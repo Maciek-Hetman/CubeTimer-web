@@ -1,29 +1,32 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../data/db'
 import { useApp } from '../../app/AppProviders'
+import { Alert } from '../../ui/Alert'
+import { Button } from '../../ui/Button'
 
 export function ConflictBanner() {
   const { ownerId, resolveConflictKeepLocal, resolveConflictKeepServer } = useApp()
-  const conflicts = useLiveQuery(
-    async () => (ownerId ? db.conflicts.where('ownerId').equals(ownerId).toArray() : []),
-    [ownerId],
-  ) ?? []
+  const conflicts =
+    useLiveQuery(async () => (ownerId ? db.conflicts.where('ownerId').equals(ownerId).toArray() : []), [ownerId]) ??
+    []
   const conflict = conflicts[0]
   if (!conflict) {
     return null
   }
   return (
-    <div className="panel" role="alert" style={{ marginBottom: 12 }}>
-      <strong>Sync conflict</strong>
-      <p className="muted">{conflict.message}</p>
+    <Alert tone="warning">
+      <strong>Sync conflict{conflicts.length > 1 ? ` · ${conflicts.length} remaining` : ''}</strong>
+      <p className="muted" style={{ margin: '6px 0 10px' }}>
+        {conflict.message}
+      </p>
       <div className="row wrap">
-        <button type="button" className="btn" onClick={() => void resolveConflictKeepServer(conflict.id)}>
+        <Button type="button" onClick={() => void resolveConflictKeepServer(conflict.id)}>
           Keep server
-        </button>
-        <button type="button" className="btn primary" onClick={() => void resolveConflictKeepLocal(conflict.id)}>
+        </Button>
+        <Button type="button" variant="primary" onClick={() => void resolveConflictKeepLocal(conflict.id)}>
           Keep mine
-        </button>
+        </Button>
       </div>
-    </div>
+    </Alert>
   )
 }

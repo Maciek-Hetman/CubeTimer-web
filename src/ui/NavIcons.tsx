@@ -1,0 +1,30 @@
+export function TimerIcon() {
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="13" r="7" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 10v3l2 1.5M9 3.5h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function StatsIcon() {
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 19V10M12 19V5M19 19v-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function SettingsIcon() {
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M12 3.5v2.2M12 18.3V20.5M4.9 6.5l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12H20.5M4.9 17.5l1.6-1.6M17.5 8l1.6-1.6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}

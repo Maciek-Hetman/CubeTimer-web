@@ -30,4 +30,11 @@ describe('timer machine', () => {
     const again = engine.press(250)
     expect(again.phase).toBe('finished')
   })
+
+  it('cancels an interrupted hold without starting', () => {
+    const engine = createTimerEngine(() => 500)
+    engine.press(0)
+    expect(engine.tick(500).phase).toBe('ready')
+    expect(engine.cancel().phase).toBe('idle')
+  })
 })

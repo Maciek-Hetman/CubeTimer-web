@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import GridLayout, { useContainerWidth, type Layout } from 'react-grid-layout'
 import { useApp } from '../../app/AppProviders'
 import { db } from '../../data/db'
+import { Button } from '../../ui/Button'
+import { Field } from '../../ui/Field'
 import { TimerPage } from '../timer/TimerPage'
 import {
   DEFAULT_LAYOUTS,
@@ -12,7 +14,6 @@ import {
   type WidgetInstance,
   type WidgetType,
 } from './widgetRegistry'
-import { Link } from 'react-router-dom'
 
 interface StoredDashboard {
   widgets: WidgetInstance[]
@@ -20,7 +21,7 @@ interface StoredDashboard {
 }
 
 export function DesktopDashboard() {
-  const { ownerId, user, logout } = useApp()
+  const { ownerId } = useApp()
   const [editing, setEditing] = useState(false)
   const [store, setStore] = useState<StoredDashboard>({
     widgets: DEFAULT_WIDGETS,
@@ -59,6 +60,9 @@ export function DesktopDashboard() {
   }, [hydrated, ownerId, store])
 
   function addWidget(type: WidgetType, side: 'left' | 'right') {
+    if (store.widgets.some((widget) => widget.type === type)) {
+      return
+    }
     const i = `${type}-${crypto.randomUUID().slice(0, 8)}`
     setStore((current) => ({
       widgets: [...current.widgets, { i, type, side }],
@@ -89,33 +93,11 @@ export function DesktopDashboard() {
         onRemove={removeWidget}
         onAdd={addWidget}
       />
-      <section className="desktop-center">
-        <div className="row wrap" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-          <nav className="row wrap">
-            <Link className="btn ghost" to="/">
-              Timer
-            </Link>
-            <Link className="btn ghost" to="/stats">
-              Stats
-            </Link>
-            <Link className="btn ghost" to="/settings">
-              Settings
-            </Link>
-          </nav>
-          <div className="row wrap">
-            {user ? (
-              <button type="button" className="btn ghost" onClick={() => void logout()}>
-                Log out
-              </button>
-            ) : (
-              <Link className="btn ghost" to="/login">
-                Sign in
-              </Link>
-            )}
-            <button type="button" className="btn" onClick={() => setEditing((value) => !value)}>
-              {editing ? 'Done' : 'Edit widgets'}
-            </button>
-          </div>
+      <section className="desktop-center stack">
+        <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
+          <Button type="button" onClick={() => setEditing((value) => !value)}>
+            {editing ? 'Done' : 'Edit widgets'}
+          </Button>
         </div>
         <TimerPage variant="desktop" />
       </section>
@@ -149,14 +131,15 @@ function WidgetColumn({
   const { width, containerRef, mounted } = useContainerWidth()
   const widgets = useMemo(() => store.widgets.filter((widget) => widget.side === side), [side, store.widgets])
   const layout = store.layouts[side]
+  const available = WIDGET_TYPES.filter((type) => !store.widgets.some((widget) => widget.type === type))
 
   return (
-    <aside ref={containerRef} style={{ minWidth: 0 }}>
+    <aside ref={containerRef} className="widget-column">
       {editing ? (
-        <label className="field" style={{ marginBottom: 8 }}>
-          Add widget
+        <Field label="Add widget">
           <select
             defaultValue=""
+            disabled={available.length === 0}
             onChange={(event) => {
               const value = event.target.value as WidgetType | ''
               if (value) {
@@ -165,14 +148,14 @@ function WidgetColumn({
               }
             }}
           >
-            <option value="">Choose…</option>
-            {WIDGET_TYPES.map((type) => (
+            <option value="">{available.length === 0 ? 'All widgets added' : 'Choose…'}</option>
+            {available.map((type) => (
               <option key={type} value={type}>
                 {WIDGET_LABELS[type]}
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       ) : null}
       {mounted ? (
         <GridLayout
@@ -185,21 +168,29 @@ function WidgetColumn({
         >
           {widgets.map((widget) => (
             <div key={widget.i} className="widget-grid-item">
-              <div className="row" style={{ justifyContent: 'space-between' }}>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
                 <h3 className="widget-drag" style={{ cursor: editing ? 'grab' : 'default' }}>
                   {WIDGET_LABELS[widget.type]}
                 </h3>
                 {editing ? (
-                  <button type="button" className="btn ghost" onClick={() => onRemove(widget.i)}>
+                  <Button type="button" variant="ghost" onClick={() => onRemove(widget.i)}>
                     Remove
-                  </button>
+                  </Button>
                 ) : null}
               </div>
               {renderWidget(widget.type)}
             </div>
           ))}
         </GridLayout>
-      ) : null}
+      ) : (
+        <div className="stack">
+          {[0, 1].map((index) => (
+            <div key={index} className="widget-grid-item" style={{ minHeight: 160 }}>
+              <p className="muted">Loading widgets…</p>
+            </div>
+          ))}
+        </div>
+      )}
     </aside>
   )
 }

@@ -1,7 +1,24 @@
 import { expect, test, type Page } from '@playwright/test'
 
-async function completeSolve(page: Page) {
-  await expect(page.getByText(/Tap and hold to start/i)).toBeVisible()
+function hint(page: Page) {
+  return page.locator('.timer-hint')
+}
+
+async function completeSolve(page: Page, method: 'pointer' | 'keyboard' = 'pointer') {
+  await expect(hint(page)).toContainText(/tap and hold to start/i)
+  if (method === 'keyboard') {
+    await page.keyboard.down('Space')
+    await expect(hint(page)).toContainText(/Hold|Release to start/i)
+    await page.waitForTimeout(800)
+    await page.keyboard.up('Space')
+    await expect(hint(page)).toContainText(/stop/i, { timeout: 8000 })
+    await page.keyboard.down('Space')
+    await page.keyboard.up('Space')
+    await expect(page.getByRole('button', { name: 'Save time' })).toBeVisible()
+    await page.keyboard.press('Enter')
+    await expect(hint(page)).toContainText(/tap and hold to start/i)
+    return
+  }
   const timer = page.getByRole('button', { name: 'Timer' })
   const box = await timer.boundingBox()
   if (!box) {
@@ -9,33 +26,57 @@ async function completeSolve(page: Page) {
   }
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
-  await expect(page.getByText(/Hold|Release to start/i)).toBeVisible()
+  await expect(hint(page)).toContainText(/Hold|Release to start/i)
   await page.waitForTimeout(800)
   await page.mouse.up()
-  await expect(page.getByText(/Tap to stop/i)).toBeVisible({ timeout: 8000 })
+  await expect(hint(page)).toContainText(/stop/i, { timeout: 8000 })
   await page.mouse.down()
   await page.mouse.up()
   await expect(page.getByRole('button', { name: 'Save time' })).toBeVisible()
   await page.getByRole('button', { name: 'Save time' }).click()
-  await expect(page.getByText(/Tap and hold to start/i)).toBeVisible()
+  await expect(hint(page)).toContainText(/tap and hold to start/i)
 }
 
 test('times a solve with the keyboard on mobile layout', async ({ page }) => {
+  test.skip(test.info().project.name === 'desktop', 'mobile layout only')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await completeSolve(page)
+  await completeSolve(page, 'keyboard')
 })
 
-test('shows the desktop widget dashboard', async ({ page }) => {
+test('recovers when a hold is interrupted', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await expect(hint(page)).toContainText(/tap and hold to start/i)
+  const timer = page.getByRole('button', { name: 'Timer' })
+  const box = await timer.boundingBox()
+  if (!box) {
+    throw new Error('Timer control is not visible')
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await expect(hint(page)).toContainText(/Hold|Release to start/i)
+  await page.evaluate(() => {
+    document.querySelector('[aria-label="Timer"]')?.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }))
+  })
+  await expect(hint(page)).toContainText(/tap and hold to start/i)
+})
+
+test('shows the desktop widget dashboard and shared header nav', async ({ page }) => {
   test.skip(test.info().project.name === 'mobile', 'desktop layout only')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Edit widgets' })).toBeVisible()
   await page.getByRole('button', { name: 'Edit widgets' }).click()
   await expect(page.getByText('Add widget').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Remove' }).first().click()
   await page.getByRole('combobox').first().selectOption('recentTimes')
-  await page.reload()
-  await page.getByRole('button', { name: 'Edit widgets' }).click()
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Stats', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Stats' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Timer', exact: true }).click()
+  await expect(page.locator('.desktop-dashboard')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent times' }).first()).toBeVisible()
 })
 
@@ -44,12 +85,14 @@ test('keeps local solves available while the API is offline', async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await completeSolve(page)
-  await page.getByRole('link', { name: 'Stats' }).click()
+  await page.getByRole('link', { name: 'Stats', exact: true }).click()
   await expect(page.locator('.chip').first()).toBeVisible({ timeout: 8000 })
 })
 
-test('merges guest data after a mocked sign-in', async ({ page }) => {
-  await page.route('http://127.0.0.1:43781/v1/auth/login', async (route) => {
+test('locks auth submit and merges guest data after a mocked sign-in', async ({ page }) => {
+  let loginCalls = 0
+  await page.route('**/v1/auth/login', async (route) => {
+    loginCalls += 1
     await route.fulfill({
       json: {
         access_token: 'access-1',
@@ -65,7 +108,7 @@ test('merges guest data after a mocked sign-in', async ({ page }) => {
       },
     })
   })
-  await page.route('http://127.0.0.1:43781/v1/sync', async (route) => {
+  await page.route('**/v1/sync', async (route) => {
     const body = route.request().postDataJSON() as { mutations: Array<{ entity: string }> }
     expect(body.mutations.length === 0 || body.mutations[0]?.entity === 'session').toBeTruthy()
     await route.fulfill({
@@ -76,10 +119,23 @@ test('merges guest data after a mocked sign-in', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await completeSolve(page)
-  await page.getByRole('link', { name: 'Settings' }).click()
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
   await page.getByRole('link', { name: 'Sign in' }).click()
   await page.getByLabel('Email').fill('user@example.com')
   await page.getByLabel('Password').fill('supersecret1')
-  await page.getByRole('button', { name: 'Sign in' }).click()
+  const submit = page.getByRole('button', { name: 'Sign in' })
+  await Promise.all([submit.click(), submit.click()])
   await expect(page.getByText(/Synced|Waiting to sync|Syncing/)).toBeVisible()
+  expect(loginCalls).toBe(1)
+})
+
+test('closes the stats delete dialog with Escape', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await completeSolve(page)
+  await page.getByRole('link', { name: 'Stats', exact: true }).click()
+  await page.getByRole('button', { name: 'Delete' }).click()
+  await expect(page.getByRole('dialog', { name: /delete solve/i })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 })

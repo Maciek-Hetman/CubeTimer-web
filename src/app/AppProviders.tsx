@@ -262,6 +262,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
     } else {
       root.setAttribute('data-theme', settings.theme)
     }
+    const applyThemeColor = () => {
+      const bg = getComputedStyle(root).getPropertyValue('--bg').trim() || '#1d4ed8'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg)
+    }
+    applyThemeColor()
+    const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null
+    media?.addEventListener('change', applyThemeColor)
+    return () => media?.removeEventListener('change', applyThemeColor)
   }, [settings.theme])
 
   const updateSettings = useCallback(
@@ -592,8 +600,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   if (!ready || !ownerId) {
     return (
-      <div className="app-shell" style={{ display: 'grid', placeItems: 'center' }}>
-        Loading…
+      <div className="boot-screen" role="status" aria-live="polite">
+        <span className="app-logo" aria-hidden="true" />
+        <strong>CubeTimer</strong>
+        <p className="muted">Loading your times…</p>
       </div>
     )
   }

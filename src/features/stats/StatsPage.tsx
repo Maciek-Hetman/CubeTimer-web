@@ -1,12 +1,21 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useApp } from '../../app/AppProviders'
 import { eventLabel, type Penalty } from '../../domain/models'
 import { averageOfN, bestAverageOfN, bestSingle, meanOfSolves, worstSingle } from '../../domain/stats/averages'
 import { formatAverage, formatSolveTime } from '../../domain/stats/formatTime'
+import { Button } from '../../ui/Button'
+import { Dialog } from '../../ui/Dialog'
+import { EmptyState } from '../../ui/EmptyState'
+import { PageHeader } from '../../ui/PageHeader'
+import { Panel } from '../../ui/Panel'
+import { StatGrid } from '../../ui/StatGrid'
 
 export function StatsPage() {
   const { solves, sessions, settings, currentSession, updateSolvePenalty, deleteSolve } = useApp()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+
+  const sessionById = useMemo(() => new Map(sessions.map((session) => [session.id, session])), [sessions])
 
   const sessionSolves = useMemo(
     () => (currentSession ? solves.filter((solve) => solve.sessionId === currentSession.id) : solves),
@@ -39,21 +48,24 @@ export function StatsPage() {
 
   return (
     <div className="stack">
-      <header>
-        <h1 style={{ margin: '8px 0' }}>Stats</h1>
-        <p className="muted">
-          {eventLabel(settings.event)}
-          {currentSession ? ` · ${currentSession.name}` : ''}
-        </p>
-      </header>
+      <PageHeader
+        title="Stats"
+        subtitle={`${eventLabel(settings.event)}${currentSession ? ` · ${currentSession.name}` : ''}`}
+      />
 
       {solves.length === 0 ? (
-        <div className="panel" style={{ textAlign: 'center' }}>
-          No solves yet
-        </div>
+        <EmptyState
+          title="No solves yet"
+          description="Time a solve on the timer to start building your history."
+          action={
+            <Link className="btn primary" to="/">
+              Open timer
+            </Link>
+          }
+        />
       ) : (
         <>
-          <section className="panel">
+          <Panel className="stack">
             <h2>All-time</h2>
             <StatGrid
               items={[
@@ -67,8 +79,8 @@ export function StatsPage() {
                 ['Best Ao12', formatAverage(summary.bestAo12)],
               ]}
             />
-          </section>
-          <section className="panel">
+          </Panel>
+          <Panel className="stack">
             <h2>Current session</h2>
             <StatGrid
               items={[
@@ -78,76 +90,73 @@ export function StatsPage() {
                 ['Ao5', formatAverage(sessionSummary.ao5)],
               ]}
             />
-          </section>
-          <section className="panel">
+          </Panel>
+          <Panel className="stack">
             <h2>History</h2>
-            <p className="muted">Showing last {Math.min(200, solves.length)} of {solves.length}</p>
-            <div className="stack">
-              {solves.slice(0, 200).map((solve) => (
-                <div key={solve.id} className="row wrap" style={{ justifyContent: 'space-between' }}>
-                  <div>
-                    <strong className="chip">{formatSolveTime(solve)}</strong>
-                    <div className="muted" style={{ fontSize: '0.85rem' }}>
-                      {new Date(solve.solvedAt).toLocaleString()}
+            <p className="muted">
+              Showing last {Math.min(200, solves.length)} of {solves.length}
+            </p>
+            <div>
+              {solves.slice(0, 200).map((solve) => {
+                const sessionName = solve.sessionId ? sessionById.get(solve.sessionId)?.name : null
+                return (
+                  <div key={solve.id} className="history-row">
+                    <div className="stack" style={{ gap: 4 }}>
+                      <strong className="chip">{formatSolveTime(solve)}</strong>
+                      <div className="history-meta muted">
+                        {new Date(solve.solvedAt).toLocaleString()}
+                        {sessionName ? ` · ${sessionName}` : ''}
+                      </div>
+                      {solve.scramble ? <div className="history-meta scramble muted">{solve.scramble}</div> : null}
+                    </div>
+                    <div className="row wrap">
+                      <select
+                        aria-label="Penalty"
+                        value={solve.penalty}
+                        onChange={(event) => void updateSolvePenalty(solve.id, event.target.value as Penalty)}
+                      >
+                        <option value="none">OK</option>
+                        <option value="plus_two">+2</option>
+                        <option value="dnf">DNF</option>
+                      </select>
+                      <Button type="button" variant="danger" onClick={() => setPendingDelete(solve.id)}>
+                        Delete
+                      </Button>
                     </div>
                   </div>
-                  <div className="row wrap">
-                    <select
-                      aria-label="Penalty"
-                      value={solve.penalty}
-                      onChange={(event) => void updateSolvePenalty(solve.id, event.target.value as Penalty)}
-                    >
-                      <option value="none">OK</option>
-                      <option value="plus_two">+2</option>
-                      <option value="dnf">DNF</option>
-                    </select>
-                    <button type="button" className="btn danger" onClick={() => setPendingDelete(solve.id)}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
-          </section>
+          </Panel>
           <p className="muted">{sessions.length} sessions stored</p>
         </>
       )}
 
       {pendingDelete ? (
-        <div className="dialog-backdrop" onClick={() => setPendingDelete(null)}>
-          <div className="dialog" onClick={(event) => event.stopPropagation()}>
-            <p>Delete this solve?</p>
-            <div className="row">
-              <button type="button" className="btn" onClick={() => setPendingDelete(null)}>
+        <Dialog
+          title="Delete solve"
+          onClose={() => setPendingDelete(null)}
+          footer={
+            <div className="row wrap">
+              <Button type="button" onClick={() => setPendingDelete(null)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="btn danger"
+                variant="danger"
                 onClick={() => {
                   void deleteSolve(pendingDelete)
                   setPendingDelete(null)
                 }}
               >
                 Delete
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          }
+        >
+          <p>Delete this solve? This cannot be undone.</p>
+        </Dialog>
       ) : null}
-    </div>
-  )
-}
-
-function StatGrid({ items }: { items: Array<[string, string]> }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-      {items.map(([label, value]) => (
-        <div key={label}>
-          <div className="muted">{label}</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>{value}</div>
-        </div>
-      ))}
     </div>
   )
 }

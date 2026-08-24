@@ -1,105 +1,122 @@
 import { useState } from 'react'
 import { useApp } from '../../app/AppProviders'
+import { Alert } from '../../ui/Alert'
+import { Button } from '../../ui/Button'
+import { Dialog } from '../../ui/Dialog'
 
 export function SessionManager({ onClose }: { onClose: () => void }) {
   const { sessions, currentSession, createSession, renameSession, switchSession, removeSession } = useApp()
   const [name, setName] = useState('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [confirmCount, setConfirmCount] = useState(0)
+  const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({})
 
   return (
-    <div className="dialog-backdrop" role="presentation" onClick={onClose}>
-      <div
-        className="dialog"
-        role="dialog"
-        aria-labelledby="session-title"
-        onClick={(event) => event.stopPropagation()}
+    <Dialog
+      title="Sessions"
+      labelledBy="session-title"
+      onClose={onClose}
+      footer={
+        <Button type="button" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <form
+        className="row wrap"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!name.trim()) {
+            return
+          }
+          void createSession(name.trim()).then(() => setName(''))
+        }}
       >
-        <h2 id="session-title">Sessions</h2>
-        <form
-          className="row"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!name.trim()) {
-              return
-            }
-            void createSession(name.trim()).then(() => setName(''))
-          }}
-        >
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="New session name"
-            aria-label="New session name"
-          />
-          <button type="submit" className="btn primary">
-            Create
-          </button>
-        </form>
-        <div className="stack" style={{ marginTop: 12 }}>
-          {sessions.length === 0 ? <p className="muted">No sessions yet.</p> : null}
-          {sessions.map((session) => (
-            <div key={session.id} className="panel">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="New session name"
+          aria-label="New session name"
+          style={{ flex: 1, minWidth: 160 }}
+        />
+        <Button type="submit" variant="primary">
+          Create
+        </Button>
+      </form>
+      <div className="stack">
+        {sessions.length === 0 ? <p className="muted">No sessions yet.</p> : null}
+        {sessions.map((session) => {
+          const draft = renameDrafts[session.id] ?? session.name
+          return (
+            <div key={session.id} className="panel stack">
               <div className="row wrap" style={{ justifyContent: 'space-between' }}>
-                <button
+                <Button
                   type="button"
-                  className="btn ghost"
+                  variant="ghost"
                   onClick={() => void switchSession(session.id).then(onClose)}
                 >
                   {session.name}
                   {currentSession?.id === session.id ? ' (current)' : ''}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="btn danger"
+                  variant="danger"
                   onClick={() => {
                     setConfirmId(session.id)
                     setConfirmCount(0)
                   }}
                 >
                   Delete
-                </button>
+                </Button>
               </div>
-              <input
-                defaultValue={session.name}
-                aria-label={`Rename ${session.name}`}
-                onBlur={(event) => {
-                  const next = event.target.value.trim()
-                  if (next && next !== session.name) {
-                    void renameSession(session.id, next)
+              <label className="field">
+                Rename
+                <input
+                  value={draft}
+                  aria-label={`Rename ${session.name}`}
+                  onChange={(event) =>
+                    setRenameDrafts((current) => ({ ...current, [session.id]: event.target.value }))
                   }
-                }}
-              />
+                  onBlur={() => {
+                    const next = draft.trim()
+                    if (next && next !== session.name) {
+                      void renameSession(session.id, next)
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.currentTarget.blur()
+                    }
+                  }}
+                />
+              </label>
             </div>
-          ))}
-        </div>
-        {confirmId ? (
-          <div className="panel" style={{ marginTop: 12 }}>
-            <p>Delete this session and all of its times? This cannot be undone.</p>
-            <div className="row wrap">
-              <button type="button" className="btn" onClick={() => setConfirmId(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn danger"
-                onClick={() => {
-                  void removeSession(confirmId).then((count) => {
-                    setConfirmCount(count)
-                    setConfirmId(null)
-                  })
-                }}
-              >
-                Delete session
-              </button>
-            </div>
-            {confirmCount > 0 ? <p className="muted">Removed {confirmCount} solves.</p> : null}
-          </div>
-        ) : null}
-        <button type="button" className="btn" style={{ marginTop: 12 }} onClick={onClose}>
-          Close
-        </button>
+          )
+        })}
       </div>
-    </div>
+      {confirmId ? (
+        <div className="panel stack">
+          <p style={{ margin: 0 }}>Delete this session and all of its times? This cannot be undone.</p>
+          <div className="row wrap">
+            <Button type="button" onClick={() => setConfirmId(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                void removeSession(confirmId).then((count) => {
+                  setConfirmCount(count)
+                  setConfirmId(null)
+                })
+              }}
+            >
+              Delete session
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {confirmCount > 0 ? <Alert tone="success" role="status">Removed {confirmCount} solves.</Alert> : null}
+    </Dialog>
   )
 }

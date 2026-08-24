@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
 import { EVENTS, eventLabel, type CubeEvent, type Penalty } from '../../domain/models'
 import { averageOfN } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
+import { Button } from '../../ui/Button'
+import { Field } from '../../ui/Field'
+import { Panel } from '../../ui/Panel'
+import { Toast } from '../../ui/StatGrid'
 import { generateScramble } from '../scramble/scrambleService'
 import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
@@ -15,6 +19,8 @@ function isFormTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
 
+type ScrambleState = 'loading' | 'ready' | 'error'
+
 export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
   const {
     settings,
@@ -25,11 +31,36 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   } = useApp()
   const engineRef = useRef(createTimerEngine(() => settings.timerStartDelayMs))
   const [snapshot, setSnapshot] = useState<TimerSnapshot>(IDLE_TIMER)
-  const [scramble, setScramble] = useState('Generating scramble…')
+  const snapshotRef = useRef(snapshot)
+  const [scramble, setScramble] = useState('')
+  const [scrambleState, setScrambleState] = useState<ScrambleState>('loading')
   const scrambleRequest = useRef(0)
-  const pendingPenalty = useRef<Penalty>('none')
   const [sessionOpen, setSessionOpen] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [liveMessage, setLiveMessage] = useState('Timer ready')
   const busy = isTimerBusy(snapshot.phase) || snapshot.phase === 'finished'
+
+  useEffect(() => {
+    snapshotRef.current = snapshot
+  }, [snapshot])
+
+  const loadScramble = useCallback(async () => {
+    const id = ++scrambleRequest.current
+    setScrambleState('loading')
+    setScramble('')
+    try {
+      const value = await generateScramble(settings.event)
+      if (id === scrambleRequest.current) {
+        setScramble(value)
+        setScrambleState('ready')
+      }
+    } catch {
+      if (id === scrambleRequest.current) {
+        setScramble('')
+        setScrambleState('error')
+      }
+    }
+  }, [settings.event])
 
   useEffect(() => {
     engineRef.current = createTimerEngine(() => settings.timerStartDelayMs)
@@ -37,19 +68,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   }, [settings.timerStartDelayMs])
 
   useEffect(() => {
-    const id = ++scrambleRequest.current
-    void generateScramble(settings.event)
-      .then((value) => {
-        if (id === scrambleRequest.current) {
-          setScramble(value)
-        }
-      })
-      .catch(() => {
-        if (id === scrambleRequest.current) {
-          setScramble('Could not generate scramble')
-        }
-      })
-  }, [settings.event])
+    void loadScramble()
+  }, [loadScramble])
 
   useEffect(() => {
     document.body.dataset.timerBusy = busy ? 'true' : 'false'
@@ -68,9 +88,97 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     return () => cancelAnimationFrame(frame)
   }, [])
 
+  const finish = useCallback(
+    async (penalty: Penalty) => {
+      const current = snapshotRef.current
+      if (current.finishedMs === null) {
+        return
+      }
+      const durationMs = current.finishedMs
+      await saveSolve({
+        durationMs,
+        penalty,
+        scramble: scramble || '—',
+      })
+      engineRef.current.reset()
+      setSnapshot(IDLE_TIMER)
+      setNotice(
+        penalty === 'none'
+          ? `Saved ${formatDuration(durationMs)}`
+          : penalty === 'plus_two'
+            ? `Saved ${formatDuration(durationMs)} (+2)`
+            : 'Saved DNF',
+      )
+      await loadScramble()
+    },
+    [loadScramble, saveSolve, scramble],
+  )
+
+  const discard = useCallback(() => {
+    engineRef.current.reset()
+    setSnapshot(IDLE_TIMER)
+  }, [])
+
+  useEffect(() => {
+    if (!notice) {
+      return
+    }
+    const timer = window.setTimeout(() => setNotice(''), 1800)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
+  useEffect(() => {
+    if (snapshot.phase === 'idle') {
+      setLiveMessage('Timer ready. Hold Space or tap and hold to start.')
+    } else if (snapshot.phase === 'holding') {
+      setLiveMessage('Holding to start')
+    } else if (snapshot.phase === 'ready') {
+      setLiveMessage('Ready. Release to start.')
+    } else if (snapshot.phase === 'finished') {
+      setLiveMessage(`Finished ${formatDuration(snapshot.finishedMs ?? 0)}. Press Enter to save.`)
+    }
+  }, [snapshot.phase, snapshot.finishedMs])
+
+  useEffect(() => {
+    if (snapshot.phase !== 'running') {
+      return
+    }
+    setLiveMessage(`Running ${formatDuration(snapshot.elapsedMs)}`)
+    const timer = window.setInterval(() => {
+      setLiveMessage(`Running ${formatDuration(snapshotRef.current.elapsedMs)}`)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [snapshot.phase])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' || event.repeat || isFormTarget(event.target)) {
+      if (isFormTarget(event.target)) {
+        return
+      }
+      const current = snapshotRef.current
+      if (current.phase === 'finished') {
+        if (event.key === 'Enter' || event.code === 'KeyS') {
+          event.preventDefault()
+          void finish('none')
+          return
+        }
+        if (event.code === 'Digit2' || event.code === 'Numpad2') {
+          event.preventDefault()
+          void finish('plus_two')
+          return
+        }
+        if (event.code === 'KeyD') {
+          event.preventDefault()
+          void finish('dnf')
+          return
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          discard()
+        }
+        return
+      }
+      if (event.code !== 'Space' || event.repeat) {
         return
       }
       event.preventDefault()
@@ -78,6 +186,9 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     }
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code !== 'Space' || isFormTarget(event.target)) {
+        return
+      }
+      if (snapshotRef.current.phase === 'finished') {
         return
       }
       event.preventDefault()
@@ -89,7 +200,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [])
+  }, [discard, finish])
 
   const ao5 = useMemo(() => averageOfN(solves, 5), [solves])
   const ao12 = useMemo(() => averageOfN(solves, 12), [solves])
@@ -98,25 +209,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const hideScramble = hideChrome || (settings.hideScrambleDuringSolve && snapshot.phase === 'running')
   const hideAverages = hideChrome || (settings.hideAveragesDuringSolve && snapshot.phase === 'running')
   const hideResults = hideChrome || (settings.hideLastResultsDuringSolve && snapshot.phase === 'running')
-
-  async function finish(penalty: Penalty) {
-    if (snapshot.finishedMs === null) {
-      return
-    }
-    pendingPenalty.current = penalty
-    await saveSolve({
-      durationMs: snapshot.finishedMs,
-      penalty,
-      scramble,
-    })
-    engineRef.current.reset()
-    setSnapshot(IDLE_TIMER)
-    const id = ++scrambleRequest.current
-    const next = await generateScramble(settings.event)
-    if (id === scrambleRequest.current) {
-      setScramble(next)
-    }
-  }
 
   const timeMs =
     snapshot.phase === 'running'
@@ -135,25 +227,36 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   const hint =
     snapshot.phase === 'idle'
-      ? 'Tap and hold to start'
+      ? 'Hold Space or tap and hold to start'
       : snapshot.phase === 'holding'
         ? 'Hold…'
         : snapshot.phase === 'ready'
           ? 'Release to start!'
           : snapshot.phase === 'running'
-            ? 'Tap to stop'
-            : 'Save or apply a penalty'
+            ? 'Tap or press Space to stop'
+            : 'Enter save · 2 +2 · D DNF · Esc discard'
+
+  function cancelHold() {
+    if (snapshotRef.current.phase === 'holding' || snapshotRef.current.phase === 'ready') {
+      setSnapshot(engineRef.current.cancel())
+    }
+  }
 
   return (
-    <div className="stack" style={{ minHeight: variant === 'desktop' ? '100%' : 'calc(100dvh - 120px)' }}>
+    <div className={`stack timer-page${variant === 'desktop' ? ' desktop' : ''}`}>
+      <h1 className="sr-only">Timer</h1>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveMessage}
+      </div>
+
       {!hideChrome ? (
         <header className="row wrap" style={{ justifyContent: 'space-between' }}>
-          <label className="field" style={{ minWidth: 140 }}>
-            <span className="muted">Event</span>
+          <Field label="Event">
             <select
               value={settings.event}
               disabled={busy}
               onChange={(event) => void setEvent(event.target.value as CubeEvent)}
+              style={{ minWidth: 140 }}
             >
               {EVENTS.map((item) => (
                 <option key={item} value={item}>
@@ -161,11 +264,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
           {settings.sessionMode === 'manual' ? (
-            <button type="button" className="btn" disabled={busy} onClick={() => setSessionOpen(true)}>
+            <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)}>
               {currentSession?.name ?? 'Sessions'}
-            </button>
+            </Button>
           ) : (
             <span className="muted">{currentSession?.name ?? 'Automatic session'}</span>
           )}
@@ -173,26 +276,29 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       ) : null}
 
       {!hideScramble ? (
-        <div className="panel panel-muted scramble">
-          {scramble}
-          <div>
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={busy}
-              onClick={() => {
-                const id = ++scrambleRequest.current
-                void generateScramble(settings.event).then((value) => {
-                  if (id === scrambleRequest.current) {
-                    setScramble(value)
-                  }
-                })
-              }}
-            >
-              New scramble
-            </button>
-          </div>
-        </div>
+        <Panel muted className="scramble stack">
+          {scrambleState === 'loading' ? <span className="muted">Generating scramble…</span> : null}
+          {scrambleState === 'error' ? (
+            <>
+              <span role="alert">Could not generate scramble</span>
+              <div>
+                <Button type="button" variant="ghost" disabled={busy} onClick={() => void loadScramble()}>
+                  Retry
+                </Button>
+              </div>
+            </>
+          ) : null}
+          {scrambleState === 'ready' ? (
+            <>
+              {scramble}
+              <div>
+                <Button type="button" variant="ghost" disabled={busy} onClick={() => void loadScramble()}>
+                  New scramble
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </Panel>
       ) : (
         <div style={{ minHeight: 48 }} />
       )}
@@ -213,7 +319,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             return
           }
           event.preventDefault()
-          event.currentTarget.setPointerCapture(event.pointerId)
+          event.currentTarget.setPointerCapture?.(event.pointerId)
           setSnapshot(engineRef.current.press(performance.now()))
         }}
         onPointerUp={() => {
@@ -222,6 +328,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           }
           setSnapshot(engineRef.current.release(performance.now()))
         }}
+        onPointerCancel={cancelHold}
+        onLostPointerCapture={cancelHold}
         onContextMenu={(event) => event.preventDefault()}
       >
         <TimeDigits ms={timeMs} />
@@ -235,35 +343,28 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
       {snapshot.phase === 'finished' ? (
         <div className="stack">
-          <button type="button" className="btn primary" onClick={() => void finish('none')}>
+          <Button type="button" variant="primary" onClick={() => void finish('none')}>
             Save time
-          </button>
+          </Button>
           <div className="row wrap">
-            <button type="button" className="btn" onClick={() => void finish('plus_two')}>
+            <Button type="button" onClick={() => void finish('plus_two')}>
               +2
-            </button>
-            <button type="button" className="btn danger" onClick={() => void finish('dnf')}>
+            </Button>
+            <Button type="button" variant="danger" onClick={() => void finish('dnf')}>
               DNF
-            </button>
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => {
-                engineRef.current.reset()
-                setSnapshot(IDLE_TIMER)
-              }}
-            >
+            </Button>
+            <Button type="button" variant="ghost" onClick={discard}>
               Discard
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
 
       {!hideAverages ? (
-        <div className="panel panel-muted row wrap" style={{ justifyContent: 'space-around' }}>
+        <Panel muted className="row wrap" style={{ justifyContent: 'space-around' }}>
           <span>Ao5 {formatAverage(ao5)}</span>
           <span>Ao12 {formatAverage(ao12)}</span>
-        </div>
+        </Panel>
       ) : null}
 
       {!hideResults ? (
@@ -277,6 +378,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       ) : null}
 
       {sessionOpen ? <SessionManager onClose={() => setSessionOpen(false)} /> : null}
+      {notice ? <Toast>{notice}</Toast> : null}
     </div>
   )
 }

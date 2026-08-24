@@ -18,6 +18,7 @@ export interface TimerEngine {
   getSnapshot(): TimerSnapshot
   press(now: number): TimerSnapshot
   release(now: number): TimerSnapshot
+  cancel(): TimerSnapshot
   tick(now: number): TimerSnapshot
   reset(): TimerSnapshot
 }
@@ -62,6 +63,14 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
         runStartedAt = now
         elapsedMs = 0
         holdProgress = 1
+        return snapshot()
+      }
+      return snapshot()
+    },
+    cancel() {
+      if (phase === 'holding' || phase === 'ready') {
+        phase = 'idle'
+        holdProgress = 0
         return snapshot()
       }
       return snapshot()
