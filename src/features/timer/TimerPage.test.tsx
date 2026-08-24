@@ -13,11 +13,11 @@ vi.mock('../scramble/scrambleService', () => ({
   generateScramble: vi.fn(async () => "R U R' U'"),
 }))
 
-function renderTimer() {
+function renderTimer(variant: 'mobile' | 'desktop' = 'mobile') {
   return render(
     <MemoryRouter>
       <AppProviders>
-        <TimerPage />
+        <TimerPage variant={variant} />
       </AppProviders>
     </MemoryRouter>,
   )
@@ -78,6 +78,63 @@ describe('TimerPage', () => {
     fireEvent.pointerCancel(timer, { pointerId: 1 })
     await waitFor(() => {
       expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+    })
+  })
+
+  it('starts when the timer is held until ready', async () => {
+    renderTimer()
+    await waitFor(() => {
+      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+    })
+
+    const timer = screen.getByRole('button', { name: 'Timer' })
+    fireEvent.pointerDown(timer, { pointerId: 1 })
+    await waitFor(
+      () => {
+        expect(timerHint()).toHaveTextContent(/Release to start/i)
+      },
+      { timeout: 2000 },
+    )
+    fireEvent.pointerUp(timer, { pointerId: 1 })
+
+    await waitFor(() => {
+      expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
+    })
+  })
+
+  it('uses hold-to-start on desktop and ignores system keys', async () => {
+    renderTimer('desktop')
+    await waitFor(() => {
+      expect(timerHint()).toHaveTextContent(/Hold any key to start/i)
+    })
+
+    fireEvent.keyDown(window, { code: 'MetaLeft', key: 'Meta' })
+    fireEvent.keyDown(window, { code: 'ControlLeft', key: 'Control' })
+    fireEvent.keyDown(window, { code: 'KeyA', key: 'a', ctrlKey: true })
+    expect(timerHint()).toHaveTextContent(/Hold any key to start/i)
+
+    const repeatedSpace = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      code: 'Space',
+      key: ' ',
+      repeat: true,
+    })
+    window.dispatchEvent(repeatedSpace)
+    expect(repeatedSpace.defaultPrevented).toBe(true)
+    expect(timerHint()).toHaveTextContent(/Hold any key to start/i)
+
+    fireEvent.keyDown(window, { code: 'KeyA', key: 'a' })
+    await waitFor(
+      () => {
+        expect(timerHint()).toHaveTextContent(/Release to start/i)
+      },
+      { timeout: 2000 },
+    )
+    fireEvent.keyUp(window, { code: 'KeyA', key: 'a' })
+
+    await waitFor(() => {
+      expect(timerHint()).toHaveTextContent(/Press any key to stop/i)
     })
   })
 

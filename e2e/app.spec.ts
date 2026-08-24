@@ -58,6 +58,28 @@ test('recovers when a hold is interrupted', async ({ page }) => {
   await expect(hint(page)).toContainText(/tap and hold to start/i)
 })
 
+test('keeps the navbar visible while the timer is running', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await expect(hint(page)).toContainText(/tap and hold to start/i)
+
+  const timer = page.getByRole('button', { name: 'Timer' })
+  const box = await timer.boundingBox()
+  if (!box) {
+    throw new Error('Timer control is not visible')
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(800)
+  await page.mouse.up()
+  await expect(hint(page)).toContainText(/stop/i, { timeout: 8000 })
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
+
+  await page.mouse.down()
+  await page.mouse.up()
+})
+
 test('shows the desktop widget dashboard and shared header nav', async ({ page }) => {
   test.skip(test.info().project.name === 'mobile', 'desktop layout only')
   await page.setViewportSize({ width: 1440, height: 900 })

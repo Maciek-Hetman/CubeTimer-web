@@ -21,6 +21,29 @@ function isFormTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
 
+const SYSTEM_KEYS = new Set([
+  'Alt',
+  'AltGraph',
+  'CapsLock',
+  'Control',
+  'Fn',
+  'Meta',
+  'NumLock',
+  'OS',
+  'ScrollLock',
+  'Shift',
+])
+
+function isSystemKey(event: KeyboardEvent): boolean {
+  return (
+    SYSTEM_KEYS.has(event.key) ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey
+  )
+}
+
 type ScrambleState = 'loading' | 'ready' | 'error'
 
 export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
@@ -41,6 +64,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const [notice, setNotice] = useState('')
   const [liveMessage, setLiveMessage] = useState('Timer ready')
   const autoSavedRef = useRef(false)
+  const activeKeyRef = useRef<string | null>(null)
+  const activePointerRef = useRef<number | null>(null)
   const isWide = useMediaQuery('(min-width: 768px)')
   const busy = isTimerBusy(snapshot.phase)
 
@@ -74,13 +99,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   useEffect(() => {
     void loadScramble()
   }, [loadScramble])
-
-  useEffect(() => {
-    document.body.dataset.timerBusy = busy ? 'true' : 'false'
-    return () => {
-      delete document.body.dataset.timerBusy
-    }
-  }, [busy])
 
   useEffect(() => {
     let frame = 0
@@ -134,7 +152,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     if (snapshot.phase === 'idle') {
       setLiveMessage(
         variant === 'desktop'
-          ? 'Timer ready. Press any key to start.'
+          ? 'Timer ready. Hold any key to start.'
           : 'Timer ready. Hold Space or tap and hold to start.',
       )
     } else if (snapshot.phase === 'holding') {
@@ -159,33 +177,32 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isFormTarget(event.target)) {
+      if (isFormTarget(event.target) || isSystemKey(event)) {
         return
       }
-      if (variant === 'desktop') {
-        if (event.repeat) {
-          return
-        }
-        event.preventDefault()
-        setSnapshot(
-          snapshotRef.current.phase === 'running'
-            ? engineRef.current.stop(performance.now())
-            : engineRef.current.start(performance.now()),
-        )
-        return
-      }
-      if (event.code !== 'Space' || event.repeat) {
+      if (variant !== 'desktop' && event.code !== 'Space') {
         return
       }
       event.preventDefault()
+      if (event.repeat) {
+        return
+      }
+      if (activeKeyRef.current !== null) {
+        return
+      }
+      activeKeyRef.current = event.code
       setSnapshot(engineRef.current.press(performance.now()))
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' || isFormTarget(event.target)) {
+      if (isFormTarget(event.target) || (variant !== 'desktop' && event.code !== 'Space')) {
         return
       }
+      if (activeKeyRef.current !== event.code) {
+        return
+      }
+      activeKeyRef.current = null
       event.preventDefault()
-      setSnapshot(engineRef.current.release(performance.now()))
+      setSnapshot(isSystemKey(event) ? engineRef.current.cancel() : engineRef.current.release(performance.now()))
     }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
@@ -221,7 +238,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const hint =
     snapshot.phase === 'idle'
       ? variant === 'desktop'
-        ? 'Press any key to start'
+        ? 'Hold any key to start'
         : 'Hold Space or tap and hold to start'
       : snapshot.phase === 'holding'
         ? 'Hold…'
@@ -232,10 +249,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
               ? 'Press any key to stop'
               : 'Tap or press Space to stop'
             : variant === 'desktop'
-              ? 'Press any key to start'
+              ? 'Hold any key to start'
               : 'Hold Space or tap and hold to start'
 
   function cancelHold() {
+    activePointerRef.current = null
     if (snapshotRef.current.phase === 'holding' || snapshotRef.current.phase === 'ready') {
       setSnapshot(engineRef.current.cancel())
     }
@@ -330,19 +348,19 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         }}
         aria-label="Timer"
         onPointerDown={(event) => {
-          event.preventDefault()
-          if (variant === 'desktop') {
-            setSnapshot(
-              snapshotRef.current.phase === 'running'
-                ? engineRef.current.stop(performance.now())
-                : engineRef.current.start(performance.now()),
-            )
+          if (event.button !== 0 || activePointerRef.current !== null) {
             return
           }
+          event.preventDefault()
+          activePointerRef.current = event.pointerId
           event.currentTarget.setPointerCapture?.(event.pointerId)
           setSnapshot(engineRef.current.press(performance.now()))
         }}
-        onPointerUp={() => {
+        onPointerUp={(event) => {
+          if (activePointerRef.current !== event.pointerId) {
+            return
+          }
+          activePointerRef.current = null
           setSnapshot(engineRef.current.release(performance.now()))
         }}
         onPointerCancel={cancelHold}
