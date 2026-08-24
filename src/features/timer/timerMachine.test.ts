@@ -32,6 +32,14 @@ describe('timer machine', () => {
     expect(again.finishedMs).toBeNull()
   })
 
+  it('starts and stops immediately for desktop input', () => {
+    const engine = createTimerEngine(() => 500)
+    expect(engine.start(100).phase).toBe('running')
+    const finished = engine.stop(725)
+    expect(finished.phase).toBe('finished')
+    expect(finished.finishedMs).toBe(625)
+  })
+
   it('cancels an interrupted hold without starting', () => {
     const engine = createTimerEngine(() => 500)
     engine.press(0)

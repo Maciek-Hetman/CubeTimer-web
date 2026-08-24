@@ -16,6 +16,8 @@ export const IDLE_TIMER: TimerSnapshot = {
 
 export interface TimerEngine {
   getSnapshot(): TimerSnapshot
+  start(now: number): TimerSnapshot
+  stop(now: number): TimerSnapshot
   press(now: number): TimerSnapshot
   release(now: number): TimerSnapshot
   cancel(): TimerSnapshot
@@ -37,6 +39,24 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
 
   return {
     getSnapshot: snapshot,
+    start(now) {
+      if (phase === 'idle' || phase === 'finished') {
+        phase = 'running'
+        runStartedAt = now
+        elapsedMs = 0
+        finishedMs = null
+        holdProgress = 1
+      }
+      return snapshot()
+    },
+    stop(now) {
+      if (phase === 'running') {
+        phase = 'finished'
+        finishedMs = Math.max(0, now - runStartedAt)
+        elapsedMs = finishedMs
+      }
+      return snapshot()
+    },
     press(now) {
       if (phase === 'idle') {
         phase = 'holding'

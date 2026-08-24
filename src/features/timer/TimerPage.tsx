@@ -132,7 +132,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   useEffect(() => {
     if (snapshot.phase === 'idle') {
-      setLiveMessage('Timer ready. Hold Space or tap and hold to start.')
+      setLiveMessage(
+        variant === 'desktop'
+          ? 'Timer ready. Press any key to start.'
+          : 'Timer ready. Hold Space or tap and hold to start.',
+      )
     } else if (snapshot.phase === 'holding') {
       setLiveMessage('Holding to start')
     } else if (snapshot.phase === 'ready') {
@@ -140,7 +144,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     } else if (snapshot.phase === 'finished') {
       setLiveMessage(`Saved ${formatDuration(snapshot.finishedMs ?? 0)}`)
     }
-  }, [snapshot.phase, snapshot.finishedMs])
+  }, [snapshot.finishedMs, snapshot.phase, variant])
 
   useEffect(() => {
     if (snapshot.phase !== 'running') {
@@ -156,6 +160,18 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isFormTarget(event.target)) {
+        return
+      }
+      if (variant === 'desktop') {
+        if (event.repeat) {
+          return
+        }
+        event.preventDefault()
+        setSnapshot(
+          snapshotRef.current.phase === 'running'
+            ? engineRef.current.stop(performance.now())
+            : engineRef.current.start(performance.now()),
+        )
         return
       }
       if (event.code !== 'Space' || event.repeat) {
@@ -177,7 +193,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [])
+  }, [variant])
 
   const ao5 = useMemo(() => averageOfN(solves, 5), [solves])
   const ao12 = useMemo(() => averageOfN(solves, 12), [solves])
@@ -204,14 +220,20 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   const hint =
     snapshot.phase === 'idle'
-      ? 'Hold Space or tap and hold to start'
+      ? variant === 'desktop'
+        ? 'Press any key to start'
+        : 'Hold Space or tap and hold to start'
       : snapshot.phase === 'holding'
         ? 'Hold…'
         : snapshot.phase === 'ready'
           ? 'Release to start!'
           : snapshot.phase === 'running'
-            ? 'Tap or press Space to stop'
-            : 'Hold Space or tap and hold to start'
+            ? variant === 'desktop'
+              ? 'Press any key to stop'
+              : 'Tap or press Space to stop'
+            : variant === 'desktop'
+              ? 'Press any key to start'
+              : 'Hold Space or tap and hold to start'
 
   function cancelHold() {
     if (snapshotRef.current.phase === 'holding' || snapshotRef.current.phase === 'ready') {
@@ -309,6 +331,14 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         aria-label="Timer"
         onPointerDown={(event) => {
           event.preventDefault()
+          if (variant === 'desktop') {
+            setSnapshot(
+              snapshotRef.current.phase === 'running'
+                ? engineRef.current.stop(performance.now())
+                : engineRef.current.start(performance.now()),
+            )
+            return
+          }
           event.currentTarget.setPointerCapture?.(event.pointerId)
           setSnapshot(engineRef.current.press(performance.now()))
         }}
