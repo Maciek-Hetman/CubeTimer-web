@@ -1,10 +1,14 @@
 import { Link } from 'react-router-dom'
+import { useState } from 'react'
 import { useApp } from '../../../app/AppProviders'
 import { formatSolveTime } from '../../../domain/stats/formatTime'
+import { Button } from '../../../ui/Button'
+import { Dialog } from '../../../ui/Dialog'
 import { EmptyState } from '../../../ui/EmptyState'
 
 export function RecentSolvesWidget() {
-  const { solves } = useApp()
+  const { solves, updateSolvePenalty, deleteSolve } = useApp()
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const recent = solves.slice(0, 10)
   if (recent.length === 0) {
     return (
@@ -20,12 +24,71 @@ export function RecentSolvesWidget() {
     )
   }
   return (
-    <ol className="stack" style={{ margin: 0, paddingLeft: 18, gap: 6 }}>
-      {recent.map((solve) => (
-        <li key={solve.id} style={{ fontFamily: 'var(--mono)' }}>
-          {formatSolveTime(solve)}
-        </li>
-      ))}
-    </ol>
+    <>
+      <ul className="recent-solves">
+        {recent.map((solve, index) => (
+          <li key={solve.id} className="recent-solve-row">
+            <span className="recent-solve-number">#{solves.length - index}</span>
+            <span className="recent-solve-time">{formatSolveTime(solve)}</span>
+            <span className="solve-controls">
+              <Button
+                type="button"
+                variant="ghost"
+                className={solve.penalty === 'plus_two' ? 'active' : ''}
+                aria-pressed={solve.penalty === 'plus_two'}
+                aria-label={`Toggle +2 for solve ${solves.length - index}`}
+                onClick={() => void updateSolvePenalty(solve.id, solve.penalty === 'plus_two' ? 'none' : 'plus_two')}
+              >
+                +2
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className={solve.penalty === 'dnf' ? 'active' : ''}
+                aria-pressed={solve.penalty === 'dnf'}
+                aria-label={`Toggle DNF for solve ${solves.length - index}`}
+                onClick={() => void updateSolvePenalty(solve.id, solve.penalty === 'dnf' ? 'none' : 'dnf')}
+              >
+                DNF
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="delete"
+                aria-label={`Delete solve ${solves.length - index}`}
+                onClick={() => setPendingDelete(solve.id)}
+              >
+                ×
+              </Button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {pendingDelete ? (
+        <Dialog
+          title="Delete solve"
+          onClose={() => setPendingDelete(null)}
+          footer={
+            <div className="row wrap">
+              <Button type="button" onClick={() => setPendingDelete(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  void deleteSolve(pendingDelete)
+                  setPendingDelete(null)
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          }
+        >
+          <p>Delete this solve? This cannot be undone.</p>
+        </Dialog>
+      ) : null}
+    </>
   )
 }

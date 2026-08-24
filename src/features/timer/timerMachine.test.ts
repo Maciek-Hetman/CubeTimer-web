@@ -21,14 +21,15 @@ describe('timer machine', () => {
     expect(finished.finishedMs).toBe(1125)
   })
 
-  it('ignores extra presses while finished', () => {
+  it('starts a new hold when pressed after finishing', () => {
     const engine = createTimerEngine(() => 100)
     engine.press(0)
     engine.tick(100)
     engine.release(100)
     engine.press(200)
     const again = engine.press(250)
-    expect(again.phase).toBe('finished')
+    expect(again.phase).toBe('holding')
+    expect(again.finishedMs).toBeNull()
   })
 
   it('cancels an interrupted hold without starting', () => {

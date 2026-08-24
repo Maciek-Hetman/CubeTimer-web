@@ -171,25 +171,7 @@ export function SettingsPage() {
         />
       </Panel>
 
-      <Panel className="stack">
-        <h2>Appearance</h2>
-        <Field label="Theme">
-          <select
-            value={settings.theme}
-            onChange={(event) =>
-              void updateSettings({ theme: event.target.value as AppSettingsTheme })
-            }
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </Field>
-      </Panel>
-
       {sessionOpen ? <SessionManager onClose={() => setSessionOpen(false)} /> : null}
     </div>
   )
 }
-
-type AppSettingsTheme = 'system' | 'light' | 'dark'

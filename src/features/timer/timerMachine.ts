@@ -50,6 +50,14 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
         elapsedMs = finishedMs
         return snapshot()
       }
+      if (phase === 'finished') {
+        phase = 'holding'
+        holdStartedAt = now
+        holdProgress = 0
+        elapsedMs = 0
+        finishedMs = null
+        return snapshot()
+      }
       return snapshot()
     },
     release(now) {

@@ -29,6 +29,7 @@ export function SessionStatsWidget() {
     <div className="stack">
       <div>{currentSession?.name}</div>
       <StatGrid
+        columns={2}
         items={[
           ['Solves', String(sessionSolves.length)],
           ['Best', formatAverage(bestSingle(sessionSolves))],

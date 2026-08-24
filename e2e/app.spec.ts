@@ -14,8 +14,6 @@ async function completeSolve(page: Page, method: 'pointer' | 'keyboard' = 'point
     await expect(hint(page)).toContainText(/stop/i, { timeout: 8000 })
     await page.keyboard.down('Space')
     await page.keyboard.up('Space')
-    await expect(page.getByRole('button', { name: 'Save time' })).toBeVisible()
-    await page.keyboard.press('Enter')
     await expect(hint(page)).toContainText(/tap and hold to start/i)
     return
   }
@@ -32,8 +30,6 @@ async function completeSolve(page: Page, method: 'pointer' | 'keyboard' = 'point
   await expect(hint(page)).toContainText(/stop/i, { timeout: 8000 })
   await page.mouse.down()
   await page.mouse.up()
-  await expect(page.getByRole('button', { name: 'Save time' })).toBeVisible()
-  await page.getByRole('button', { name: 'Save time' }).click()
   await expect(hint(page)).toContainText(/tap and hold to start/i)
 }
 

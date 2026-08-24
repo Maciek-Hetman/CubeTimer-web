@@ -14,6 +14,7 @@ import {
   WIDGET_LABELS,
   WIDGET_TYPES,
   renderWidget,
+  SESSION_STATS_MIN_H,
   type WidgetInstance,
   type WidgetType,
 } from './widgetRegistry'
@@ -23,14 +24,20 @@ interface StoredDashboard {
   layouts: Record<'left' | 'right', Layout>
 }
 
-function ensureAveragesHeight(widgets: WidgetInstance[], layouts: StoredDashboard['layouts']): StoredDashboard['layouts'] {
-  const averagesIds = new Set(widgets.filter((widget) => widget.type === 'averages').map((widget) => widget.i))
+const MIN_WIDGET_HEIGHTS: Partial<Record<WidgetType, number>> = {
+  averages: AVERAGES_MIN_H,
+  sessionStats: SESSION_STATS_MIN_H,
+}
+
+function ensureWidgetHeights(widgets: WidgetInstance[], layouts: StoredDashboard['layouts']): StoredDashboard['layouts'] {
+  const minHeights = new Map(widgets.map((widget) => [widget.i, MIN_WIDGET_HEIGHTS[widget.type] ?? 0]))
   const bump = (layout: Layout) =>
     layout.map((item) => {
-      if (!averagesIds.has(item.i)) {
+      const requiredHeight = minHeights.get(item.i) ?? 0
+      if (!requiredHeight) {
         return item
       }
-      const minH = Math.max(item.minH ?? 0, AVERAGES_MIN_H)
+      const minH = Math.max(item.minH ?? 0, requiredHeight)
       return { ...item, minH, h: Math.max(item.h, minH) }
     })
   return { left: bump(layouts.left), right: bump(layouts.right) }
@@ -59,7 +66,7 @@ export function DesktopDashboard() {
         }
         setStore({
           widgets,
-          layouts: ensureAveragesHeight(widgets, layouts),
+          layouts: ensureWidgetHeights(widgets, layouts),
         })
       }
       setHydrated(true)
@@ -82,8 +89,8 @@ export function DesktopDashboard() {
       return
     }
     const i = `${type}-${crypto.randomUUID().slice(0, 8)}`
-    const height = type === 'averages' ? AVERAGES_MIN_H : 4
-    const minH = type === 'averages' ? AVERAGES_MIN_H : 3
+    const height = MIN_WIDGET_HEIGHTS[type] ?? 4
+    const minH = MIN_WIDGET_HEIGHTS[type] ?? 3
     setStore((current) => ({
       widgets: [...current.widgets, { i, type, side }],
       layouts: {

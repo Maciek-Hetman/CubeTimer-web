@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
-import { EVENTS, eventLabel, type CubeEvent, type Penalty } from '../../domain/models'
+import { EVENTS, eventLabel, type CubeEvent } from '../../domain/models'
 import { averageOfN } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
-import { Field } from '../../ui/Field'
 import { RefreshIcon } from '../../ui/NavIcons'
 import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
+import { ThemeToggle } from '../../ui/ThemeToggle'
+import { useMediaQuery } from '../../ui/useMediaQuery'
 import { generateScramble } from '../scramble/scrambleService'
 import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
@@ -39,7 +40,9 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const [sessionOpen, setSessionOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [liveMessage, setLiveMessage] = useState('Timer ready')
-  const busy = isTimerBusy(snapshot.phase) || snapshot.phase === 'finished'
+  const autoSavedRef = useRef(false)
+  const isWide = useMediaQuery('(min-width: 768px)')
+  const busy = isTimerBusy(snapshot.phase)
 
   useEffect(() => {
     snapshotRef.current = snapshot
@@ -90,7 +93,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   }, [])
 
   const finish = useCallback(
-    async (penalty: Penalty) => {
+    async () => {
       const current = snapshotRef.current
       if (current.finishedMs === null) {
         return
@@ -98,27 +101,26 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       const durationMs = current.finishedMs
       await saveSolve({
         durationMs,
-        penalty,
+        penalty: 'none',
         scramble: scramble || '—',
       })
-      engineRef.current.reset()
-      setSnapshot(IDLE_TIMER)
-      setNotice(
-        penalty === 'none'
-          ? `Saved ${formatDuration(durationMs)}`
-          : penalty === 'plus_two'
-            ? `Saved ${formatDuration(durationMs)} (+2)`
-            : 'Saved DNF',
-      )
+      setNotice(`Saved ${formatDuration(durationMs)}`)
       await loadScramble()
     },
     [loadScramble, saveSolve, scramble],
   )
 
-  const discard = useCallback(() => {
-    engineRef.current.reset()
-    setSnapshot(IDLE_TIMER)
-  }, [])
+  useEffect(() => {
+    if (snapshot.phase !== 'finished' || snapshot.finishedMs === null) {
+      autoSavedRef.current = false
+      return
+    }
+    if (autoSavedRef.current) {
+      return
+    }
+    autoSavedRef.current = true
+    void finish()
+  }, [finish, snapshot.finishedMs, snapshot.phase])
 
   useEffect(() => {
     if (!notice) {
@@ -136,7 +138,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     } else if (snapshot.phase === 'ready') {
       setLiveMessage('Ready. Release to start.')
     } else if (snapshot.phase === 'finished') {
-      setLiveMessage(`Finished ${formatDuration(snapshot.finishedMs ?? 0)}. Press Enter to save.`)
+      setLiveMessage(`Saved ${formatDuration(snapshot.finishedMs ?? 0)}`)
     }
   }, [snapshot.phase, snapshot.finishedMs])
 
@@ -156,29 +158,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       if (isFormTarget(event.target)) {
         return
       }
-      const current = snapshotRef.current
-      if (current.phase === 'finished') {
-        if (event.key === 'Enter' || event.code === 'KeyS') {
-          event.preventDefault()
-          void finish('none')
-          return
-        }
-        if (event.code === 'Digit2' || event.code === 'Numpad2') {
-          event.preventDefault()
-          void finish('plus_two')
-          return
-        }
-        if (event.code === 'KeyD') {
-          event.preventDefault()
-          void finish('dnf')
-          return
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          discard()
-        }
-        return
-      }
       if (event.code !== 'Space' || event.repeat) {
         return
       }
@@ -187,9 +166,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     }
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code !== 'Space' || isFormTarget(event.target)) {
-        return
-      }
-      if (snapshotRef.current.phase === 'finished') {
         return
       }
       event.preventDefault()
@@ -201,7 +177,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [discard, finish])
+  }, [])
 
   const ao5 = useMemo(() => averageOfN(solves, 5), [solves])
   const ao12 = useMemo(() => averageOfN(solves, 12), [solves])
@@ -235,7 +211,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           ? 'Release to start!'
           : snapshot.phase === 'running'
             ? 'Tap or press Space to stop'
-            : 'Enter save · 2 +2 · D DNF · Esc discard'
+            : 'Hold Space or tap and hold to start'
 
   function cancelHold() {
     if (snapshotRef.current.phase === 'holding' || snapshotRef.current.phase === 'ready') {
@@ -252,20 +228,19 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
       {!hideChrome ? (
         <header className="row wrap" style={{ justifyContent: 'space-between' }}>
-          <Field label="Event">
-            <select
-              value={settings.event}
-              disabled={busy}
-              onChange={(event) => void setEvent(event.target.value as CubeEvent)}
-              style={{ minWidth: 140 }}
-            >
-              {EVENTS.map((item) => (
-                <option key={item} value={item}>
-                  {eventLabel(item)}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <select
+            aria-label="Event"
+            value={settings.event}
+            disabled={busy}
+            onChange={(event) => void setEvent(event.target.value as CubeEvent)}
+            style={{ minWidth: 140 }}
+          >
+            {EVENTS.map((item) => (
+              <option key={item} value={item}>
+                {eventLabel(item)}
+              </option>
+            ))}
+          </select>
           {settings.sessionMode === 'manual' ? (
             <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)}>
               {currentSession?.name ?? 'Sessions'}
@@ -273,6 +248,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           ) : (
             <span className="muted">{currentSession?.name ?? 'Automatic session'}</span>
           )}
+          {!isWide && variant !== 'desktop' ? <ThemeToggle /> : null}
         </header>
       ) : null}
 
@@ -332,17 +308,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         }}
         aria-label="Timer"
         onPointerDown={(event) => {
-          if (snapshot.phase === 'finished') {
-            return
-          }
           event.preventDefault()
           event.currentTarget.setPointerCapture?.(event.pointerId)
           setSnapshot(engineRef.current.press(performance.now()))
         }}
         onPointerUp={() => {
-          if (snapshot.phase === 'finished') {
-            return
-          }
           setSnapshot(engineRef.current.release(performance.now()))
         }}
         onPointerCancel={cancelHold}
@@ -358,33 +328,14 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         ) : null}
       </button>
 
-      {snapshot.phase === 'finished' ? (
-        <div className="stack">
-          <Button type="button" variant="primary" onClick={() => void finish('none')}>
-            Save time
-          </Button>
-          <div className="row wrap">
-            <Button type="button" onClick={() => void finish('plus_two')}>
-              +2
-            </Button>
-            <Button type="button" variant="danger" onClick={() => void finish('dnf')}>
-              DNF
-            </Button>
-            <Button type="button" variant="ghost" onClick={discard}>
-              Discard
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {!hideAverages ? (
+      {variant !== 'desktop' && !hideAverages ? (
         <Panel muted className="row wrap" style={{ justifyContent: 'space-around' }}>
           <span>Ao5 {formatAverage(ao5)}</span>
           <span>Ao12 {formatAverage(ao12)}</span>
         </Panel>
       ) : null}
 
-      {!hideResults ? (
+      {variant !== 'desktop' && !hideResults ? (
         <div className="row wrap" style={{ justifyContent: 'center' }}>
           {recent.map((solve) => (
             <span key={solve.id} className="chip">

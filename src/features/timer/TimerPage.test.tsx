@@ -81,7 +81,7 @@ describe('TimerPage', () => {
     })
   })
 
-  it('saves a finished solve from the keyboard', async () => {
+  it('saves a finished solve automatically', async () => {
     renderTimer()
     expect((await screen.findAllByText(/R U R' U'/))[0]).toBeInTheDocument()
     await waitFor(() => {
@@ -100,11 +100,10 @@ describe('TimerPage', () => {
       expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
     })
     fireEvent.keyDown(window, { code: 'Space', key: ' ' })
-    await screen.findByRole('button', { name: 'Save time' })
-    fireEvent.keyDown(window, { key: 'Enter', code: 'Enter' })
     expect(await screen.findByText(/Saved /i)).toBeInTheDocument()
     await waitFor(() => {
       expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
     })
+    expect(screen.queryByRole('button', { name: 'Save time' })).not.toBeInTheDocument()
   })
 })

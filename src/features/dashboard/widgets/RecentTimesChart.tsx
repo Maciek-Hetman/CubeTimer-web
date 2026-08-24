@@ -39,10 +39,18 @@ export function RecentTimesChart() {
   return (
     <div style={{ width: '100%', height: 180 }}>
       <ResponsiveContainer>
-        <LineChart data={data}>
+        <LineChart data={data} margin={{ top: 8, right: 40, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis dataKey="index" hide />
-          <YAxis tickFormatter={(value: number) => formatDuration(value)} width={56} stroke="var(--text-muted)" />
+          <YAxis
+            tickFormatter={(value: number) => String(Math.round(value / 1000))}
+            domain={[
+              (dataMin: number) => dataMin - 500,
+              (dataMax: number) => dataMax + 500,
+            ]}
+            width={40}
+            stroke="var(--text-muted)"
+          />
           <Tooltip
             contentStyle={{
               background: 'var(--surface-elevated)',
@@ -51,7 +59,7 @@ export function RecentTimesChart() {
             }}
             formatter={(value) => formatDuration(Number(value))}
           />
-          <Line type="monotone" dataKey="ms" stroke="var(--accent)" dot={false} strokeWidth={2} />
+          <Line type="monotone" dataKey="ms" name="Time (s)" stroke="var(--accent)" dot={false} strokeWidth={2} />
         </LineChart>
       </ResponsiveContainer>
     </div>

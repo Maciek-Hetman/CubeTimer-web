@@ -6,6 +6,7 @@ import { AppBrand } from '../ui/AppBrand'
 import { Button } from '../ui/Button'
 import { CheckIcon, EditWidgetsIcon, SettingsIcon, StatsIcon, TimerIcon } from '../ui/NavIcons'
 import { useMediaQuery } from '../ui/useMediaQuery'
+import { ThemeToggle } from '../ui/ThemeToggle'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Timer', end: true, icon: <TimerIcon /> },
@@ -82,6 +83,7 @@ export function AppShell() {
                 {widgetEditing ? <CheckIcon /> : <EditWidgetsIcon />}
               </Button>
             ) : null}
+            <ThemeToggle />
             {showSync ? <SyncIndicator /> : null}
           </div>
         </header>
