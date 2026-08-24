@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ConflictBanner } from '../features/sync/ConflictBanner'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
 import { AppBrand } from '../ui/AppBrand'
-import { SettingsIcon, StatsIcon, TimerIcon } from '../ui/NavIcons'
+import { Button } from '../ui/Button'
+import { CheckIcon, EditWidgetsIcon, SettingsIcon, StatsIcon, TimerIcon } from '../ui/NavIcons'
 import { useMediaQuery } from '../ui/useMediaQuery'
 
 const NAV_ITEMS = [
@@ -10,6 +12,11 @@ const NAV_ITEMS = [
   { to: '/stats', label: 'Stats', end: false, icon: <StatsIcon /> },
   { to: '/settings', label: 'Settings', end: false, icon: <SettingsIcon /> },
 ] as const
+
+export interface ShellOutletContext {
+  widgetEditing: boolean
+  setWidgetEditing: (value: boolean | ((current: boolean) => boolean)) => void
+}
 
 export function AppShell() {
   const location = useLocation()
@@ -23,7 +30,21 @@ export function AppShell() {
     location.pathname.startsWith('/forgot-password')
   const showHeaderNav = !isAuthRoute && isWide
   const showBottomNav = !isAuthRoute && !isWide
-  const isDesktopHome = isDesktop && location.pathname === '/'
+  const isHome = location.pathname === '/'
+  const isDesktopHome = isDesktop && isHome
+  const showSync = !isAuthRoute && !isHome
+  const [widgetEditing, setWidgetEditing] = useState(false)
+
+  useEffect(() => {
+    if (!isDesktopHome) {
+      setWidgetEditing(false)
+    }
+  }, [isDesktopHome])
+
+  const outletContext = useMemo<ShellOutletContext>(
+    () => ({ widgetEditing, setWidgetEditing }),
+    [widgetEditing],
+  )
 
   const mainClass = [
     'app-main',
@@ -47,13 +68,28 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
-          <SyncIndicator />
+          <div className="header-actions">
+            {isDesktopHome ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="icon"
+                aria-pressed={widgetEditing}
+                aria-label={widgetEditing ? 'Done editing widgets' : 'Edit widgets'}
+                title={widgetEditing ? 'Done' : 'Edit widgets'}
+                onClick={() => setWidgetEditing((value) => !value)}
+              >
+                {widgetEditing ? <CheckIcon /> : <EditWidgetsIcon />}
+              </Button>
+            ) : null}
+            {showSync ? <SyncIndicator /> : null}
+          </div>
         </header>
       ) : null}
       <main className={mainClass}>
         <ConflictBanner />
-        {!isAuthRoute && !showHeaderNav ? <SyncIndicator /> : null}
-        <Outlet />
+        {showSync && !showHeaderNav ? <SyncIndicator /> : null}
+        <Outlet context={outletContext} />
       </main>
       {showBottomNav ? (
         <nav className="bottom-nav" aria-label="Primary">

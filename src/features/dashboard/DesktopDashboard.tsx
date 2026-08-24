@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import GridLayout, { useContainerWidth, type Layout } from 'react-grid-layout'
+import { useOutletContext } from 'react-router-dom'
 import { useApp } from '../../app/AppProviders'
+import type { ShellOutletContext } from '../../app/AppShell'
 import { db } from '../../data/db'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
 import { TimerPage } from '../timer/TimerPage'
 import {
+  AVERAGES_MIN_H,
   DEFAULT_LAYOUTS,
   DEFAULT_WIDGETS,
   WIDGET_LABELS,
@@ -20,9 +23,22 @@ interface StoredDashboard {
   layouts: Record<'left' | 'right', Layout>
 }
 
+function ensureAveragesHeight(widgets: WidgetInstance[], layouts: StoredDashboard['layouts']): StoredDashboard['layouts'] {
+  const averagesIds = new Set(widgets.filter((widget) => widget.type === 'averages').map((widget) => widget.i))
+  const bump = (layout: Layout) =>
+    layout.map((item) => {
+      if (!averagesIds.has(item.i)) {
+        return item
+      }
+      const minH = Math.max(item.minH ?? 0, AVERAGES_MIN_H)
+      return { ...item, minH, h: Math.max(item.h, minH) }
+    })
+  return { left: bump(layouts.left), right: bump(layouts.right) }
+}
+
 export function DesktopDashboard() {
   const { ownerId } = useApp()
-  const [editing, setEditing] = useState(false)
+  const { widgetEditing: editing = false } = useOutletContext<ShellOutletContext>() ?? {}
   const [store, setStore] = useState<StoredDashboard>({
     widgets: DEFAULT_WIDGETS,
     layouts: DEFAULT_LAYOUTS,
@@ -35,13 +51,15 @@ export function DesktopDashboard() {
       const layout = record?.layout as StoredDashboard | undefined
       if (layout?.widgets && layout.layouts) {
         const known = new Set(WIDGET_TYPES)
-        const widgets = layout.widgets.filter((widget) => known.has(widget.type))
+        const knownWidgets = layout.widgets.filter((widget) => known.has(widget.type))
+        const widgets = knownWidgets.length > 0 ? knownWidgets : DEFAULT_WIDGETS
+        const layouts = {
+          left: layout.layouts.left ?? DEFAULT_LAYOUTS.left,
+          right: layout.layouts.right ?? DEFAULT_LAYOUTS.right,
+        }
         setStore({
-          widgets: widgets.length > 0 ? widgets : DEFAULT_WIDGETS,
-          layouts: {
-            left: layout.layouts.left ?? DEFAULT_LAYOUTS.left,
-            right: layout.layouts.right ?? DEFAULT_LAYOUTS.right,
-          },
+          widgets,
+          layouts: ensureAveragesHeight(widgets, layouts),
         })
       }
       setHydrated(true)
@@ -64,11 +82,13 @@ export function DesktopDashboard() {
       return
     }
     const i = `${type}-${crypto.randomUUID().slice(0, 8)}`
+    const height = type === 'averages' ? AVERAGES_MIN_H : 4
+    const minH = type === 'averages' ? AVERAGES_MIN_H : 3
     setStore((current) => ({
       widgets: [...current.widgets, { i, type, side }],
       layouts: {
         ...current.layouts,
-        [side]: [...current.layouts[side], { i, x: 0, y: Infinity, w: 1, h: 4, minH: 3 }],
+        [side]: [...current.layouts[side], { i, x: 0, y: Infinity, w: 1, h: height, minH }],
       },
     }))
   }
@@ -93,12 +113,7 @@ export function DesktopDashboard() {
         onRemove={removeWidget}
         onAdd={addWidget}
       />
-      <section className="desktop-center stack">
-        <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
-          <Button type="button" onClick={() => setEditing((value) => !value)}>
-            {editing ? 'Done' : 'Edit widgets'}
-          </Button>
-        </div>
+      <section className="desktop-center">
         <TimerPage variant="desktop" />
       </section>
       <WidgetColumn

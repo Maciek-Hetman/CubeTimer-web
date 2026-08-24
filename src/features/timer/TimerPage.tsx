@@ -5,6 +5,7 @@ import { averageOfN } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
+import { RefreshIcon } from '../../ui/NavIcons'
 import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
 import { generateScramble } from '../scramble/scrambleService'
@@ -276,28 +277,44 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       ) : null}
 
       {!hideScramble ? (
-        <Panel muted className="scramble stack">
-          {scrambleState === 'loading' ? <span className="muted">Generating scramble…</span> : null}
-          {scrambleState === 'error' ? (
-            <>
-              <span role="alert">Could not generate scramble</span>
-              <div>
-                <Button type="button" variant="ghost" disabled={busy} onClick={() => void loadScramble()}>
-                  Retry
+        <Panel muted className="scramble">
+          <div className="scramble-row">
+            {scrambleState === 'loading' ? <span className="muted scramble-text">Generating scramble…</span> : null}
+            {scrambleState === 'error' ? (
+              <>
+                <span className="scramble-text" role="alert">
+                  Could not generate scramble
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="icon"
+                  disabled={busy}
+                  aria-label="Retry"
+                  title="Retry"
+                  onClick={() => void loadScramble()}
+                >
+                  <RefreshIcon />
                 </Button>
-              </div>
-            </>
-          ) : null}
-          {scrambleState === 'ready' ? (
-            <>
-              {scramble}
-              <div>
-                <Button type="button" variant="ghost" disabled={busy} onClick={() => void loadScramble()}>
-                  New scramble
+              </>
+            ) : null}
+            {scrambleState === 'ready' ? (
+              <>
+                <span className="scramble-text">{scramble}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="icon"
+                  disabled={busy}
+                  aria-label="New scramble"
+                  title="New scramble"
+                  onClick={() => void loadScramble()}
+                >
+                  <RefreshIcon />
                 </Button>
-              </div>
-            </>
-          ) : null}
+              </>
+            ) : null}
+          </div>
         </Panel>
       ) : (
         <div style={{ minHeight: 48 }} />
@@ -311,7 +328,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           width: '100%',
           border: 0,
           background: 'transparent',
-          minHeight: variant === 'desktop' ? 280 : 240,
+          minHeight: variant === 'desktop' ? 380 : 240,
         }}
         aria-label="Timer"
         onPointerDown={(event) => {

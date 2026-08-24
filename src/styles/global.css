@@ -85,9 +85,9 @@ h2 {
   position: sticky;
   top: 0;
   z-index: 40;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   min-height: var(--header-height);
   padding: var(--space-2) var(--space-4);
@@ -100,7 +100,16 @@ h2 {
 .header-nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-1);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  min-height: 40px;
 }
 
 .nav-icon {
@@ -335,6 +344,14 @@ body[data-timer-busy='true'] .app-header {
   box-shadow: none;
 }
 
+.btn.icon {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -505,8 +522,10 @@ input[type='range'] {
 }
 
 .timer-page.desktop {
+  flex: 1;
   max-width: none;
-  min-height: 100%;
+  min-height: 0;
+  height: 100%;
 }
 
 .timer-display {
@@ -562,6 +581,19 @@ input[type='range'] {
   line-height: 1.55;
   word-break: break-word;
   font-size: 1.02rem;
+  padding: var(--space-3);
+}
+
+.scramble-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.scramble-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .chip {
@@ -628,15 +660,18 @@ input[type='range'] {
 
 .desktop-dashboard {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(420px, 1.4fr) minmax(220px, 1fr);
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(220px, 280px);
   gap: var(--space-3);
   min-height: calc(100dvh - var(--header-height) - 28px);
+  height: calc(100dvh - var(--header-height) - 28px);
 }
 
 .desktop-center {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
+  height: 100%;
 }
 
 .widget-column {
@@ -681,7 +716,7 @@ input[type='range'] {
 }
 
 .data-table td {
-  padding: 7px 0;
+  padding: 6px 0;
   font-family: var(--mono);
 }
 

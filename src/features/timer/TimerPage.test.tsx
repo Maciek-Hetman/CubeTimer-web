@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppProviders } from '../../app/AppProviders'
 import { db, getOrCreateSettings } from '../../data/db'
+import { generateScramble } from '../scramble/scrambleService'
 import { TimerPage } from './TimerPage'
 
 vi.mock('../scramble/scrambleService', () => ({
@@ -29,12 +30,26 @@ function timerHint() {
 describe('TimerPage', () => {
   beforeEach(async () => {
     cleanup()
+    vi.mocked(generateScramble).mockClear()
     await db.delete()
     await db.open()
   })
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('regenerates scramble from the compact action', async () => {
+    const user = userEvent.setup()
+    renderTimer()
+    await screen.findByRole('button', { name: 'New scramble' })
+    expect((await screen.findAllByText(/R U R' U'/))[0]).toBeInTheDocument()
+    const calls = vi.mocked(generateScramble).mock.calls.length
+    await user.click(screen.getByRole('button', { name: 'New scramble' }))
+    await waitFor(() => {
+      expect(vi.mocked(generateScramble).mock.calls.length).toBeGreaterThan(calls)
+    })
+    expect(await screen.findByRole('button', { name: 'New scramble' })).toBeInTheDocument()
   })
 
   it('shows scramble and opens the session manager in manual mode', async () => {
