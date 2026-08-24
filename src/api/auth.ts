@@ -1,0 +1,62 @@
+import { apiRequest } from './client'
+import type { AuthSession, User } from './types'
+
+export function register(email: string, password: string) {
+  return apiRequest<{ status: string }>('/v1/auth/register', {
+    method: 'POST',
+    body: { email, password },
+  })
+}
+
+export function resendVerification(email: string) {
+  return apiRequest<{ status: string }>('/v1/auth/email/resend', {
+    method: 'POST',
+    body: { email },
+  })
+}
+
+export function verifyEmail(token: string) {
+  return apiRequest<AuthSession>('/v1/auth/email/verify', {
+    method: 'POST',
+    body: { token },
+  })
+}
+
+export function login(email: string, password: string) {
+  return apiRequest<AuthSession>('/v1/auth/login', {
+    method: 'POST',
+    body: { email, password },
+  })
+}
+
+export function refresh(refreshToken: string) {
+  return apiRequest<AuthSession>('/v1/auth/refresh', {
+    method: 'POST',
+    body: { refresh_token: refreshToken },
+  })
+}
+
+export function logout(refreshToken: string) {
+  return apiRequest<void>('/v1/auth/logout', {
+    method: 'POST',
+    body: { refresh_token: refreshToken },
+  })
+}
+
+export function forgotPassword(email: string) {
+  return apiRequest<{ status: string }>('/v1/auth/password/forgot', {
+    method: 'POST',
+    body: { email },
+  })
+}
+
+export function resetPassword(token: string, newPassword: string) {
+  return apiRequest<AuthSession>('/v1/auth/password/reset', {
+    method: 'POST',
+    body: { token, new_password: newPassword },
+  })
+}
+
+export function getMe(accessToken: string) {
+  return apiRequest<User>('/v1/me', { accessToken })
+}

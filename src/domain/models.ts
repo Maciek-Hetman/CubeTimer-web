@@ -1,0 +1,122 @@
+export const EVENTS = ['2x2', '3x3', '4x4', '5x5', 'megaminx', 'pyraminx'] as const
+export type CubeEvent = (typeof EVENTS)[number]
+
+export const PENALTIES = ['none', 'plus_two', 'dnf'] as const
+export type Penalty = (typeof PENALTIES)[number]
+
+export const SESSION_KINDS = ['manual', 'automatic'] as const
+export type SessionKind = (typeof SESSION_KINDS)[number]
+
+export type SessionMode = SessionKind
+
+export interface CubeSession {
+  id: string
+  ownerId: string
+  name: string
+  event: CubeEvent
+  kind: SessionKind
+  startedAt: string
+  endedAt: string | null
+  archived: boolean
+  version: number
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export interface Solve {
+  id: string
+  ownerId: string
+  sessionId: string | null
+  durationMs: number
+  penalty: Penalty
+  solvedAt: string
+  scramble: string
+  event: CubeEvent
+  version: number
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export interface MutationRecord {
+  id: string
+  ownerId: string
+  entity: 'session' | 'solve'
+  entityId: string
+  operation: 'upsert' | 'delete'
+  baseVersion: number
+  data?: SessionInput | SolveInput
+  createdAt: string
+}
+
+export interface SessionInput {
+  id: string
+  name: string
+  event: CubeEvent
+  kind: SessionKind
+  started_at: string
+  ended_at: string | null
+  archived: boolean
+}
+
+export interface SolveInput {
+  id: string
+  session_id: string | null
+  duration_ms: number
+  penalty: Penalty
+  solved_at: string
+  scramble: string
+  event: CubeEvent
+}
+
+export interface AppSettings {
+  ownerId: string
+  event: CubeEvent
+  sessionMode: SessionMode
+  inactivityGapMinutes: number
+  timerStartDelayMs: number
+  focusMode: boolean
+  hideScrambleDuringSolve: boolean
+  hideAveragesDuringSolve: boolean
+  hideLastResultsDuringSolve: boolean
+  theme: 'system' | 'light' | 'dark'
+  currentSessionIds: Partial<Record<CubeEvent, string>>
+}
+
+export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
+  event: '3x3',
+  sessionMode: 'automatic',
+  inactivityGapMinutes: 60,
+  timerStartDelayMs: 500,
+  focusMode: false,
+  hideScrambleDuringSolve: false,
+  hideAveragesDuringSolve: false,
+  hideLastResultsDuringSolve: false,
+  theme: 'system',
+  currentSessionIds: {},
+}
+
+export function createId(): string {
+  return crypto.randomUUID()
+}
+
+export function nowIso(date = new Date()): string {
+  return date.toISOString()
+}
+
+export function effectiveTimeMs(solve: Pick<Solve, 'durationMs' | 'penalty'>): number | null {
+  if (solve.penalty === 'dnf') {
+    return null
+  }
+  return solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+}
+
+export function eventLabel(event: CubeEvent): string {
+  switch (event) {
+    case 'megaminx':
+      return 'Megaminx'
+    case 'pyraminx':
+      return 'Pyraminx'
+    default:
+      return event
+  }
+}
