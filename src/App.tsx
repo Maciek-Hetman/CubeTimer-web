@@ -12,6 +12,7 @@ import { ResetPasswordPage } from './features/auth/ResetPasswordPage'
 import { StatsPage } from './features/stats/StatsPage'
 import { HistoryPage } from './features/history/HistoryPage'
 import { SettingsPage } from './features/settings/SettingsPage'
+import { AccountPage } from './features/account/AccountPage'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/account" element={<AccountPage />} />
             <Route
               path="/admin"
               element={

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ConflictBanner } from '../features/sync/ConflictBanner'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
+import { AccountButton, AccountTabIcon } from '../features/account/AccountButton'
 import { AppBrand } from '../ui/AppBrand'
 import { Button } from '../ui/Button'
 import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerIcon, HistoryIcon } from '../ui/NavIcons'
@@ -15,7 +16,7 @@ export interface ShellOutletContext {
 }
 
 export function AppShell() {
-  const { isAdmin, settings, customBackground } = useApp()
+  const { user, isAdmin, settings, customBackground } = useApp()
   const location = useLocation()
   const isWide = useMediaQuery('(min-width: 768px)')
   const isDesktop = useMediaQuery('(min-width: 1200px)')
@@ -31,6 +32,7 @@ export function AppShell() {
     { to: '/history', label: 'History', end: false, icon: <HistoryIcon /> },
     ...(isAdmin ? [{ to: '/admin', label: 'Admin', end: false, icon: <ShieldIcon /> }] : []),
     { to: '/settings', label: 'Settings', end: false, icon: <SettingsIcon /> },
+    ...(!isWide ? [{ to: user ? '/account' : '/login', label: user ? 'Account' : 'Sign in', end: false, icon: <AccountTabIcon /> }] : []),
   ]
 
   const showHeaderNav = !isAuthRoute && isWide
@@ -105,13 +107,14 @@ export function AppShell() {
               </Button>
             ) : null}
             <ThemeToggle />
-            {showSync ? <SyncIndicator /> : null}
+            <AccountButton />
           </div>
         </header>
       ) : null}
       <main className={mainClass}>
         <ConflictBanner />
         {showSync && !showHeaderNav ? <SyncIndicator /> : null}
+
         <Outlet context={outletContext} />
       </main>
       {showBottomNav ? (
