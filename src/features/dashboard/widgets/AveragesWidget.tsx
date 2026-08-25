@@ -20,7 +20,7 @@ export function AveragesWidget() {
           <tr key={n}>
             <td>Ao{n}</td>
             <td className="num">{formatAverage(averageOfN(solves, n))}</td>
-            <td className="num">{formatAverage(n === 1 ? bestSingle(solves) : bestAverageOfN(solves, n))}</td>
+            <td className="num best-time">{formatAverage(n === 1 ? bestSingle(solves) : bestAverageOfN(solves, n))}</td>
           </tr>
         ))}
       </tbody>

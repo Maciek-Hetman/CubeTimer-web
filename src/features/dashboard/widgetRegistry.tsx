@@ -27,7 +27,7 @@ export const DEFAULT_WIDGETS: WidgetInstance[] = [
   { i: 'recentSolves', type: 'recentSolves', side: 'right' },
 ]
 
-export const AVERAGES_MIN_H = 5
+export const AVERAGES_MIN_H = 4
 export const SESSION_STATS_MIN_H = 5
 
 export const DEFAULT_LAYOUTS: Record<'left' | 'right', Layout> = {

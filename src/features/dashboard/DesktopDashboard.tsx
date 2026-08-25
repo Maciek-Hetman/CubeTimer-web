@@ -39,7 +39,15 @@ function ensureWidgetHeights(widgets: WidgetInstance[], layouts: StoredDashboard
         return item
       }
       const minH = Math.max(item.minH ?? 0, requiredHeight)
-      return { ...item, minH, h: Math.max(item.h, minH) }
+      let h = Math.max(item.h, minH)
+      
+      // Auto-snap Averages widgets to the new perfect height of 4 
+      // if they were at the old default of 5, or if they got squeezed to 3.
+      if (item.i.startsWith('averages') && (item.h === 5 || item.h === 3) && requiredHeight === 4) {
+        h = 4
+      }
+      
+      return { ...item, minH, h }
     })
   return { left: bump(layouts.left), right: bump(layouts.right) }
 }

@@ -768,7 +768,7 @@ input[type='range'] {
   text-align: left;
   color: var(--text-muted);
   font-weight: 600;
-  padding: 6px 0;
+  padding: 3px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -778,16 +778,22 @@ input[type='range'] {
 }
 
 .data-table td {
-  padding: 6px 0;
+  padding: 3px 0;
   font-family: var(--mono);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
 }
 
 .data-table td:first-child {
   font-family: var(--font);
+  font-weight: 600;
 }
 
-.data-table td.num {
-  text-align: right;
+.data-table td.best-time {
+  color: var(--success);
 }
 
 .stat-grid {
