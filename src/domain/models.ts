@@ -80,6 +80,7 @@ export interface AppSettings {
   timerDisplayMode: TimerDisplayMode
   hideScrambleDuringSolve: boolean
   hideWidgetsDuringSolve: boolean
+  enableWidgets: boolean
   theme: 'system' | 'light' | 'dark'
   currentSessionIds: Partial<Record<CubeEvent, string>>
 }
@@ -92,6 +93,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   timerDisplayMode: 'show',
   hideScrambleDuringSolve: false,
   hideWidgetsDuringSolve: false,
+  enableWidgets: true,
   theme: 'system',
   currentSessionIds: {},
 }

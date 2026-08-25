@@ -15,7 +15,7 @@ export interface ShellOutletContext {
 }
 
 export function AppShell() {
-  const { isAdmin } = useApp()
+  const { isAdmin, settings } = useApp()
   const location = useLocation()
   const isWide = useMediaQuery('(min-width: 768px)')
   const isDesktop = useMediaQuery('(min-width: 1200px)')
@@ -74,7 +74,7 @@ export function AppShell() {
             ))}
           </nav>
           <div className="header-actions">
-            {isDesktopHome ? (
+            {isDesktopHome && settings.enableWidgets !== false ? (
               <Button
                 type="button"
                 variant="ghost"

@@ -167,10 +167,17 @@ export function SettingsPage() {
           onChange={(checked) => void updateSettings({ hideScrambleDuringSolve: checked })}
         />
         <Switch
-          label="Hide widgets during solve"
-          checked={settings.hideWidgetsDuringSolve}
-          onChange={(checked) => void updateSettings({ hideWidgetsDuringSolve: checked })}
+          label="Enable widgets (desktop only)"
+          checked={settings.enableWidgets ?? true}
+          onChange={(checked) => void updateSettings({ enableWidgets: checked })}
         />
+        {(settings.enableWidgets ?? true) && (
+          <Switch
+            label="Hide widgets during solve"
+            checked={settings.hideWidgetsDuringSolve}
+            onChange={(checked) => void updateSettings({ hideWidgetsDuringSolve: checked })}
+          />
+        )}
       </Panel>
 
       {sessionOpen ? <SessionManager onClose={() => setSessionOpen(false)} /> : null}
