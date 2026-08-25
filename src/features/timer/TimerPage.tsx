@@ -249,7 +249,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {liveMessage}
       </div>
 
-      <header className="row wrap" style={{ justifyContent: 'space-between', marginTop: variant === 'desktop' ? 12 : 0 }}>
+      <header className="row wrap" style={{ justifyContent: 'space-between', marginTop: variant === 'desktop' ? 8 : 0 }}>
         <Select
           aria-label="Event"
           value={settings.event}
