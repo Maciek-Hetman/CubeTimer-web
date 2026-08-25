@@ -10,6 +10,7 @@ import { VerifyEmailPage } from './features/auth/VerifyEmailPage'
 import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from './features/auth/ResetPasswordPage'
 import { StatsPage } from './features/stats/StatsPage'
+import { HistoryPage } from './features/history/HistoryPage'
 import { SettingsPage } from './features/settings/SettingsPage'
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/history" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route
               path="/admin"

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export function StatGrid({ items, columns }: { items: Array<[string, string]>; columns?: number }) {
+export function StatGrid({ items, columns }: { items: Array<[string, ReactNode]>; columns?: number }) {
   return (
     <div
       className="stat-grid"

@@ -1,25 +1,48 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApp } from '../../app/AppProviders'
-import { eventLabel, type Penalty } from '../../domain/models'
+import { eventLabel } from '../../domain/models'
 import { averageOfN, bestAverageOfN, bestSingle, meanOfSolves, worstSingle } from '../../domain/stats/averages'
-import { formatAverage, formatSolveTime } from '../../domain/stats/formatTime'
-import { Button } from '../../ui/Button'
-import { Dialog } from '../../ui/Dialog'
+import { formatAverage } from '../../domain/stats/formatTime'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { StatGrid } from '../../ui/StatGrid'
 
-export function StatsPage() {
-  const { solves, sessions, settings, currentSession, updateSolvePenalty, deleteSolve } = useApp()
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+function DeltaBadge({ delta }: { delta: number | null }) {
+  if (delta === null || isNaN(delta)) return null
+  const isImprovement = delta < 0
+  const color = isImprovement ? '#22c55e' : '#ef4444' // fallback to raw colors
+  const sign = isImprovement ? '-' : '+'
+  const absDelta = Math.abs(delta)
+  return (
+    <span style={{ color, fontSize: '0.85em', marginLeft: 8 }}>
+      {sign}{formatAverage(absDelta)}
+    </span>
+  )
+}
 
-  const sessionById = useMemo(() => new Map(sessions.map((session) => [session.id, session])), [sessions])
+export function StatsPage() {
+  const { solves, sessions, settings, currentSession } = useApp()
 
   const sessionSolves = useMemo(
     () => (currentSession ? solves.filter((solve) => solve.sessionId === currentSession.id) : solves),
     [currentSession, solves],
+  )
+
+  const previousSession = useMemo(() => {
+    if (!currentSession) return null
+    const currentIndex = sessions.findIndex((s) => s.id === currentSession.id)
+    if (currentIndex > 0) {
+      return sessions[currentIndex - 1]
+    }
+    return null
+  }, [sessions, currentSession])
+
+  const previousSessionSolves = useMemo(
+    () => (previousSession ? solves.filter((solve) => solve.sessionId === previousSession.id) : []),
+    [previousSession, solves],
   )
 
   const summary = useMemo(
@@ -46,6 +69,31 @@ export function StatsPage() {
     [sessionSolves],
   )
 
+  const previousSessionSummary = useMemo(
+    () => ({
+      best: bestSingle(previousSessionSolves),
+      mean: meanOfSolves(previousSessionSolves),
+      ao5: averageOfN(previousSessionSolves, 5),
+    }),
+    [previousSessionSolves],
+  )
+
+  const getDelta = (current: number | null, previous: number | null) => {
+    if (current === null || previous === null) return null
+    return current - previous
+  }
+
+  const chartData = useMemo(() => {
+    const reversed = [...solves].reverse()
+    return reversed.map((solve, i) => {
+      const time = solve.penalty === 'dnf' ? null : solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+      return {
+        index: i + 1,
+        time: time ? time / 1000 : null,
+      }
+    })
+  }, [solves])
+
   return (
     <div className="stack">
       <PageHeader
@@ -65,98 +113,85 @@ export function StatsPage() {
         />
       ) : (
         <>
+          <div className="row wrap" style={{ gap: '16px' }}>
+            <Panel style={{ flex: 1, minWidth: '150px' }}>
+              <div className="muted" style={{ fontSize: '0.9em' }}>PB Time</div>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+                {formatAverage(summary.best)}
+              </div>
+            </Panel>
+            <Panel style={{ flex: 1, minWidth: '150px' }}>
+              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao5</div>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+                {formatAverage(summary.bestAo5)}
+              </div>
+            </Panel>
+            <Panel style={{ flex: 1, minWidth: '150px' }}>
+              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao12</div>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+                {formatAverage(summary.bestAo12)}
+              </div>
+            </Panel>
+          </div>
+
+          <Panel className="stack">
+            <h2>Times Graph</h2>
+            <div style={{ width: '100%', height: 250 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                  <Line type="monotone" dataKey="time" stroke="#8884d8" dot={false} isAnimationActive={false} />
+                  <XAxis dataKey="index" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} width={40} />
+                  <Tooltip labelFormatter={(label) => `Solve ${label}`} formatter={(val: any) => [`${Number(val).toFixed(2)}s`, 'Time']} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+
           <Panel className="stack">
             <h2>All-time</h2>
             <StatGrid
               items={[
                 ['Solves', String(summary.count)],
-                ['Best', formatAverage(summary.best)],
                 ['Worst', formatAverage(summary.worst)],
                 ['Mean', formatAverage(summary.mean)],
                 ['Ao5', formatAverage(summary.ao5)],
                 ['Ao12', formatAverage(summary.ao12)],
-                ['Best Ao5', formatAverage(summary.bestAo5)],
-                ['Best Ao12', formatAverage(summary.bestAo12)],
               ]}
             />
           </Panel>
+
           <Panel className="stack">
             <h2>Current session</h2>
             <StatGrid
               items={[
                 ['Solves', String(sessionSummary.count)],
-                ['Best', formatAverage(sessionSummary.best)],
-                ['Mean', formatAverage(sessionSummary.mean)],
-                ['Ao5', formatAverage(sessionSummary.ao5)],
+                [
+                  'Best',
+                  <span key="best">
+                    {formatAverage(sessionSummary.best)}
+                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
+                  </span>,
+                ],
+                [
+                  'Mean',
+                  <span key="mean">
+                    {formatAverage(sessionSummary.mean)}
+                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
+                  </span>,
+                ],
+                [
+                  'Ao5',
+                  <span key="ao5">
+                    {formatAverage(sessionSummary.ao5)}
+                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
+                  </span>,
+                ],
               ]}
             />
           </Panel>
-          <Panel className="stack">
-            <h2>History</h2>
-            <p className="muted">
-              Showing last {Math.min(200, solves.length)} of {solves.length}
-            </p>
-            <div>
-              {solves.slice(0, 200).map((solve) => {
-                const sessionName = solve.sessionId ? sessionById.get(solve.sessionId)?.name : null
-                return (
-                  <div key={solve.id} className="history-row">
-                    <div className="stack" style={{ gap: 4 }}>
-                      <strong className="chip">{formatSolveTime(solve)}</strong>
-                      <div className="history-meta muted">
-                        {new Date(solve.solvedAt).toLocaleString()}
-                        {sessionName ? ` · ${sessionName}` : ''}
-                      </div>
-                      {solve.scramble ? <div className="history-meta scramble muted">{solve.scramble}</div> : null}
-                    </div>
-                    <div className="row wrap">
-                      <select
-                        aria-label="Penalty"
-                        value={solve.penalty}
-                        onChange={(event) => void updateSolvePenalty(solve.id, event.target.value as Penalty)}
-                      >
-                        <option value="none">OK</option>
-                        <option value="plus_two">+2</option>
-                        <option value="dnf">DNF</option>
-                      </select>
-                      <Button type="button" variant="danger" onClick={() => setPendingDelete(solve.id)}>
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </Panel>
-          <p className="muted">{sessions.length} sessions stored</p>
         </>
       )}
-
-      {pendingDelete ? (
-        <Dialog
-          title="Delete solve"
-          onClose={() => setPendingDelete(null)}
-          footer={
-            <div className="row wrap">
-              <Button type="button" onClick={() => setPendingDelete(null)}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                onClick={() => {
-                  void deleteSolve(pendingDelete)
-                  setPendingDelete(null)
-                }}
-              >
-                Delete
-              </Button>
-            </div>
-          }
-        >
-          <p>Delete this solve? This cannot be undone.</p>
-        </Dialog>
-      ) : null}
     </div>
   )
 }

@@ -866,6 +866,14 @@ input[type='range'] {
   color: var(--danger);
 }
 
+.history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
 .history-row:first-child {
   border-top: 0;
   padding-top: 0;

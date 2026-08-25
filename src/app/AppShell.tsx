@@ -4,7 +4,7 @@ import { ConflictBanner } from '../features/sync/ConflictBanner'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
 import { AppBrand } from '../ui/AppBrand'
 import { Button } from '../ui/Button'
-import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerIcon } from '../ui/NavIcons'
+import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerIcon, HistoryIcon } from '../ui/NavIcons'
 import { useMediaQuery } from '../ui/useMediaQuery'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { useApp } from './AppProviders'
@@ -28,6 +28,7 @@ export function AppShell() {
   const navItems = [
     { to: '/', label: 'Timer', end: true, icon: <TimerIcon /> },
     { to: '/stats', label: 'Stats', end: false, icon: <StatsIcon /> },
+    { to: '/history', label: 'History', end: false, icon: <HistoryIcon /> },
     ...(isAdmin ? [{ to: '/admin', label: 'Admin', end: false, icon: <ShieldIcon /> }] : []),
     { to: '/settings', label: 'Settings', end: false, icon: <SettingsIcon /> },
   ]
