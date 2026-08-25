@@ -27,8 +27,8 @@ export function SessionStatsWidget() {
   }
   return (
     <div className="stack">
-      <div>{currentSession?.name}</div>
       <StatGrid
+        size="large"
         columns={2}
         items={[
           ['Solves', String(sessionSolves.length)],

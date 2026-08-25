@@ -1,9 +1,17 @@
 import type { ReactNode } from 'react'
 
-export function StatGrid({ items, columns }: { items: Array<[string, ReactNode]>; columns?: number }) {
+export function StatGrid({
+  items,
+  columns,
+  size = 'normal',
+}: {
+  items: Array<[string, ReactNode]>
+  columns?: number
+  size?: 'normal' | 'large'
+}) {
   return (
     <div
-      className="stat-grid"
+      className={`stat-grid ${size === 'large' ? 'stat-grid-large' : ''}`}
       style={columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}
     >
       {items.map(([label, value]) => (

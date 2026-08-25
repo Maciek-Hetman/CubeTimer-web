@@ -820,6 +820,10 @@ input[type='range'] {
   font-weight: 700;
 }
 
+.stat-grid-large .stat-card .value {
+  font-size: 1.45rem;
+}
+
 .recent-solves {
   display: flex;
   flex-direction: column;

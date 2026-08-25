@@ -41,9 +41,12 @@ function ensureWidgetHeights(widgets: WidgetInstance[], layouts: StoredDashboard
       const minH = Math.max(item.minH ?? 0, requiredHeight)
       let h = Math.max(item.h, minH)
       
-      // Auto-snap Averages widgets to the new perfect height of 4 
+      // Auto-snap Averages and SessionStats widgets to the new perfect height of 4 
       // if they were at the old default of 5, or if they got squeezed to 3.
       if (item.i.startsWith('averages') && (item.h === 5 || item.h === 3) && requiredHeight === 4) {
+        h = 4
+      }
+      if (item.i.startsWith('sessionStats') && item.h === 5 && requiredHeight === 4) {
         h = 4
       }
       
@@ -159,6 +162,7 @@ function WidgetColumn({
   onRemove: (id: string) => void
   onAdd: (type: WidgetType, side: 'left' | 'right') => void
 }) {
+  const { currentSession } = useApp()
   const { width, containerRef, mounted } = useContainerWidth()
   const widgets = useMemo(() => store.widgets.filter((widget) => widget.side === side), [side, store.widgets])
   const layout = store.layouts[side]
@@ -197,7 +201,9 @@ function WidgetColumn({
             <div key={widget.i} className="widget-grid-item">
               <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
                 <h3 className="widget-drag" style={{ cursor: editing ? 'grab' : 'default' }}>
-                  {WIDGET_LABELS[widget.type]}
+                  {widget.type === 'sessionStats' && currentSession?.name
+                    ? `${WIDGET_LABELS[widget.type]} — ${currentSession.name}`
+                    : WIDGET_LABELS[widget.type]}
                 </h3>
                 {editing ? (
                   <Button type="button" variant="ghost" onClick={() => onRemove(widget.i)}>
