@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
 import { EVENTS, eventLabel, type CubeEvent } from '../../domain/models'
-import { averageOfN } from '../../domain/stats/averages'
+import { averageOfN, bestAverageOfN, bestSingle } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
 import { RefreshIcon } from '../../ui/NavIcons'
@@ -12,6 +12,8 @@ import { ThemeToggle } from '../../ui/ThemeToggle'
 import { useMediaQuery } from '../../ui/useMediaQuery'
 import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
+import confetti from 'canvas-confetti'
+import { getAccentPalette } from '../../styles/accents'
 
 function isFormTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -93,15 +95,56 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         return
       }
       const durationMs = current.finishedMs
-      await saveSolve({
+
+      const prevSingle = bestSingle(solves)
+      const prevAo5 = bestAverageOfN(solves, 5)
+      const prevAo12 = bestAverageOfN(solves, 12)
+      const prevAo25 = bestAverageOfN(solves, 25)
+
+      const savedSolve = await saveSolve({
         durationMs,
         penalty: 'none',
         scramble: scramble || '—',
       })
-      setNotice(`Saved ${formatDuration(durationMs)}`)
+
+      const newSolves = [savedSolve, ...solves]
+      const newSingle = bestSingle(newSolves)
+      const currentAo5 = averageOfN(newSolves, 5)
+      const currentAo12 = averageOfN(newSolves, 12)
+      const currentAo25 = averageOfN(newSolves, 25)
+
+      const broken: string[] = []
+      if (prevSingle !== null && newSingle !== null && newSingle < prevSingle) {
+        broken.push(`Single: ${formatDuration(newSingle)}`)
+      }
+      if (prevAo5 !== null && currentAo5 !== null && currentAo5 < prevAo5) {
+        broken.push(`Ao5: ${formatAverage(currentAo5)}`)
+      }
+      if (prevAo12 !== null && currentAo12 !== null && currentAo12 < prevAo12) {
+        broken.push(`Ao12: ${formatAverage(currentAo12)}`)
+      }
+      if (prevAo25 !== null && currentAo25 !== null && currentAo25 < prevAo25) {
+        broken.push(`Ao25: ${formatAverage(currentAo25)}`)
+      }
+
+      if (broken.length > 0) {
+        const palette = getAccentPalette(settings.accentColor || 'blue')
+        const colors = [palette.light.main, palette.dark.main, palette.light.soft, palette.dark.soft]
+        
+        confetti({
+          particleCount: 120,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors
+        })
+        setNotice(`New PB! ${broken.join(' & ')}`)
+      } else {
+        setNotice(`Saved ${formatDuration(durationMs)}`)
+      }
+
       await loadScramble()
     },
-    [loadScramble, saveSolve, scramble],
+    [loadScramble, saveSolve, scramble, solves, settings.accentColor],
   )
 
   useEffect(() => {
