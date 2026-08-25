@@ -215,10 +215,17 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const ao5 = useMemo(() => averageOfN(solves, 5), [solves])
   const ao12 = useMemo(() => averageOfN(solves, 12), [solves])
   const recent = solves.slice(0, 5)
-  const hideChrome = settings.focusMode && snapshot.phase === 'running'
-  const hideScramble = hideChrome || (settings.hideScrambleDuringSolve && snapshot.phase === 'running')
-  const hideAverages = hideChrome || (settings.hideAveragesDuringSolve && snapshot.phase === 'running')
-  const hideResults = hideChrome || (settings.hideLastResultsDuringSolve && snapshot.phase === 'running')
+  const isSolvingOrPreparing = snapshot.phase === 'running' || snapshot.phase === 'ready' || snapshot.phase === 'holding'
+  const hideScramble = settings.hideScrambleDuringSolve && isSolvingOrPreparing
+
+  useEffect(() => {
+    if (settings.hideWidgetsDuringSolve && isSolvingOrPreparing) {
+      document.body.classList.add('hide-widgets')
+    } else {
+      document.body.classList.remove('hide-widgets')
+    }
+    return () => document.body.classList.remove('hide-widgets')
+  }, [settings.hideWidgetsDuringSolve, isSolvingOrPreparing])
 
   const timeMs =
     snapshot.phase === 'running'
@@ -266,31 +273,29 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {liveMessage}
       </div>
 
-      {!hideChrome ? (
-        <header className="row wrap" style={{ justifyContent: 'space-between' }}>
-          <select
-            aria-label="Event"
-            value={settings.event}
-            disabled={busy}
-            onChange={(event) => void setEvent(event.target.value as CubeEvent)}
-            style={{ minWidth: 140 }}
-          >
-            {EVENTS.map((item) => (
-              <option key={item} value={item}>
-                {eventLabel(item)}
-              </option>
-            ))}
-          </select>
-          {settings.sessionMode === 'manual' ? (
-            <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)}>
-              {currentSession?.name ?? 'Sessions'}
-            </Button>
-          ) : (
-            <span className="muted">{currentSession?.name ?? 'Automatic session'}</span>
-          )}
-          {!isWide && variant !== 'desktop' ? <ThemeToggle /> : null}
-        </header>
-      ) : null}
+      <header className="row wrap" style={{ justifyContent: 'space-between' }}>
+        <select
+          aria-label="Event"
+          value={settings.event}
+          disabled={busy}
+          onChange={(event) => void setEvent(event.target.value as CubeEvent)}
+          style={{ minWidth: 140 }}
+        >
+          {EVENTS.map((item) => (
+            <option key={item} value={item}>
+              {eventLabel(item)}
+            </option>
+          ))}
+        </select>
+        {settings.sessionMode === 'manual' ? (
+          <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)}>
+            {currentSession?.name ?? 'Sessions'}
+          </Button>
+        ) : (
+          <span className="muted">{currentSession?.name ?? 'Automatic session'}</span>
+        )}
+        {!isWide && variant !== 'desktop' ? <ThemeToggle /> : null}
+      </header>
 
       {!hideScramble ? (
         <Panel muted className="scramble">
@@ -376,14 +381,14 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         ) : null}
       </button>
 
-      {variant !== 'desktop' && !hideAverages ? (
+      {variant !== 'desktop' ? (
         <Panel muted className="row wrap" style={{ justifyContent: 'space-around' }}>
           <span>Ao5 {formatAverage(ao5)}</span>
           <span>Ao12 {formatAverage(ao12)}</span>
         </Panel>
       ) : null}
 
-      {variant !== 'desktop' && !hideResults ? (
+      {variant !== 'desktop' ? (
         <div className="row wrap" style={{ justifyContent: 'center' }}>
           {recent.map((solve) => (
             <span key={solve.id} className="chip">

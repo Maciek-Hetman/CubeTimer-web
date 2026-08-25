@@ -12,7 +12,7 @@ import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
 import { SessionManager } from '../sessions/SessionManager'
 
-const HOLD_PRESETS = [300, 500, 550, 1000] as const
+const HOLD_PRESETS = [0, 250, 300, 500, 550, 1000] as const
 
 export function SettingsPage() {
   const { settings, updateSettings, user, logout } = useApp()
@@ -129,7 +129,7 @@ export function SettingsPage() {
         <Field label={`Hold delay (${settings.timerStartDelayMs} ms)`}>
           <input
             type="range"
-            min={200}
+            min={0}
             max={1000}
             step={50}
             value={settings.timerStartDelayMs}
@@ -149,25 +149,14 @@ export function SettingsPage() {
           ))}
         </div>
         <Switch
-          label="Focus mode"
-          description="Hide chrome while the timer is running"
-          checked={settings.focusMode}
-          onChange={(checked) => void updateSettings({ focusMode: checked })}
-        />
-        <Switch
           label="Hide scramble during solve"
           checked={settings.hideScrambleDuringSolve}
           onChange={(checked) => void updateSettings({ hideScrambleDuringSolve: checked })}
         />
         <Switch
-          label="Hide averages during solve"
-          checked={settings.hideAveragesDuringSolve}
-          onChange={(checked) => void updateSettings({ hideAveragesDuringSolve: checked })}
-        />
-        <Switch
-          label="Hide last results during solve"
-          checked={settings.hideLastResultsDuringSolve}
-          onChange={(checked) => void updateSettings({ hideLastResultsDuringSolve: checked })}
+          label="Hide widgets during solve"
+          checked={settings.hideWidgetsDuringSolve}
+          onChange={(checked) => void updateSettings({ hideWidgetsDuringSolve: checked })}
         />
       </Panel>
 

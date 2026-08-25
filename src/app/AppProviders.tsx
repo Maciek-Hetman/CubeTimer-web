@@ -143,7 +143,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [persistSession])
 
   const settingsQuery = useLiveQuery(async () => (ownerId ? db.settings.get(ownerId) : undefined), [ownerId])
-  const settings = settingsQuery ?? { ownerId, ...DEFAULT_SETTINGS }
+  const settings = settingsQuery ? { ...DEFAULT_SETTINGS, ...settingsQuery } : { ownerId, ...DEFAULT_SETTINGS }
 
   const sessions =
     useLiveQuery(

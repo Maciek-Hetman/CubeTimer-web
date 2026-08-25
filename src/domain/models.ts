@@ -74,10 +74,8 @@ export interface AppSettings {
   sessionMode: SessionMode
   inactivityGapMinutes: number
   timerStartDelayMs: number
-  focusMode: boolean
   hideScrambleDuringSolve: boolean
-  hideAveragesDuringSolve: boolean
-  hideLastResultsDuringSolve: boolean
+  hideWidgetsDuringSolve: boolean
   theme: 'system' | 'light' | 'dark'
   currentSessionIds: Partial<Record<CubeEvent, string>>
 }
@@ -87,10 +85,8 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   sessionMode: 'automatic',
   inactivityGapMinutes: 60,
   timerStartDelayMs: 500,
-  focusMode: false,
   hideScrambleDuringSolve: false,
-  hideAveragesDuringSolve: false,
-  hideLastResultsDuringSolve: false,
+  hideWidgetsDuringSolve: false,
   theme: 'system',
   currentSessionIds: {},
 }
