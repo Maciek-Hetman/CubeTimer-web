@@ -249,13 +249,13 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {liveMessage}
       </div>
 
-      <header className="row wrap" style={{ justifyContent: 'space-between' }}>
+      <header className="row wrap" style={{ justifyContent: 'space-between', marginTop: variant === 'desktop' ? 12 : 0 }}>
         <Select
           aria-label="Event"
           value={settings.event}
           disabled={busy}
           onChange={(val) => void setEvent(val as CubeEvent)}
-          style={{ width: 130 }}
+          style={{ width: 110 }}
           options={EVENTS.map((item) => ({
             value: item,
             label: eventLabel(item)
