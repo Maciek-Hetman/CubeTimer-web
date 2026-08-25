@@ -31,12 +31,12 @@ export function StatsIcon() {
 export function SettingsIcon() {
   return (
     <svg className="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
       <path
-        d="M12 3.5v2.2M12 18.3V20.5M4.9 6.5l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12H20.5M4.9 17.5l1.6-1.6M17.5 8l1.6-1.6"
+        d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )
