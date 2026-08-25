@@ -355,7 +355,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         <div className="timer-hint">{hint}</div>
         {snapshot.phase === 'holding' ? (
           <div className="progress" aria-hidden="true">
-            <span style={{ width: `${Math.round(snapshot.holdProgress * 100)}%` }} />
+            <span style={{ animation: `fill-progress ${settings.timerStartDelayMs}ms linear forwards` }} />
           </div>
         ) : null}
       </button>

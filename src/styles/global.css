@@ -693,8 +693,12 @@ input[type='range'] {
   display: block;
   height: 100%;
   background: var(--danger);
-  transition: width 40ms linear;
   box-shadow: 0 0 12px color-mix(in srgb, var(--danger) 65%, transparent);
+}
+
+@keyframes fill-progress {
+  from { width: 0%; }
+  to { width: 100%; }
 }
 
 .sync-pill {
