@@ -372,7 +372,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         onLostPointerCapture={cancelHold}
         onContextMenu={(event) => event.preventDefault()}
       >
-        <TimeDigits ms={timeMs} />
+        <TimeDigits ms={timeMs} mode={settings.timerDisplayMode ?? 'show'} isRunning={snapshot.phase === 'running'} />
         <div className="timer-hint">{hint}</div>
         {snapshot.phase === 'holding' ? (
           <div className="progress" aria-hidden="true">
@@ -404,9 +404,27 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   )
 }
 
-function TimeDigits({ ms }: { ms: number }) {
+function TimeDigits({ ms, mode, isRunning }: { ms: number; mode: string; isRunning: boolean }) {
   const formatted = formatDuration(ms)
   const [main, decimals] = formatted.includes('.') ? formatted.split('.') : [formatted, '00']
+
+  if (isRunning && mode === 'hide') {
+    return (
+      <span style={{ visibility: 'hidden' }}>
+        {main}
+        <span className="decimals">.{decimals}</span>
+      </span>
+    )
+  }
+
+  if (isRunning && mode === 'hide_decimals') {
+    return (
+      <span>
+        {main}
+      </span>
+    )
+  }
+
   return (
     <span>
       {main}

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { resendVerification } from '../../api/auth'
 import { useApp } from '../../app/AppProviders'
-import type { SessionMode } from '../../domain/models'
+import type { SessionMode, TimerDisplayMode } from '../../domain/models'
 import { ApiError } from '../../api/types'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -148,6 +148,16 @@ export function SettingsPage() {
             </Button>
           ))}
         </div>
+        <Field label="Timer display during solve">
+          <select
+            value={settings.timerDisplayMode ?? 'show'}
+            onChange={(event) => void updateSettings({ timerDisplayMode: event.target.value as TimerDisplayMode })}
+          >
+            <option value="show">Show full time</option>
+            <option value="hide_decimals">Hide decimals</option>
+            <option value="hide">Hide completely</option>
+          </select>
+        </Field>
         <Switch
           label="Hide scramble during solve"
           checked={settings.hideScrambleDuringSolve}

@@ -9,6 +9,9 @@ export type SessionKind = (typeof SESSION_KINDS)[number]
 
 export type SessionMode = SessionKind
 
+export const TIMER_DISPLAY_MODES = ['show', 'hide_decimals', 'hide'] as const
+export type TimerDisplayMode = (typeof TIMER_DISPLAY_MODES)[number]
+
 export interface CubeSession {
   id: string
   ownerId: string
@@ -74,6 +77,7 @@ export interface AppSettings {
   sessionMode: SessionMode
   inactivityGapMinutes: number
   timerStartDelayMs: number
+  timerDisplayMode: TimerDisplayMode
   hideScrambleDuringSolve: boolean
   hideWidgetsDuringSolve: boolean
   theme: 'system' | 'light' | 'dark'
@@ -85,6 +89,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   sessionMode: 'automatic',
   inactivityGapMinutes: 60,
   timerStartDelayMs: 500,
+  timerDisplayMode: 'show',
   hideScrambleDuringSolve: false,
   hideWidgetsDuringSolve: false,
   theme: 'system',
