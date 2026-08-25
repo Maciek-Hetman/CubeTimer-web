@@ -9,7 +9,6 @@ import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
 import { ThemeToggle } from '../../ui/ThemeToggle'
 import { useMediaQuery } from '../../ui/useMediaQuery'
-import { generateScramble } from '../scramble/scrambleService'
 import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
 
@@ -44,8 +43,6 @@ function isSystemKey(event: KeyboardEvent): boolean {
   )
 }
 
-type ScrambleState = 'loading' | 'ready' | 'error'
-
 export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
   const {
     settings,
@@ -53,13 +50,13 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     solves,
     currentSession,
     saveSolve,
+    scramble,
+    scrambleState,
+    loadScramble,
   } = useApp()
   const engineRef = useRef(createTimerEngine(() => settings.timerStartDelayMs))
   const [snapshot, setSnapshot] = useState<TimerSnapshot>(IDLE_TIMER)
   const snapshotRef = useRef(snapshot)
-  const [scramble, setScramble] = useState('')
-  const [scrambleState, setScrambleState] = useState<ScrambleState>('loading')
-  const scrambleRequest = useRef(0)
   const [sessionOpen, setSessionOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [liveMessage, setLiveMessage] = useState('Timer ready')
@@ -73,32 +70,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     snapshotRef.current = snapshot
   }, [snapshot])
 
-  const loadScramble = useCallback(async () => {
-    const id = ++scrambleRequest.current
-    setScrambleState('loading')
-    setScramble('')
-    try {
-      const value = await generateScramble(settings.event)
-      if (id === scrambleRequest.current) {
-        setScramble(value)
-        setScrambleState('ready')
-      }
-    } catch {
-      if (id === scrambleRequest.current) {
-        setScramble('')
-        setScrambleState('error')
-      }
-    }
-  }, [settings.event])
-
   useEffect(() => {
     engineRef.current = createTimerEngine(() => settings.timerStartDelayMs)
     setSnapshot(IDLE_TIMER)
   }, [settings.timerStartDelayMs])
-
-  useEffect(() => {
-    void loadScramble()
-  }, [loadScramble])
 
   useEffect(() => {
     let frame = 0

@@ -71,6 +71,9 @@ export interface AppContextValue {
   requestSync: () => void
   resolveConflictKeepServer: (conflictId: string) => Promise<void>
   resolveConflictKeepLocal: (conflictId: string) => Promise<void>
+  scramble: string
+  scrambleState: 'loading' | 'ready' | 'error'
+  loadScramble: () => Promise<void>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -169,6 +172,37 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [sessions, settings])
 
   const enqueueWrites = Boolean(user && ownerId && !isGuestOwner(ownerId))
+
+  const [scramble, setScramble] = useState('')
+  const [scrambleState, setScrambleState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const scrambleRequest = useRef(0)
+  const scrambleEventRef = useRef<CubeEvent | null>(null)
+
+  const loadScramble = useCallback(async () => {
+    const event = settings.event
+    const id = ++scrambleRequest.current
+    setScrambleState('loading')
+    try {
+      const { generateScramble } = await import('../features/scramble/scrambleService')
+      const value = await generateScramble(event)
+      if (id === scrambleRequest.current) {
+        setScramble(value)
+        setScrambleState('ready')
+        scrambleEventRef.current = event
+      }
+    } catch {
+      if (id === scrambleRequest.current) {
+        setScramble('')
+        setScrambleState('error')
+      }
+    }
+  }, [settings.event])
+
+  useEffect(() => {
+    if (ready && scrambleEventRef.current !== settings.event) {
+      void loadScramble()
+    }
+  }, [ready, settings.event, loadScramble])
 
   const refreshAccessToken = useCallback(async () => {
     const token = refreshTokenRef.current ?? (await getStoredRefreshToken())
@@ -593,6 +627,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
       requestSync,
       resolveConflictKeepServer,
       resolveConflictKeepLocal,
+      scramble,
+      scrambleState,
+      loadScramble,
     }),
     [
       applyAuthSession,
@@ -621,6 +658,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
       updateSettings,
       updateSolvePenalty,
       user,
+      scramble,
+      scrambleState,
+      loadScramble,
     ],
   )
 
