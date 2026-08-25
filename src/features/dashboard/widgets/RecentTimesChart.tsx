@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
 import { useApp } from '../../../app/AppProviders'
 import { effectiveTimeMs } from '../../../domain/models'
@@ -11,7 +11,7 @@ export function RecentTimesChart() {
   const data = useMemo(
     () =>
       solves
-        .slice(0, 50)
+        .slice(0, 20)
         .toReversed()
         .map((solve, index) => ({
           index: index + 1,
@@ -39,17 +39,20 @@ export function RecentTimesChart() {
   return (
     <div style={{ width: '100%', height: 180 }}>
       <ResponsiveContainer>
-        <LineChart data={data} margin={{ top: 8, right: 40, bottom: 8, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 8, left: 0 }}>
+          <defs>
+            <linearGradient id="colorMs" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <XAxis dataKey="index" hide />
           <YAxis
-            tickFormatter={(value: number) => String(Math.round(value / 1000))}
+            hide
             domain={[
               (dataMin: number) => dataMin - 500,
               (dataMax: number) => dataMax + 500,
             ]}
-            width={40}
-            stroke="var(--text-muted)"
           />
           <Tooltip
             contentStyle={{
@@ -59,8 +62,16 @@ export function RecentTimesChart() {
             }}
             formatter={(value) => formatDuration(Number(value))}
           />
-          <Line type="monotone" dataKey="ms" name="Time (s)" stroke="var(--accent)" dot={false} strokeWidth={2} />
-        </LineChart>
+          <Area
+            type="monotone"
+            dataKey="ms"
+            name="Time"
+            stroke="var(--accent)"
+            fillOpacity={1}
+            fill="url(#colorMs)"
+            strokeWidth={2}
+          />
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   )
