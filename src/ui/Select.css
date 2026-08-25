@@ -82,6 +82,13 @@
 }
 
 .custom-select-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
   padding: 8px 12px;
   cursor: pointer;
   border-radius: calc(var(--radius-sm) - 4px);

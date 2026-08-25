@@ -15,8 +15,21 @@ import { SessionManager } from '../sessions/SessionManager'
 
 const HOLD_PRESETS = [0, 250, 300, 500, 550, 1000] as const
 
+const BACKGROUND_PRESETS = [
+  { label: 'Slate', value: '#64748b' },
+  { label: 'Navy', value: '#1e3a8a' },
+  { label: 'Forest', value: '#064e3b' },
+  { label: 'Plum', value: '#701a75' },
+  { label: 'Charcoal', value: '#171717' },
+  { label: 'Crimson', value: '#991b1b' },
+  { label: 'Rust', value: '#9a3412' },
+  { label: 'Olive', value: '#3f6212' },
+  { label: 'Teal', value: '#115e59' },
+  { label: 'Ocean', value: '#0369a1' },
+]
+
 export function SettingsPage() {
-  const { settings, updateSettings, user, logout } = useApp()
+  const { settings, updateSettings, user, logout, setCustomBackground } = useApp()
   const [sessionOpen, setSessionOpen] = useState(false)
   const [gapDraft, setGapDraft] = useState(String(settings.inactivityGapMinutes))
   const [resendMessage, setResendMessage] = useState('')
@@ -177,6 +190,68 @@ export function SettingsPage() {
             checked={settings.hideWidgetsDuringSolve}
             onChange={(checked) => void updateSettings({ hideWidgetsDuringSolve: checked })}
           />
+        )}
+      </Panel>
+
+      <Panel className="stack">
+        <h2>Appearance</h2>
+        <Field label="Background">
+          <Select
+            value={settings.backgroundType ?? 'theme'}
+            onChange={(val) => void updateSettings({ backgroundType: val as any })}
+            options={[
+              { value: 'theme', label: 'Theme Default' },
+              { value: 'preset', label: 'Solid Color' },
+              { value: 'custom', label: 'Custom Image' }
+            ]}
+          />
+        </Field>
+
+        {settings.backgroundType === 'preset' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px' }}>
+            {BACKGROUND_PRESETS.map((preset) => (
+              <Button
+                key={preset.value}
+                type="button"
+                variant={settings.backgroundPreset === preset.value ? 'primary' : 'ghost'}
+                onClick={() => void updateSettings({ backgroundPreset: preset.value })}
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+              >
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: preset.value, border: '1px solid var(--border)', flexShrink: 0 }} />
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {settings.backgroundType === 'custom' && (
+          <>
+            <Field label="Upload custom image">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    void setCustomBackground(reader.result as string)
+                  }
+                  reader.readAsDataURL(file)
+                }}
+              />
+            </Field>
+            <Field label="Image scaling">
+              <Select
+                value={settings.backgroundImageSizing ?? 'fill'}
+                onChange={(val) => void updateSettings({ backgroundImageSizing: val as any })}
+                options={[
+                  { value: 'fill', label: 'Fill (Cropped)' },
+                  { value: 'stretch', label: 'Stretch (Distorted)' }
+                ]}
+              />
+            </Field>
+          </>
         )}
       </Panel>
 

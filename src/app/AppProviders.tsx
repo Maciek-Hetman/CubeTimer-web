@@ -12,7 +12,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import * as authApi from '../api/auth'
 import { apiRequest, type AuthenticatedRequest, type RequestOptions } from '../api/client'
 import { ApiError, type AuthSession, type User } from '../api/types'
-import { db, getOrCreateSettings } from '../data/db'
+import { db, getOrCreateSettings, getMeta, setMeta } from '../data/db'
 import {
   deleteSessionCascade,
   listSessions,
@@ -74,6 +74,8 @@ export interface AppContextValue {
   scramble: string
   scrambleState: 'loading' | 'ready' | 'error'
   loadScramble: () => Promise<void>
+  customBackground: string | null
+  setCustomBackground: (bg: string | null) => Promise<void>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -147,6 +149,16 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const settingsQuery = useLiveQuery(async () => (ownerId ? db.settings.get(ownerId) : undefined), [ownerId])
   const settings = settingsQuery ? { ...DEFAULT_SETTINGS, ...settingsQuery } : { ownerId, ...DEFAULT_SETTINGS }
+
+  const customBackground = useLiveQuery(
+    async () => (ownerId ? getMeta<string | null>(`custom_bg_${ownerId}`, null) : null),
+    [ownerId]
+  ) ?? null
+
+  const setCustomBackground = useCallback(async (bg: string | null) => {
+    if (!ownerId) return
+    await setMeta(`custom_bg_${ownerId}`, bg)
+  }, [ownerId])
 
   const sessions =
     useLiveQuery(
@@ -630,6 +642,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       scramble,
       scrambleState,
       loadScramble,
+      customBackground,
+      setCustomBackground,
     }),
     [
       applyAuthSession,
@@ -661,6 +675,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       scramble,
       scrambleState,
       loadScramble,
+      customBackground,
+      setCustomBackground,
     ],
   )
 

@@ -82,6 +82,9 @@ export interface AppSettings {
   hideWidgetsDuringSolve: boolean
   enableWidgets: boolean
   theme: 'system' | 'light' | 'dark'
+  backgroundType: 'theme' | 'preset' | 'custom'
+  backgroundPreset: string
+  backgroundImageSizing: 'fill' | 'stretch'
   currentSessionIds: Partial<Record<CubeEvent, string>>
 }
 
@@ -95,6 +98,9 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   hideWidgetsDuringSolve: false,
   enableWidgets: true,
   theme: 'system',
+  backgroundType: 'theme',
+  backgroundPreset: '',
+  backgroundImageSizing: 'fill',
   currentSessionIds: {},
 }
 

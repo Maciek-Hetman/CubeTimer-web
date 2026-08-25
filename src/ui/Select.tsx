@@ -61,7 +61,9 @@ export function Select({
     ? selectedOption.label 
     : (placeholder || (options.length > 0 && !placeholder ? options[0].label : 'Select...'))
 
-  const handleSelect = (option: SelectOption) => {
+  const handleSelect = (event: React.MouseEvent, option: SelectOption) => {
+    event.preventDefault()
+    event.stopPropagation()
     if (option.disabled) return
     if (value === undefined) setInternalValue(option.value)
     setIsOpen(false)
@@ -77,7 +79,11 @@ export function Select({
       <button
         type="button"
         className={`custom-select-trigger ${isOpen ? 'open' : ''}`}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (!disabled) setIsOpen(!isOpen)
+        }}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -101,15 +107,20 @@ export function Select({
 
       <div className={`custom-select-menu ${isOpen ? 'open' : ''}`} role="listbox">
         {options.map((opt) => (
-          <div
+          <button
+            type="button"
             key={opt.value}
             role="option"
             aria-selected={opt.value === internalValue}
             className={`custom-select-option ${opt.value === internalValue ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''}`}
-            onClick={() => handleSelect(opt)}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={(e) => handleSelect(e, opt)}
           >
             {opt.label}
-          </div>
+          </button>
         ))}
       </div>
     </div>

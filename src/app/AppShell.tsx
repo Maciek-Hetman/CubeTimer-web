@@ -15,7 +15,7 @@ export interface ShellOutletContext {
 }
 
 export function AppShell() {
-  const { isAdmin, settings } = useApp()
+  const { isAdmin, settings, customBackground } = useApp()
   const location = useLocation()
   const isWide = useMediaQuery('(min-width: 768px)')
   const isDesktop = useMediaQuery('(min-width: 1200px)')
@@ -60,8 +60,26 @@ export function AppShell() {
     .filter(Boolean)
     .join(' ')
 
+  const isCustomBg = settings.backgroundType !== 'theme' && (settings.backgroundType === 'preset' ? !!settings.backgroundPreset : !!customBackground)
+  
+  const shellStyle = useMemo(() => {
+    if (settings.backgroundType === 'preset' && settings.backgroundPreset) {
+      return { background: settings.backgroundPreset }
+    }
+    if (settings.backgroundType === 'custom' && customBackground) {
+      return { 
+        backgroundImage: `url(${customBackground})`,
+        backgroundSize: settings.backgroundImageSizing === 'stretch' ? '100% 100%' : 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }
+    }
+    return undefined
+  }, [settings.backgroundType, settings.backgroundPreset, settings.backgroundImageSizing, customBackground])
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-custom-bg={isCustomBg}>
+      {shellStyle && <div className="app-background" style={shellStyle} />}
       {showHeaderNav ? (
         <header className="app-header">
           <AppBrand />
