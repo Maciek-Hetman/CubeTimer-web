@@ -82,6 +82,8 @@ export interface AppSettings {
   hideWidgetsDuringSolve: boolean
   enableWidgets: boolean
   theme: 'system' | 'light' | 'dark'
+  accentColor: string
+  uiTransparency: number
   backgroundType: 'theme' | 'preset' | 'custom'
   backgroundPreset: string
   backgroundImageSizing: 'fill' | 'stretch'
@@ -98,6 +100,8 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   hideWidgetsDuringSolve: false,
   enableWidgets: true,
   theme: 'system',
+  accentColor: 'blue',
+  uiTransparency: 100,
   backgroundType: 'theme',
   backgroundPreset: '',
   backgroundImageSizing: 'fill',

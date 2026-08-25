@@ -42,6 +42,7 @@ import {
   saveAuth,
   setCurrentOwnerId,
 } from './profile'
+import { getAccentPalette } from '../styles/accents'
 
 export interface AppContextValue {
   ready: boolean
@@ -331,15 +332,36 @@ export function AppProviders({ children }: { children: ReactNode }) {
     } else {
       root.setAttribute('data-theme', settings.theme)
     }
+
     const applyThemeColor = () => {
       const bg = getComputedStyle(root).getPropertyValue('--bg').trim() || '#1d4ed8'
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg)
+      
+      const isDark =
+        settings.theme === 'dark' ||
+        (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      
+      const palette = getAccentPalette(settings.accentColor || 'blue')
+      const colors = isDark ? palette.dark : palette.light
+      
+      root.style.setProperty('--accent', colors.main)
+      root.style.setProperty('--accent-soft', colors.soft)
+      
+      const opacity = settings.uiTransparency ?? 100
+      root.style.setProperty('--ui-opacity', `${opacity}%`)
+      
+      if (opacity < 100) {
+        root.setAttribute('data-transparent-ui', 'true')
+      } else {
+        root.removeAttribute('data-transparent-ui')
+      }
     }
+    
     applyThemeColor()
     const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null
     media?.addEventListener('change', applyThemeColor)
     return () => media?.removeEventListener('change', applyThemeColor)
-  }, [settings.theme])
+  }, [settings.theme, settings.accentColor, settings.uiTransparency])
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {

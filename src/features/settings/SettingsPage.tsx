@@ -12,6 +12,7 @@ import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
 import { SessionManager } from '../sessions/SessionManager'
+import { ACCENT_PRESETS } from '../../styles/accents'
 
 const HOLD_PRESETS = [0, 250, 300, 500, 550, 1000] as const
 
@@ -195,6 +196,35 @@ export function SettingsPage() {
 
       <Panel className="stack">
         <h2>Appearance</h2>
+        
+        <Field label="Accent Color">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px' }}>
+            {ACCENT_PRESETS.map((preset) => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant={settings.accentColor === preset.id ? 'primary' : 'ghost'}
+                onClick={() => void updateSettings({ accentColor: preset.id })}
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+              >
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: preset.light.main, border: '1px solid var(--border)', flexShrink: 0 }} />
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label={`UI Transparency (${settings.uiTransparency ?? 100}%)`}>
+          <input
+            type="range"
+            min={10}
+            max={100}
+            step={5}
+            value={settings.uiTransparency ?? 100}
+            onChange={(event) => void updateSettings({ uiTransparency: Number(event.target.value) })}
+          />
+        </Field>
+
         <Field label="Background">
           <Select
             value={settings.backgroundType ?? 'theme'}

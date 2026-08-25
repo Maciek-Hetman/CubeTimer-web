@@ -1005,35 +1005,33 @@ input[type='range'] {
   width: 100%;
 }
 
-/* Custom Background Glassmorphism */
-.app-shell[data-custom-bg="true"] .panel,
-.app-shell[data-custom-bg="true"] .widget-grid-item,
-.app-shell[data-custom-bg="true"] .dialog,
-.app-shell[data-custom-bg="true"] .custom-select-trigger {
-  background: color-mix(in srgb, var(--surface) 65%, transparent) !important;
+/* Transparent UI Glassmorphism */
+html[data-transparent-ui="true"] .panel,
+html[data-transparent-ui="true"] .widget-grid-item,
+html[data-transparent-ui="true"] .dialog,
+html[data-transparent-ui="true"] .custom-select-trigger {
+  background: color-mix(in srgb, var(--surface) var(--ui-opacity), transparent) !important;
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border-color: transparent !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08) !important;
 }
 
-.app-shell[data-custom-bg="true"] .custom-select-menu {
-  background: color-mix(in srgb, var(--surface) 90%, transparent) !important;
+html[data-transparent-ui="true"] .custom-select-menu {
+  background: color-mix(in srgb, var(--surface) max(var(--ui-opacity), 70%), transparent) !important;
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border-color: transparent !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
 }
 
-.app-shell[data-custom-bg="true"] .panel-muted {
-  background: color-mix(in srgb, var(--surface-muted) 65%, transparent);
+html[data-transparent-ui="true"] .panel-muted {
+  background: color-mix(in srgb, var(--surface-muted) var(--ui-opacity), transparent);
 }
 
-.app-shell[data-custom-bg="true"] .bottom-nav,
-.app-shell[data-custom-bg="true"] .app-header {
-  background: color-mix(in srgb, var(--surface) 75%, transparent) !important;
+html[data-transparent-ui="true"] .bottom-nav,
+html[data-transparent-ui="true"] .app-header {
+  background: color-mix(in srgb, var(--surface) var(--ui-opacity), transparent) !important;
   border-color: transparent !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
 }
-
-/* Glassmorphism background colors automatically adapt to the current theme */

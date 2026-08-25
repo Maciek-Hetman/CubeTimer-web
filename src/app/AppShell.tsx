@@ -60,8 +60,7 @@ export function AppShell() {
     .filter(Boolean)
     .join(' ')
 
-  const isCustomBg = settings.backgroundType !== 'theme' && (settings.backgroundType === 'preset' ? !!settings.backgroundPreset : !!customBackground)
-  
+
   const shellStyle = useMemo(() => {
     if (settings.backgroundType === 'preset' && settings.backgroundPreset) {
       return { background: settings.backgroundPreset }
@@ -78,7 +77,7 @@ export function AppShell() {
   }, [settings.backgroundType, settings.backgroundPreset, settings.backgroundImageSizing, customBackground])
 
   return (
-    <div className="app-shell" data-custom-bg={isCustomBg}>
+    <div className="app-shell">
       {shellStyle && <div className="app-background" style={shellStyle} />}
       {showHeaderNav ? (
         <header className="app-header">
