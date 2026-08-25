@@ -6,6 +6,7 @@ import type { ShellOutletContext } from '../../app/AppShell'
 import { db } from '../../data/db'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
+import { Select } from '../../ui/Select'
 import { TimerPage } from '../timer/TimerPage'
 import {
   AVERAGES_MIN_H,
@@ -159,24 +160,20 @@ function WidgetColumn({
     <aside ref={containerRef} className="widget-column">
       {editing ? (
         <Field label="Add widget">
-          <select
-            defaultValue=""
+          <Select
+            value=""
             disabled={available.length === 0}
-            onChange={(event) => {
-              const value = event.target.value as WidgetType | ''
+            onChange={(value) => {
               if (value) {
-                onAdd(value, side)
-                event.target.value = ''
+                onAdd(value as WidgetType, side)
               }
             }}
-          >
-            <option value="">{available.length === 0 ? 'All widgets added' : 'Choose…'}</option>
-            {available.map((type) => (
-              <option key={type} value={type}>
-                {WIDGET_LABELS[type]}
-              </option>
-            ))}
-          </select>
+            placeholder={available.length === 0 ? 'All widgets added' : 'Choose…'}
+            options={available.map((type) => ({
+              value: type,
+              label: WIDGET_LABELS[type]
+            }))}
+          />
         </Field>
       ) : null}
       {mounted ? (

@@ -7,6 +7,7 @@ import { ApiError } from '../../api/types'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
+import { Select } from '../../ui/Select'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
@@ -89,13 +90,14 @@ export function SettingsPage() {
       <Panel className="stack">
         <h2>Sessions</h2>
         <Field label="Session management">
-          <select
+          <Select
             value={settings.sessionMode}
-            onChange={(event) => void updateSettings({ sessionMode: event.target.value as SessionMode })}
-          >
-            <option value="automatic">Automatic</option>
-            <option value="manual">Manual</option>
-          </select>
+            onChange={(val) => void updateSettings({ sessionMode: val as SessionMode })}
+            options={[
+              { value: 'automatic', label: 'Automatic' },
+              { value: 'manual', label: 'Manual' }
+            ]}
+          />
         </Field>
         <Field label="Inactivity gap (minutes)">
           <input
@@ -149,14 +151,15 @@ export function SettingsPage() {
           ))}
         </div>
         <Field label="Timer display during solve">
-          <select
+          <Select
             value={settings.timerDisplayMode ?? 'show'}
-            onChange={(event) => void updateSettings({ timerDisplayMode: event.target.value as TimerDisplayMode })}
-          >
-            <option value="show">Show full time</option>
-            <option value="hide_decimals">Hide decimals</option>
-            <option value="hide">Hide completely</option>
-          </select>
+            onChange={(val) => void updateSettings({ timerDisplayMode: val as TimerDisplayMode })}
+            options={[
+              { value: 'show', label: 'Show full time' },
+              { value: 'hide_decimals', label: 'Hide decimals' },
+              { value: 'hide', label: 'Hide completely' }
+            ]}
+          />
         </Field>
         <Switch
           label="Hide scramble during solve"

@@ -7,6 +7,7 @@ import { Button } from '../../ui/Button'
 import { RefreshIcon } from '../../ui/NavIcons'
 import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
+import { Select } from '../../ui/Select'
 import { ThemeToggle } from '../../ui/ThemeToggle'
 import { useMediaQuery } from '../../ui/useMediaQuery'
 import { SessionManager } from '../sessions/SessionManager'
@@ -249,19 +250,17 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       </div>
 
       <header className="row wrap" style={{ justifyContent: 'space-between' }}>
-        <select
+        <Select
           aria-label="Event"
           value={settings.event}
           disabled={busy}
-          onChange={(event) => void setEvent(event.target.value as CubeEvent)}
+          onChange={(val) => void setEvent(val as CubeEvent)}
           style={{ minWidth: 140 }}
-        >
-          {EVENTS.map((item) => (
-            <option key={item} value={item}>
-              {eventLabel(item)}
-            </option>
-          ))}
-        </select>
+          options={EVENTS.map((item) => ({
+            value: item,
+            label: eventLabel(item)
+          }))}
+        />
         {settings.sessionMode === 'manual' ? (
           <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)}>
             {currentSession?.name ?? 'Sessions'}
