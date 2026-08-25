@@ -107,3 +107,17 @@
 .custom-select-option.disabled:hover {
   background: transparent;
 }
+
+.custom-select-container.ghost .custom-select-trigger {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.custom-select-container.small .custom-select-trigger {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+

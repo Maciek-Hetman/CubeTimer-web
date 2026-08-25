@@ -44,7 +44,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="stack">
+    <div className="stack narrow-page">
       <PageHeader title="Settings" subtitle="Account, sessions, timer behavior, and appearance" />
 
       <Panel className="stack">

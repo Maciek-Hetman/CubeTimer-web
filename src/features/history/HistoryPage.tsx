@@ -16,7 +16,7 @@ export function HistoryPage() {
   const sessionById = useMemo(() => new Map(sessions.map((session) => [session.id, session])), [sessions])
 
   return (
-    <div className="stack">
+    <div className="stack narrow-page">
       <PageHeader
         title="History"
         subtitle={`${eventLabel(settings.event)}${currentSession ? ` · ${currentSession.name}` : ''}`}

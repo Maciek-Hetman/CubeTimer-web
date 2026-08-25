@@ -18,6 +18,8 @@ export interface SelectProps {
   style?: CSSProperties
   className?: string
   placeholder?: string
+  variant?: 'default' | 'ghost'
+  size?: 'default' | 'small'
 }
 
 export function Select({
@@ -29,7 +31,9 @@ export function Select({
   'aria-label': ariaLabel,
   style,
   className = '',
-  placeholder
+  placeholder,
+  variant = 'default',
+  size = 'default'
 }: SelectProps) {
   const [internalValue, setInternalValue] = useState(value !== undefined ? value : defaultValue)
   const [isOpen, setIsOpen] = useState(false)
@@ -66,7 +70,7 @@ export function Select({
 
   return (
     <div 
-      className={`custom-select-container ${disabled ? 'disabled' : ''} ${className}`} 
+      className={`custom-select-container ${variant} ${size} ${disabled ? 'disabled' : ''} ${className}`} 
       style={style} 
       ref={containerRef}
     >
