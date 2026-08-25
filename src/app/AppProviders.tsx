@@ -81,6 +81,8 @@ export interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null)
 
+let mountRefreshPromise: Promise<AuthSession> | null = null
+
 export function AppProviders({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [ownerId, setOwnerId] = useState('')
@@ -127,18 +129,25 @@ export function AppProviders({ children }: { children: ReactNode }) {
           setUser(storedUser)
         }
       }
-      if (refreshToken) {
-        refreshTokenRef.current = refreshToken
-        try {
-          const session = await authApi.refresh(refreshToken)
-          if (!cancelled) {
-            await persistSession(session, false)
+        if (refreshToken) {
+          refreshTokenRef.current = refreshToken
+          try {
+            if (!mountRefreshPromise) {
+              mountRefreshPromise = authApi.refresh(refreshToken)
+            }
+            const session = await mountRefreshPromise
+            if (!cancelled) {
+              await persistSession(session, false)
+            } else {
+              // Still persist the new tokens to IDB so they aren't lost if the second mount reads from IDB
+              void persistSession(session, false)
+            }
+          } catch {
+            await clearAuth()
+            refreshTokenRef.current = null
+            mountRefreshPromise = null
           }
-        } catch {
-          await clearAuth()
-          refreshTokenRef.current = null
         }
-      }
       if (!cancelled) {
         setReady(true)
       }
@@ -217,28 +226,39 @@ export function AppProviders({ children }: { children: ReactNode }) {
     }
   }, [ready, settings.event, loadScramble])
 
+  const refreshPromiseRef = useRef<Promise<string> | null>(null)
+
   const refreshAccessToken = useCallback(async () => {
-    const token = refreshTokenRef.current ?? (await getStoredRefreshToken())
-    if (!token) {
-      throw new ApiError(401, 'unauthenticated', 'Not signed in')
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current
     }
-    try {
-      const session = await authApi.refresh(token)
-      refreshTokenRef.current = session.refresh_token
-      await saveAuth(session.refresh_token, session.user)
-      setAccessToken(session.access_token)
-      setUser(session.user)
-      accessTokenRef.current = session.access_token
-      return session.access_token
-    } catch (error) {
-      if (error instanceof ApiError && (error.status === 401 || error.status === 409)) {
-        await clearAuth()
-        refreshTokenRef.current = null
-        setAccessToken(null)
-        setUser(null)
+    const promise = (async () => {
+      const token = refreshTokenRef.current ?? (await getStoredRefreshToken())
+      if (!token) {
+        throw new ApiError(401, 'unauthenticated', 'Not signed in')
       }
-      throw error
-    }
+      try {
+        const session = await authApi.refresh(token)
+        refreshTokenRef.current = session.refresh_token
+        await saveAuth(session.refresh_token, session.user)
+        setAccessToken(session.access_token)
+        setUser(session.user)
+        accessTokenRef.current = session.access_token
+        return session.access_token
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 409)) {
+          await clearAuth()
+          refreshTokenRef.current = null
+          setAccessToken(null)
+          setUser(null)
+        }
+        throw error
+      } finally {
+        refreshPromiseRef.current = null
+      }
+    })()
+    refreshPromiseRef.current = promise
+    return promise
   }, [])
 
   const authenticatedRequest = useCallback(
