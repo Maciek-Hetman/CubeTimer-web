@@ -248,6 +248,60 @@ h2 {
   pointer-events: none;
 }
 
+.bottom-nav.has-admin {
+  width: min(420px, calc(100% - 24px));
+}
+
+.admin-toolbar {
+  justify-content: flex-end;
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.segmented .btn {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.admin-charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+.admin-chart h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+}
+
+.admin-chart-canvas {
+  width: 100%;
+  height: 240px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 8px 10px 8px 0;
+}
+
+@media (min-width: 900px) {
+  .admin-charts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);

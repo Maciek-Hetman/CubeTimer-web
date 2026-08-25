@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as authApi from '../api/auth'
+import { apiRequest, type AuthenticatedRequest, type RequestOptions } from '../api/client'
 import { ApiError, type AuthSession, type User } from '../api/types'
 import { db, getOrCreateSettings } from '../data/db'
 import {
@@ -61,10 +62,12 @@ export interface AppContextValue {
   renameSession: (sessionId: string, name: string) => Promise<void>
   switchSession: (sessionId: string) => Promise<void>
   removeSession: (sessionId: string) => Promise<number>
+  isAdmin: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   applyAuthSession: (session: AuthSession, options?: { mergeGuest?: boolean }) => Promise<void>
+  authenticatedRequest: AuthenticatedRequest
   requestSync: () => void
   resolveConflictKeepServer: (conflictId: string) => Promise<void>
   resolveConflictKeepLocal: (conflictId: string) => Promise<void>
@@ -190,6 +193,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
       throw error
     }
   }, [])
+
+  const authenticatedRequest = useCallback(
+    async <T,>(path: string, options: Omit<RequestOptions, 'accessToken'> = {}): Promise<T> => {
+      const run = (token: string) => apiRequest<T>(path, { ...options, accessToken: token })
+      let token = accessTokenRef.current
+      if (!token) {
+        token = await refreshAccessToken()
+      }
+      try {
+        return await run(token)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          const next = await refreshAccessToken()
+          return run(next)
+        }
+        throw error
+      }
+    },
+    [refreshAccessToken],
+  )
 
   const doSync = useCallback(async () => {
     if (!ownerId || isGuestOwner(ownerId) || syncingRef.current) {
@@ -552,6 +575,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       sessions,
       solves,
       currentSession,
+      isAdmin: user?.user_role === 'admin',
       updateSettings,
       setEvent,
       saveSolve,
@@ -565,12 +589,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
       register: registerFn,
       logout: logoutFn,
       applyAuthSession,
+      authenticatedRequest,
       requestSync,
       resolveConflictKeepServer,
       resolveConflictKeepLocal,
     }),
     [
       applyAuthSession,
+      authenticatedRequest,
       createSession,
       currentSession,
       deleteSolve,

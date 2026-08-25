@@ -186,3 +186,125 @@ test('closes the stats delete dialog with Escape', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
 })
+
+function mockAuthSession(role: 'user' | 'admin') {
+  return {
+    access_token: `access-${role}`,
+    refresh_token: `refresh-${role}`,
+    token_type: 'Bearer',
+    expires_in: 900,
+    user: {
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      email: `${role}@example.com`,
+      email_verified: true,
+      user_role: role,
+    },
+  }
+}
+
+async function mockCubeSync(page: Page, role: 'user' | 'admin' = 'user') {
+  await page.route('**/v1/auth/login', async (route) => {
+    await route.fulfill({ json: mockAuthSession(role) })
+  })
+  await page.route('**/v1/auth/refresh', async (route) => {
+    await route.fulfill({ json: mockAuthSession(role) })
+  })
+  await page.route('**/v1/sync', async (route) => {
+    await route.fulfill({
+      json: { outcomes: [], changes: [], next_cursor: 0, has_more: false },
+    })
+  })
+}
+
+test('hides admin navigation from guests and sends them to sign-in', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Admin' })).toHaveCount(0)
+  await page.goto('/admin')
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
+})
+
+test('shows admin metrics for an admin account', async ({ page }) => {
+  await mockCubeSync(page, 'admin')
+  await page.route('**/v1/admin/stats/overview', async (route) => {
+    await route.fulfill({
+      json: {
+        total_users: 12,
+        verified_users: 10,
+        new_users_24h: 1,
+        new_users_7d: 3,
+        new_users_30d: 8,
+        active_users_24h: 4,
+        active_users_7d: 7,
+        active_users_30d: 9,
+        total_devices: 15,
+        total_sessions: 40,
+        total_solves: 200,
+      },
+    })
+  })
+  await page.route('**/v1/admin/stats/requests**', async (route) => {
+    await route.fulfill({
+      json: {
+        from: '2026-08-18T00:00:00.000Z',
+        to: '2026-08-25T00:00:00.000Z',
+        interval: 'day',
+        points: [
+          {
+            bucket: '2026-08-24T00:00:00.000Z',
+            request_count: 10,
+            status_2xx: 8,
+            status_3xx: 0,
+            status_4xx: 1,
+            status_5xx: 1,
+            average_duration_ms: 12.5,
+            max_duration_ms: 40,
+          },
+        ],
+      },
+    })
+  })
+  await page.route('**/v1/admin/stats/errors**', async (route) => {
+    await route.fulfill({
+      json: {
+        from: '2026-08-18T00:00:00.000Z',
+        to: '2026-08-25T00:00:00.000Z',
+        interval: 'day',
+        points: [
+          {
+            bucket: '2026-08-24T00:00:00.000Z',
+            method: 'POST',
+            route: '/v1/sync',
+            status_code: 409,
+            request_count: 4,
+          },
+        ],
+      },
+    })
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/login')
+  await page.getByLabel('Email').fill('admin@example.com')
+  await page.getByLabel('Password').fill('supersecret1')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await page.getByRole('link', { name: 'Admin', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible()
+  await expect(page.locator('.stat-card').filter({ hasText: 'Users' }).locator('.value')).toHaveText('12')
+  await expect(page.getByRole('heading', { name: 'Errors by route' })).toBeVisible()
+  await expect(page.getByText('/v1/sync')).toBeVisible()
+})
+
+test('denies the admin dashboard to signed-in users', async ({ page }) => {
+  await mockCubeSync(page, 'user')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/login')
+  await page.getByLabel('Email').fill('user@example.com')
+  await page.getByLabel('Password').fill('supersecret1')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Admin' })).toHaveCount(0)
+  await page.goto('/admin')
+  await expect(page.getByText('Access denied')).toBeVisible()
+})
+

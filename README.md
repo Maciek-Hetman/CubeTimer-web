@@ -2,13 +2,21 @@
 
 Responsive, offline-first cube timer. Mobile layout follows the Android CubeTimer app. Desktop adds a fixed center timer with customizable side widgets. Cubing sessions are managed on the client and optionally replicated to [CubeSync](https://github.com/Maciek-Hetman/cubesync).
 
-## Stack
+## What you can do
 
-- React + TypeScript + Vite PWA
-- Dexie / IndexedDB as the source of truth
-- CubeSync `POST /v1/sync` for signed-in accounts
+- Time solves with hold-to-start (tap or Space), scramble generation, and +2 / DNF penalties
+- Track 2x2, 3x3, 4x4, 5x5, Megaminx, and Pyraminx
+- Use automatic or manual sessions, inspect stats, and customize desktop widgets
+- Time as a guest offline; sign in to sync verified accounts with CubeSync
+- View CubeSync platform metrics on `/admin` if your account has the admin role
 
-## Local development
+## Docs
+
+- [User guide](docs/user-guide.md) — timer, sessions, stats, sync, and admin access
+- [Development](docs/development.md) — architecture, setup, API, tests, and troubleshooting
+- [CubeSync OpenAPI](openapi/cubesync.yaml) — backend contract used by this client
+
+## Quick start
 
 ```bash
 cp .env.example .env
@@ -31,16 +39,16 @@ Timing works as a guest without an account. After sign-in, local guest sessions 
 
 Preferences and widget layouts stay on the device. CubeSync has no settings entity.
 
-## Sessions
-
-- **Manual:** switch, create, rename, and delete sessions from the timer. Deleting a session also deletes its times.
-- **Automatic:** nearby solves share a session named from weekday and time of day (for example `Saturday evening`). A new session starts after the configured inactivity gap or after logout.
+Admin metrics (`GET /v1/admin/stats/*`) require a CubeSync user with `user_role: admin`. The UI hides the Admin item for everyone else; the API still enforces 401/403.
 
 ## Scripts
 
 ```bash
 npm run dev
 npm run test
+npm run test:watch
+npm run typecheck
+npm run lint
 npm run e2e
 npm run build
 npm run preview

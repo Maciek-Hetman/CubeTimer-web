@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppProviders } from './app/AppProviders'
 import { AppShell } from './app/AppShell'
 import { HomePage } from './app/HomePage'
+import { AdminDashboardPage } from './features/admin/AdminDashboardPage'
+import { AdminRoute } from './features/admin/AdminRoute'
 import { LoginPage } from './features/auth/LoginPage'
 import { RegisterPage } from './features/auth/RegisterPage'
 import { VerifyEmailPage } from './features/auth/VerifyEmailPage'
@@ -19,6 +21,14 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminDashboardPage />
+                </AdminRoute>
+              }
+            />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />

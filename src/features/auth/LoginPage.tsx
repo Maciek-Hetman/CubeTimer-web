@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../../app/AppProviders'
 import { ApiError } from '../../api/types'
 import { Alert } from '../../ui/Alert'
@@ -10,6 +10,7 @@ import { AuthLayout } from './AuthLayout'
 export function LoginPage() {
   const { login } = useApp()
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -24,7 +25,8 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       await login(email, password)
-      navigate('/')
+      const from = (location.state as { from?: string } | null)?.from
+      navigate(from && from.startsWith('/') && !from.startsWith('//') ? from : '/')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not sign in')
     } finally {

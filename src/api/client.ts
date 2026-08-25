@@ -8,6 +8,8 @@ export interface RequestOptions {
   retry?: boolean
 }
 
+export type AuthenticatedRequest = <T>(path: string, options?: Omit<RequestOptions, 'accessToken'>) => Promise<T>
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     Accept: 'application/json',

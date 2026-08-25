@@ -68,6 +68,61 @@ export interface SyncResponse {
   has_more: boolean
 }
 
+export type StatsInterval = 'hour' | 'day'
+
+export interface AdminStatsQuery {
+  from?: string
+  to?: string
+  interval?: StatsInterval
+}
+
+export interface AdminOverviewStats {
+  total_users: number
+  verified_users: number
+  new_users_24h: number
+  new_users_7d: number
+  new_users_30d: number
+  active_users_24h: number
+  active_users_7d: number
+  active_users_30d: number
+  total_devices: number
+  total_sessions: number
+  total_solves: number
+}
+
+export interface AdminRequestStatsPoint {
+  bucket: string
+  request_count: number
+  status_2xx: number
+  status_3xx: number
+  status_4xx: number
+  status_5xx: number
+  average_duration_ms: number
+  max_duration_ms: number
+}
+
+export interface AdminRequestStats {
+  from: string
+  to: string
+  interval: StatsInterval
+  points: AdminRequestStatsPoint[]
+}
+
+export interface AdminErrorStatsPoint {
+  bucket: string
+  method: string
+  route: string
+  status_code: number
+  request_count: number
+}
+
+export interface AdminErrorStats {
+  from: string
+  to: string
+  interval: StatsInterval
+  points: AdminErrorStatsPoint[]
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string

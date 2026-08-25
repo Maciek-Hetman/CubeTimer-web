@@ -4,15 +4,10 @@ import { ConflictBanner } from '../features/sync/ConflictBanner'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
 import { AppBrand } from '../ui/AppBrand'
 import { Button } from '../ui/Button'
-import { CheckIcon, EditWidgetsIcon, SettingsIcon, StatsIcon, TimerIcon } from '../ui/NavIcons'
+import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerIcon } from '../ui/NavIcons'
 import { useMediaQuery } from '../ui/useMediaQuery'
 import { ThemeToggle } from '../ui/ThemeToggle'
-
-const NAV_ITEMS = [
-  { to: '/', label: 'Timer', end: true, icon: <TimerIcon /> },
-  { to: '/stats', label: 'Stats', end: false, icon: <StatsIcon /> },
-  { to: '/settings', label: 'Settings', end: false, icon: <SettingsIcon /> },
-] as const
+import { useApp } from './AppProviders'
 
 export interface ShellOutletContext {
   widgetEditing: boolean
@@ -20,6 +15,7 @@ export interface ShellOutletContext {
 }
 
 export function AppShell() {
+  const { isAdmin } = useApp()
   const location = useLocation()
   const isWide = useMediaQuery('(min-width: 768px)')
   const isDesktop = useMediaQuery('(min-width: 1200px)')
@@ -29,6 +25,13 @@ export function AppShell() {
     location.pathname.startsWith('/verify-email') ||
     location.pathname.startsWith('/reset-password') ||
     location.pathname.startsWith('/forgot-password')
+  const navItems = [
+    { to: '/', label: 'Timer', end: true, icon: <TimerIcon /> },
+    { to: '/stats', label: 'Stats', end: false, icon: <StatsIcon /> },
+    ...(isAdmin ? [{ to: '/admin', label: 'Admin', end: false, icon: <ShieldIcon /> }] : []),
+    { to: '/settings', label: 'Settings', end: false, icon: <SettingsIcon /> },
+  ]
+
   const showHeaderNav = !isAuthRoute && isWide
   const showBottomNav = !isAuthRoute && !isWide
   const isHome = location.pathname === '/'
@@ -62,7 +65,7 @@ export function AppShell() {
         <header className="app-header">
           <AppBrand />
           <nav className="header-nav" aria-label="Primary">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <NavLink key={item.to} to={item.to} end={item.end}>
                 {item.icon}
                 {item.label}
@@ -94,8 +97,8 @@ export function AppShell() {
         <Outlet context={outletContext} />
       </main>
       {showBottomNav ? (
-        <nav className="bottom-nav" aria-label="Primary">
-          {NAV_ITEMS.map((item) => (
+        <nav className={['bottom-nav', isAdmin ? 'has-admin' : ''].filter(Boolean).join(' ')} aria-label="Primary">
+          {navItems.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}>
               {item.icon}
               {item.label}
