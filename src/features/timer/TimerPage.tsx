@@ -249,26 +249,24 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {liveMessage}
       </div>
 
-      <header className="row wrap" style={{ justifyContent: 'space-between', padding: '0 8px', marginTop: '-8px' }}>
+      <header className="row wrap" style={{ justifyContent: 'space-between' }}>
         <Select
           aria-label="Event"
           value={settings.event}
           disabled={busy}
           onChange={(val) => void setEvent(val as CubeEvent)}
-          style={{ minWidth: 100 }}
-          variant="ghost"
-          size="small"
+          style={{ width: 130 }}
           options={EVENTS.map((item) => ({
             value: item,
             label: eventLabel(item)
           }))}
         />
         {settings.sessionMode === 'manual' ? (
-          <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)} variant="ghost" style={{ minHeight: 32, padding: '6px 10px', fontSize: 'var(--text-xs)' }}>
+          <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)}>
             {currentSession?.name ?? 'Sessions'}
           </Button>
         ) : (
-          <span className="muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, padding: '6px 10px' }}>{currentSession?.name ?? 'Automatic session'}</span>
+          <span className="muted">{currentSession?.name ?? 'Automatic session'}</span>
         )}
         {!isWide && variant !== 'desktop' ? <ThemeToggle /> : null}
       </header>
