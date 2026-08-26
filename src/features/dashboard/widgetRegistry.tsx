@@ -1,4 +1,3 @@
-import type { Layout } from 'react-grid-layout'
 import { AveragesWidget } from './widgets/AveragesWidget'
 import { RecentSolvesWidget } from './widgets/RecentSolvesWidget'
 import { RecentTimesChart } from './widgets/RecentTimesChart'
@@ -26,20 +25,6 @@ export const DEFAULT_WIDGETS: WidgetInstance[] = [
   { i: 'sessionStats', type: 'sessionStats', side: 'right' },
   { i: 'recentSolves', type: 'recentSolves', side: 'right' },
 ]
-
-export const AVERAGES_MIN_H = 4
-export const SESSION_STATS_MIN_H = 4
-
-export const DEFAULT_LAYOUTS: Record<'left' | 'right', Layout> = {
-  left: [
-    { i: 'recentTimes', x: 0, y: 0, w: 1, h: 5, minH: 3 },
-    { i: 'averages', x: 0, y: 5, w: 1, h: AVERAGES_MIN_H, minH: AVERAGES_MIN_H },
-  ],
-  right: [
-    { i: 'sessionStats', x: 0, y: 0, w: 1, h: SESSION_STATS_MIN_H, minH: SESSION_STATS_MIN_H },
-    { i: 'recentSolves', x: 0, y: 4, w: 1, h: 5, minH: 3 },
-  ],
-}
 
 export function renderWidget(type: WidgetType) {
   switch (type) {

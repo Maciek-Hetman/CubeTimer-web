@@ -1,6 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import GridLayout, { useContainerWidth, type Layout } from 'react-grid-layout'
 import { useOutletContext } from 'react-router-dom'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  defaultDropAnimationSideEffects,
+  type DragStartEvent,
+  type DragOverEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
 import { useApp } from '../../app/AppProviders'
 import type { ShellOutletContext } from '../../app/AppShell'
 import { db } from '../../data/db'
@@ -9,50 +30,16 @@ import { Field } from '../../ui/Field'
 import { Select } from '../../ui/Select'
 import { TimerPage } from '../timer/TimerPage'
 import {
-  AVERAGES_MIN_H,
-  DEFAULT_LAYOUTS,
   DEFAULT_WIDGETS,
   WIDGET_LABELS,
   WIDGET_TYPES,
   renderWidget,
-  SESSION_STATS_MIN_H,
   type WidgetInstance,
   type WidgetType,
 } from './widgetRegistry'
 
 interface StoredDashboard {
   widgets: WidgetInstance[]
-  layouts: Record<'left' | 'right', Layout>
-}
-
-const MIN_WIDGET_HEIGHTS: Partial<Record<WidgetType, number>> = {
-  averages: AVERAGES_MIN_H,
-  sessionStats: SESSION_STATS_MIN_H,
-}
-
-function ensureWidgetHeights(widgets: WidgetInstance[], layouts: StoredDashboard['layouts']): StoredDashboard['layouts'] {
-  const minHeights = new Map(widgets.map((widget) => [widget.i, MIN_WIDGET_HEIGHTS[widget.type] ?? 0]))
-  const bump = (layout: Layout) =>
-    layout.map((item) => {
-      const requiredHeight = minHeights.get(item.i) ?? 0
-      if (!requiredHeight) {
-        return item
-      }
-      const minH = Math.max(item.minH ?? 0, requiredHeight)
-      let h = Math.max(item.h, minH)
-      
-      // Auto-snap Averages and SessionStats widgets to the new perfect height of 4 
-      // if they were at the old default of 5, or if they got squeezed to 3.
-      if (item.i.startsWith('averages') && (item.h === 5 || item.h === 3) && requiredHeight === 4) {
-        h = 4
-      }
-      if (item.i.startsWith('sessionStats') && item.h === 5 && requiredHeight === 4) {
-        h = 4
-      }
-      
-      return { ...item, minH, h }
-    })
-  return { left: bump(layouts.left), right: bump(layouts.right) }
 }
 
 export function DesktopDashboard() {
@@ -60,26 +47,19 @@ export function DesktopDashboard() {
   const { widgetEditing: editing = false } = useOutletContext<ShellOutletContext>() ?? {}
   const [store, setStore] = useState<StoredDashboard>({
     widgets: DEFAULT_WIDGETS,
-    layouts: DEFAULT_LAYOUTS,
   })
   const [hydrated, setHydrated] = useState(false)
+  const [activeId, setActiveId] = useState<string | null>(null)
 
   useEffect(() => {
     setHydrated(false)
     void db.widgetLayouts.get(ownerId).then((record) => {
       const layout = record?.layout as StoredDashboard | undefined
-      if (layout?.widgets && layout.layouts) {
+      if (layout?.widgets) {
         const known = new Set(WIDGET_TYPES)
         const knownWidgets = layout.widgets.filter((widget) => known.has(widget.type))
         const widgets = knownWidgets.length > 0 ? knownWidgets : DEFAULT_WIDGETS
-        const layouts = {
-          left: layout.layouts.left ?? DEFAULT_LAYOUTS.left,
-          right: layout.layouts.right ?? DEFAULT_LAYOUTS.right,
-        }
-        setStore({
-          widgets,
-          layouts: ensureWidgetHeights(widgets, layouts),
-        })
+        setStore({ widgets })
       }
       setHydrated(true)
     })
@@ -101,49 +81,135 @@ export function DesktopDashboard() {
       return
     }
     const i = `${type}-${crypto.randomUUID().slice(0, 8)}`
-    const height = MIN_WIDGET_HEIGHTS[type] ?? 4
-    const minH = MIN_WIDGET_HEIGHTS[type] ?? 3
     setStore((current) => ({
       widgets: [...current.widgets, { i, type, side }],
-      layouts: {
-        ...current.layouts,
-        [side]: [...current.layouts[side], { i, x: 0, y: Infinity, w: 1, h: height, minH }],
-      },
     }))
   }
 
   function removeWidget(id: string) {
     setStore((current) => ({
       widgets: current.widgets.filter((widget) => widget.i !== id),
-      layouts: {
-        left: current.layouts.left.filter((item) => item.i !== id),
-        right: current.layouts.right.filter((item) => item.i !== id),
-      },
     }))
   }
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(event.active.id as string)
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event
+    if (!over) return
+
+    const activeId = active.id
+    const overId = over.id
+
+    if (activeId === overId) return
+
+    const isActiveColumn = overId === 'left' || overId === 'right'
+
+    setStore((current) => {
+      const activeIndex = current.widgets.findIndex((w) => w.i === activeId)
+      const overIndex = current.widgets.findIndex((w) => w.i === overId)
+
+      if (activeIndex === -1) return current
+
+      const newWidgets = [...current.widgets]
+      const activeWidget = newWidgets[activeIndex]
+
+      if (isActiveColumn) {
+        if (activeWidget.side !== overId) {
+          activeWidget.side = overId as 'left' | 'right'
+          newWidgets.splice(activeIndex, 1)
+          newWidgets.push(activeWidget)
+          return { widgets: newWidgets }
+        }
+        return current
+      }
+
+      if (overIndex !== -1) {
+        const overWidget = newWidgets[overIndex]
+        if (activeWidget.side !== overWidget.side) {
+          activeWidget.side = overWidget.side
+        }
+        return { widgets: arrayMove(newWidgets, activeIndex, overIndex) }
+      }
+
+      return current
+    })
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over) return
+
+    const activeId = active.id
+    const overId = over.id
+
+    if (activeId !== overId) {
+      setStore((current) => {
+        const activeIndex = current.widgets.findIndex((w) => w.i === activeId)
+        const overIndex = current.widgets.findIndex((w) => w.i === overId)
+        if (activeIndex !== -1 && overIndex !== -1) {
+          return { widgets: arrayMove(current.widgets, activeIndex, overIndex) }
+        }
+        return current
+      })
+    }
+  }
+
+  const activeWidget = useMemo(() => {
+    if (!activeId) return null
+    return store.widgets.find((w) => w.i === activeId)
+  }, [activeId, store.widgets])
+
   return (
-    <div className="desktop-dashboard">
-      <WidgetColumn
-        side="left"
-        store={store}
-        editing={editing}
-        onLayout={(layout) => setStore((current) => ({ ...current, layouts: { ...current.layouts, left: layout } }))}
-        onRemove={removeWidget}
-        onAdd={addWidget}
-      />
-      <section className="desktop-center">
-        <TimerPage variant="desktop" />
-      </section>
-      <WidgetColumn
-        side="right"
-        store={store}
-        editing={editing}
-        onLayout={(layout) => setStore((current) => ({ ...current, layouts: { ...current.layouts, right: layout } }))}
-        onRemove={removeWidget}
-        onAdd={addWidget}
-      />
-    </div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="desktop-dashboard">
+        <WidgetColumn
+          side="left"
+          store={store}
+          editing={editing}
+          onRemove={removeWidget}
+          onAdd={addWidget}
+        />
+        <section className="desktop-center">
+          <TimerPage variant="desktop" />
+        </section>
+        <WidgetColumn
+          side="right"
+          store={store}
+          editing={editing}
+          onRemove={removeWidget}
+          onAdd={addWidget}
+        />
+      </div>
+      
+      <DragOverlay
+        dropAnimation={{
+          sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
+        }}
+      >
+        {activeWidget ? (
+          <WidgetCard widget={activeWidget} editing={true} onRemove={() => {}} overlay />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   )
 }
 
@@ -151,25 +217,20 @@ function WidgetColumn({
   side,
   store,
   editing,
-  onLayout,
   onRemove,
   onAdd,
 }: {
   side: 'left' | 'right'
   store: StoredDashboard
   editing: boolean
-  onLayout: (layout: Layout) => void
   onRemove: (id: string) => void
   onAdd: (type: WidgetType, side: 'left' | 'right') => void
 }) {
-  const { currentSession } = useApp()
-  const { width, containerRef, mounted } = useContainerWidth()
   const widgets = useMemo(() => store.widgets.filter((widget) => widget.side === side), [side, store.widgets])
-  const layout = store.layouts[side]
   const available = WIDGET_TYPES.filter((type) => !store.widgets.some((widget) => widget.type === type))
 
   return (
-    <aside ref={containerRef} className="widget-column">
+    <aside className="widget-column" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {editing ? (
         <Field label="Add widget">
           <Select
@@ -188,42 +249,83 @@ function WidgetColumn({
           />
         </Field>
       ) : null}
-      {mounted ? (
-        <GridLayout
-          width={width}
-          layout={layout}
-          gridConfig={{ cols: 1, rowHeight: 48, margin: [8, 8] }}
-          dragConfig={{ enabled: editing, handle: '.widget-drag' }}
-          resizeConfig={{ enabled: editing }}
-          onLayoutChange={onLayout}
-        >
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: '200px' }}>
+        <SortableContext id={side} items={widgets.map(w => w.i)} strategy={verticalListSortingStrategy}>
           {widgets.map((widget) => (
-            <div key={widget.i} className="widget-grid-item">
-              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-                <h3 className="widget-drag" style={{ cursor: editing ? 'grab' : 'default' }}>
-                  {widget.type === 'sessionStats' && currentSession?.name
-                    ? `${WIDGET_LABELS[widget.type]} — ${currentSession.name}`
-                    : WIDGET_LABELS[widget.type]}
-                </h3>
-                {editing ? (
-                  <Button type="button" variant="ghost" onClick={() => onRemove(widget.i)}>
-                    Remove
-                  </Button>
-                ) : null}
-              </div>
-              {renderWidget(widget.type)}
-            </div>
+            <SortableWidget key={widget.i} widget={widget} editing={editing} onRemove={onRemove} />
           ))}
-        </GridLayout>
-      ) : (
-        <div className="stack">
-          {[0, 1].map((index) => (
-            <div key={index} className="widget-grid-item" style={{ minHeight: 160 }}>
-              <p className="muted">Loading widgets…</p>
-            </div>
-          ))}
-        </div>
-      )}
+        </SortableContext>
+      </div>
     </aside>
+  )
+}
+
+function SortableWidget({ widget, editing, onRemove }: { widget: WidgetInstance, editing: boolean, onRemove: (id: string) => void }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: widget.i, disabled: !editing })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <WidgetCard 
+        widget={widget} 
+        editing={editing} 
+        onRemove={onRemove} 
+        dragHandleProps={editing ? { ...attributes, ...listeners } : undefined} 
+      />
+    </div>
+  )
+}
+
+function WidgetCard({ 
+  widget, 
+  editing, 
+  onRemove, 
+  dragHandleProps,
+  overlay = false 
+}: { 
+  widget: WidgetInstance
+  editing: boolean
+  onRemove: (id: string) => void
+  dragHandleProps?: Record<string, any>
+  overlay?: boolean
+}) {
+  const { currentSession } = useApp()
+  
+  return (
+    <div className="widget-grid-item" style={{ 
+      margin: 0, 
+      ...(overlay ? { opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' } : {})
+    }}>
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 
+          className="widget-drag" 
+          style={{ cursor: editing ? (overlay ? 'grabbing' : 'grab') : 'default' }}
+          {...dragHandleProps}
+        >
+          {widget.type === 'sessionStats' && currentSession?.name
+            ? `${WIDGET_LABELS[widget.type]} — ${currentSession.name}`
+            : WIDGET_LABELS[widget.type]}
+        </h3>
+        {editing && !overlay ? (
+          <Button type="button" variant="ghost" onClick={() => onRemove(widget.i)}>
+            Remove
+          </Button>
+        ) : null}
+      </div>
+      {renderWidget(widget.type)}
+    </div>
   )
 }
