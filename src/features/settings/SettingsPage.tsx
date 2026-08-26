@@ -24,6 +24,12 @@ const BACKGROUND_PRESETS = [
   { label: 'Olive', value: '#3f6212' },
   { label: 'Teal', value: '#115e59' },
   { label: 'Ocean', value: '#0369a1' },
+  { label: 'Midnight', value: '#020617' },
+  { label: 'Mocha', value: '#3b2f2f' },
+  { label: 'Sage', value: '#4b5563' },
+  { label: 'Lavender', value: '#581c87' },
+  { label: 'Coral', value: '#9f1239' },
+  { label: 'Steel', value: '#334155' },
 ]
 
 export function SettingsPage() {
