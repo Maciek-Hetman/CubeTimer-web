@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApp } from '../../app/AppProviders'
 import { eventLabel } from '../../domain/models'
-import { averageOfN, bestAverageOfN, bestSingle, meanOfSolves, worstSingle } from '../../domain/stats/averages'
-import { formatAverage } from '../../domain/stats/formatTime'
+import { averageOfN, bestAverageOfN, bestSingle, meanOfSolves, worstSingle, standardDeviation, totalTime } from '../../domain/stats/averages'
+import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
@@ -51,10 +51,16 @@ export function StatsPage() {
       best: bestSingle(solves),
       worst: worstSingle(solves),
       mean: meanOfSolves(solves),
+      stdDev: standardDeviation(solves),
+      totalTime: totalTime(solves),
       ao5: averageOfN(solves, 5),
       ao12: averageOfN(solves, 12),
+      ao50: averageOfN(solves, 50),
+      ao100: averageOfN(solves, 100),
       bestAo5: bestAverageOfN(solves, 5),
       bestAo12: bestAverageOfN(solves, 12),
+      bestAo50: bestAverageOfN(solves, 50),
+      bestAo100: bestAverageOfN(solves, 100),
     }),
     [solves],
   )
@@ -64,7 +70,11 @@ export function StatsPage() {
       count: sessionSolves.length,
       best: bestSingle(sessionSolves),
       mean: meanOfSolves(sessionSolves),
+      stdDev: standardDeviation(sessionSolves),
+      totalTime: totalTime(sessionSolves),
       ao5: averageOfN(sessionSolves, 5),
+      ao50: averageOfN(sessionSolves, 50),
+      ao100: averageOfN(sessionSolves, 100),
     }),
     [sessionSolves],
   )
@@ -73,7 +83,10 @@ export function StatsPage() {
     () => ({
       best: bestSingle(previousSessionSolves),
       mean: meanOfSolves(previousSessionSolves),
+      stdDev: standardDeviation(previousSessionSolves),
       ao5: averageOfN(previousSessionSolves, 5),
+      ao50: averageOfN(previousSessionSolves, 50),
+      ao100: averageOfN(previousSessionSolves, 100),
     }),
     [previousSessionSolves],
   )
@@ -132,6 +145,18 @@ export function StatsPage() {
                 {formatAverage(summary.bestAo12)}
               </div>
             </Panel>
+            <Panel style={{ flex: 1, minWidth: '150px' }}>
+              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao50</div>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+                {formatAverage(summary.bestAo50)}
+              </div>
+            </Panel>
+            <Panel style={{ flex: 1, minWidth: '150px' }}>
+              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao100</div>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+                {formatAverage(summary.bestAo100)}
+              </div>
+            </Panel>
           </div>
 
           <Panel className="stack">
@@ -153,10 +178,14 @@ export function StatsPage() {
             <StatGrid
               items={[
                 ['Solves', String(summary.count)],
+                ['Total Time', formatTotalTime(summary.totalTime)],
                 ['Worst', formatAverage(summary.worst)],
                 ['Mean', formatAverage(summary.mean)],
+                ['Std Dev', formatAverage(summary.stdDev)],
                 ['Ao5', formatAverage(summary.ao5)],
                 ['Ao12', formatAverage(summary.ao12)],
+                ['Ao50', formatAverage(summary.ao50)],
+                ['Ao100', formatAverage(summary.ao100)],
               ]}
             />
           </Panel>
@@ -166,6 +195,7 @@ export function StatsPage() {
             <StatGrid
               items={[
                 ['Solves', String(sessionSummary.count)],
+                ['Total Time', formatTotalTime(sessionSummary.totalTime)],
                 [
                   'Best',
                   <span key="best">
@@ -181,10 +211,31 @@ export function StatsPage() {
                   </span>,
                 ],
                 [
+                  'Std Dev',
+                  <span key="stdDev">
+                    {formatAverage(sessionSummary.stdDev)}
+                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
+                  </span>,
+                ],
+                [
                   'Ao5',
                   <span key="ao5">
                     {formatAverage(sessionSummary.ao5)}
                     {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
+                  </span>,
+                ],
+                [
+                  'Ao50',
+                  <span key="ao50">
+                    {formatAverage(sessionSummary.ao50)}
+                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
+                  </span>,
+                ],
+                [
+                  'Ao100',
+                  <span key="ao100">
+                    {formatAverage(sessionSummary.ao100)}
+                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
                   </span>,
                 ],
               ]}

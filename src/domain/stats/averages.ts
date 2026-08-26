@@ -62,6 +62,24 @@ export function worstSingle(solves: Solve[]): number | null {
   return worst
 }
 
+export function totalTime(solves: Solve[]): number {
+  return solves.reduce((sum, solve) => {
+    return sum + solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+  }, 0)
+}
+
+export function standardDeviation(solves: Solve[]): number | null {
+  const values = solves
+    .map((solve) => effectiveTimeMs(solve))
+    .filter((value): value is number => value !== null)
+  if (values.length === 0) {
+    return null
+  }
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length
+  const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length
+  return Math.sqrt(variance)
+}
+
 function averageWindow(window: Solve[], n: number): number | null {
   const values = window.map((solve) => effectiveTimeMs(solve))
   const dnfCount = values.filter((value) => value === null).length
