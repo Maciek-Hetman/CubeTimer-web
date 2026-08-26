@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import {
   Bar,
@@ -24,7 +25,25 @@ const chartTooltipStyle = {
 export function AdminTrafficPage() {
   const { requests, loading } = useOutletContext<AdminContextType>()
 
-  if (loading && !requests) {
+  const chartData = useMemo(() => {
+    if (!requests || !requests.points) return []
+    return requests.points.map(point => {
+      const minutesInBucket = requests.interval === 'day' ? 24 * 60 : 60
+      const throughputRpm = point.request_count / minutesInBucket
+      
+      const successRate = point.request_count > 0 ? (point.status_2xx / point.request_count) * 100 : 0
+      const errorRate = point.request_count > 0 ? ((point.status_4xx + point.status_5xx) / point.request_count) * 100 : 0
+      
+      return {
+        ...point,
+        throughput_rpm: throughputRpm,
+        success_rate: successRate,
+        error_rate: errorRate
+      }
+    })
+  }, [requests])
+
+  if (loading && (!requests || chartData.length === 0)) {
     return (
       <Panel className="stack" role="status">
         <p className="muted" style={{ margin: 0 }}>
@@ -36,12 +55,10 @@ export function AdminTrafficPage() {
 
   if (!requests) return null
 
-  const requestPoints = requests.points ?? []
-
   return (
     <Panel className="stack">
       <h2>Requests</h2>
-      {requestPoints.length === 0 ? (
+      {chartData.length === 0 ? (
         <EmptyState title="No request data" description="There are no requests in this range." />
       ) : (
         <div className="admin-charts">
@@ -49,7 +66,7 @@ export function AdminTrafficPage() {
             <h3>Volume and status</h3>
             <div className="admin-chart-canvas">
               <ResponsiveContainer>
-                <BarChart data={requestPoints} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+                <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
                   <YAxis width={40} stroke="var(--text-muted)" allowDecimals={false} />
@@ -64,10 +81,70 @@ export function AdminTrafficPage() {
             </div>
           </div>
           <div className="admin-chart">
+            <h3>Throughput</h3>
+            <div className="admin-chart-canvas">
+              <ResponsiveContainer>
+                <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
+                  <YAxis width={48} stroke="var(--text-muted)" tickFormatter={(value: number) => `${value.toFixed(1)}`} />
+                  <Tooltip
+                    contentStyle={chartTooltipStyle}
+                    labelFormatter={formatBucket}
+                    formatter={(value) => [`${Number(value).toFixed(2)} RPM`, undefined]}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="throughput_rpm"
+                    name="Requests / min"
+                    stroke="var(--accent)"
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="admin-chart">
+            <h3>Success & Error Rates</h3>
+            <div className="admin-chart-canvas">
+              <ResponsiveContainer>
+                <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
+                  <YAxis width={48} stroke="var(--text-muted)" domain={[0, 100]} tickFormatter={(value: number) => `${Math.round(value)}%`} />
+                  <Tooltip
+                    contentStyle={chartTooltipStyle}
+                    labelFormatter={formatBucket}
+                    formatter={(value) => [`${Number(value).toFixed(2)}%`, undefined]}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="success_rate"
+                    name="Success Rate"
+                    stroke="var(--success)"
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="error_rate"
+                    name="Error Rate"
+                    stroke="var(--danger)"
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="admin-chart">
             <h3>Latency</h3>
             <div className="admin-chart-canvas">
               <ResponsiveContainer>
-                <LineChart data={requestPoints} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+                <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
                   <YAxis width={48} stroke="var(--text-muted)" tickFormatter={(value: number) => `${Math.round(value)}`} />

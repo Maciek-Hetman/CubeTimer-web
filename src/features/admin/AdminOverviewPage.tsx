@@ -24,8 +24,14 @@ export function AdminOverviewPage() {
   const activeRatio30d = overview.total_users > 0 
     ? (overview.active_users_30d / overview.total_users) * 100 
     : 0
+  const dauMauRatio = overview.active_users_30d > 0
+    ? (overview.active_users_24h / overview.active_users_30d) * 100
+    : 0
   const avgSolvesSession = overview.total_sessions > 0 
     ? overview.total_solves / overview.total_sessions 
+    : 0
+  const avgDevicesUser = overview.total_users > 0
+    ? overview.total_devices / overview.total_users
     : 0
 
   return (
@@ -36,7 +42,9 @@ export function AdminOverviewPage() {
           items={[
             ['Verification Rate', `${verificationRate.toFixed(1)}%`],
             ['30d Active Ratio', `${activeRatio30d.toFixed(1)}%`],
+            ['DAU / MAU Ratio', `${dauMauRatio.toFixed(1)}%`],
             ['Avg Solves / Session', formatCount(Math.round(avgSolvesSession))],
+            ['Avg Devices / User', formatCount(Math.round(avgDevicesUser))],
           ]}
         />
       </Panel>
