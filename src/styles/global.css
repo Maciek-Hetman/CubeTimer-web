@@ -798,6 +798,11 @@ input[type='range'] {
   text-align: right;
 }
 
+.data-table th.center,
+.data-table td.center {
+  text-align: center;
+}
+
 .data-table td {
   padding: 3px 0;
   font-family: var(--mono);

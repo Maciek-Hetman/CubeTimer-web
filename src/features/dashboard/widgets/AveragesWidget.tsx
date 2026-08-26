@@ -11,16 +11,16 @@ export function AveragesWidget() {
       <thead>
         <tr>
           <th>Avg</th>
-          <th className="num">Current</th>
-          <th className="num">Best</th>
+          <th className="center">Current</th>
+          <th className="center">Best</th>
         </tr>
       </thead>
       <tbody>
         {WINDOWS.map((n) => (
           <tr key={n}>
             <td>Ao{n}</td>
-            <td className="num">{formatAverage(averageOfN(solves, n))}</td>
-            <td className="num best-time">{formatAverage(n === 1 ? bestSingle(solves) : bestAverageOfN(solves, n))}</td>
+            <td className="center">{formatAverage(averageOfN(solves, n))}</td>
+            <td className="center best-time">{formatAverage(n === 1 ? bestSingle(solves) : bestAverageOfN(solves, n))}</td>
           </tr>
         ))}
       </tbody>
