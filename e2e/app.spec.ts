@@ -176,6 +176,62 @@ test('locks auth submit and merges guest data after a mocked sign-in', async ({ 
   expect(loginCalls).toBe(1)
 })
 
+test('hides account solves once a stored session is revoked', async ({ page }) => {
+  const accountId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  await mockCubeSync(page, 'user')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/login')
+  await page.getByLabel('Email').fill('user@example.com')
+  await page.getByLabel('Password').fill('supersecret1')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await page.waitForTimeout(500)
+
+  await page.evaluate(
+    (ownerId) =>
+      new Promise<void>((resolve) => {
+        const req = indexedDB.open('cubetimer')
+        req.onsuccess = () => {
+          const db = req.result
+          const now = new Date().toISOString()
+          db.transaction('sessions', 'readwrite').objectStore('sessions').put({
+            id: 'session-1', ownerId, name: 'Main', event: '3x3', kind: 'manual',
+            startedAt: now, endedAt: null, archived: false, version: 0, updatedAt: now, deletedAt: null,
+          })
+          db.transaction('solves', 'readwrite').objectStore('solves').put({
+            id: 'solve-1', ownerId, sessionId: 'session-1', durationMs: 1000, penalty: 'none',
+            solvedAt: now, scramble: 'R U', event: '3x3', version: 0, updatedAt: now, deletedAt: null,
+          })
+          resolve()
+        }
+      }),
+    accountId,
+  )
+  await page.goto('/stats')
+  await expect(page.locator('.stat-card').filter({ hasText: 'Solves' }).locator('.value').first()).toHaveText('1', { timeout: 8000 })
+
+  await page.route('**/v1/auth/refresh', (route) =>
+    route.fulfill({ status: 401, json: { error: { code: 'invalid_refresh_token', message: 'invalid' } } }),
+  )
+  await page.reload()
+  await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible({ timeout: 8000 })
+  await page.goto('/stats')
+  await expect(page.getByText('No solves yet')).toBeVisible()
+  await expect(page.locator('.stat-card')).toHaveCount(0)
+
+  const currentOwner = await page.evaluate(() =>
+    new Promise<string>((resolve) => {
+      const req = indexedDB.open('cubetimer')
+      req.onsuccess = () => {
+        const db = req.result
+        const tx = db.transaction('meta', 'readonly')
+        const get = tx.objectStore('meta').get('owner.current')
+        get.onsuccess = () => resolve(String(get.result?.value ?? ''))
+      }
+    }),
+  )
+  expect(currentOwner.startsWith('guest:')).toBe(true)
+})
+
 test('closes the stats delete dialog with Escape', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')

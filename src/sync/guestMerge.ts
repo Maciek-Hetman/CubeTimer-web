@@ -42,16 +42,18 @@ export async function adoptGuestData(guestOwnerId: string, accountOwnerId: strin
         })
       }
     }
-    if (settings) {
+    const existingSettings = await db.settings.get(accountOwnerId)
+    if (settings && !existingSettings) {
       await db.settings.put({ ...settings, ownerId: accountOwnerId })
-      await db.settings.delete(guestOwnerId)
-    } else {
+    } else if (!existingSettings) {
       await getOrCreateSettings(accountOwnerId)
     }
-    if (widgets) {
+    await db.settings.delete(guestOwnerId)
+    const existingWidgets = await db.widgetLayouts.get(accountOwnerId)
+    if (widgets && !existingWidgets) {
       await db.widgetLayouts.put({ ...widgets, ownerId: accountOwnerId })
-      await db.widgetLayouts.delete(guestOwnerId)
     }
+    await db.widgetLayouts.delete(guestOwnerId)
   })
 
   return { sessions: sessions.length, solves: solves.length }

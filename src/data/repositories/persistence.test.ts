@@ -5,7 +5,7 @@ import { newSolve, putSolve } from './solves'
 import { listOutbox } from './outbox'
 import { adoptGuestData } from '../../sync/guestMerge'
 import { applySyncResponse } from '../../sync/syncEngine'
-import type { MutationRecord } from '../../domain/models'
+import { DEFAULT_SETTINGS, type MutationRecord } from '../../domain/models'
 
 describe('local persistence', () => {
   beforeEach(async () => {
@@ -53,6 +53,30 @@ describe('local persistence', () => {
     expect(outbox[0]?.entity).toBe('session')
     expect(outbox[1]?.entity).toBe('solve')
     expect(outbox[0]?.baseVersion).toBe(0)
+  })
+
+  it('keeps existing account settings when adopting guest data', async () => {
+    await db.settings.put({ ownerId: 'account-1', ...DEFAULT_SETTINGS, event: '2x2', theme: 'dark' })
+    await db.settings.put({ ownerId: 'guest:abc', ...DEFAULT_SETTINGS })
+    await adoptGuestData('guest:abc', 'account-1')
+    const kept = await db.settings.get('account-1')
+    expect(kept?.event).toBe('2x2')
+    expect(kept?.theme).toBe('dark')
+    expect(await db.settings.get('guest:abc')).toBeUndefined()
+  })
+
+  it('adopts guest settings when the account has none', async () => {
+    await db.settings.put({ ownerId: 'guest:abc', ...DEFAULT_SETTINGS, event: '4x4' })
+    await adoptGuestData('guest:abc', 'account-new')
+    expect((await db.settings.get('account-new'))?.event).toBe('4x4')
+    expect(await db.settings.get('guest:abc')).toBeUndefined()
+  })
+
+  it('keeps the account widget layout when adopting guest data', async () => {
+    await db.widgetLayouts.put({ ownerId: 'account-1', widgets: ['averages', 'recentTimes'], layout: { widgets: ['averages', 'recentTimes'] } })
+    await db.widgetLayouts.put({ ownerId: 'guest:abc', widgets: ['recentSolves'], layout: { widgets: [] } })
+    await adoptGuestData('guest:abc', 'account-1')
+    expect((await db.widgetLayouts.get('account-1'))?.widgets).toEqual(['averages', 'recentTimes'])
   })
 })
 

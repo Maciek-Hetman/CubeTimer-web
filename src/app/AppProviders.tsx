@@ -115,13 +115,30 @@ export function AppProviders({ children }: { children: ReactNode }) {
     setOwnerId(session.user.id)
   }, [])
 
+  const transitionToGuest = useCallback(async () => {
+    await clearAuth()
+    refreshTokenRef.current = null
+    setAccessToken(null)
+    setUser(null)
+    let guest = await getCurrentOwnerId()
+    if (!isGuestOwner(guest)) {
+      guest = await createFreshGuestOwner()
+    }
+    await getOrCreateSettings(guest)
+    setOwnerId(guest)
+    setSyncStatus('idle')
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
       await ensureGuestOwner()
-      const owner = await getCurrentOwnerId()
-      await getOrCreateSettings(owner)
+      let owner = await getCurrentOwnerId()
       const refreshToken = await getStoredRefreshToken()
+      if (!refreshToken && !isGuestOwner(owner)) {
+        owner = await createFreshGuestOwner()
+      }
+      await getOrCreateSettings(owner)
       const storedUser = await getStoredUser<User>()
       if (!cancelled) {
         setOwnerId(owner)
@@ -143,9 +160,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
               void persistSession(session, false)
             }
           } catch {
-            await clearAuth()
-            refreshTokenRef.current = null
             mountRefreshPromise = null
+            await transitionToGuest()
           }
         }
       if (!cancelled) {
@@ -155,7 +171,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [persistSession])
+  }, [persistSession, transitionToGuest])
 
   const settingsQuery = useLiveQuery(async () => (ownerId ? db.settings.get(ownerId) : undefined), [ownerId])
   const settings = settingsQuery ? { ...DEFAULT_SETTINGS, ...settingsQuery } : { ownerId, ...DEFAULT_SETTINGS }
@@ -247,10 +263,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
         return session.access_token
       } catch (error) {
         if (error instanceof ApiError && (error.status === 401 || error.status === 409)) {
-          await clearAuth()
-          refreshTokenRef.current = null
-          setAccessToken(null)
-          setUser(null)
+          await transitionToGuest()
         }
         throw error
       } finally {
@@ -259,7 +272,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     })()
     refreshPromiseRef.current = promise
     return promise
-  }, [])
+  }, [transitionToGuest])
 
   const authenticatedRequest = useCallback(
     async <T,>(path: string, options: Omit<RequestOptions, 'accessToken'> = {}): Promise<T> => {
@@ -613,15 +626,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-    await clearAuth()
-    refreshTokenRef.current = null
-    setAccessToken(null)
-    setUser(null)
-    const guest = await createFreshGuestOwner()
-    await getOrCreateSettings(guest)
-    setOwnerId(guest)
-    setSyncStatus('idle')
-  }, [doSync, enqueueWrites, ownerId])
+    await transitionToGuest()
+  }, [doSync, enqueueWrites, ownerId, transitionToGuest])
 
   const resolveConflictKeepServer = useCallback(async (conflictId: string) => {
     await db.conflicts.delete(conflictId)
