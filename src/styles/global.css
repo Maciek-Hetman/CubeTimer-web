@@ -853,7 +853,7 @@ input[type='range'] {
 .recent-solves {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -864,7 +864,7 @@ input[type='range'] {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 3px 0;
+  padding: 1px 0;
 }
 
 .recent-solve-number {
@@ -884,6 +884,14 @@ input[type='range'] {
   white-space: nowrap;
 }
 
+.recent-solve-time.best {
+  color: var(--success);
+}
+
+.recent-solve-time.worst {
+  color: var(--danger);
+}
+
 .solve-controls {
   display: inline-flex;
   flex-shrink: 0;
@@ -891,9 +899,9 @@ input[type='range'] {
 }
 
 .solve-controls .btn {
-  min-width: 28px;
-  min-height: 28px;
-  padding: 3px 5px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 2px 4px;
   font-size: var(--text-xs);
   box-shadow: none;
 }
@@ -906,6 +914,8 @@ input[type='range'] {
 
 .solve-controls .btn.delete {
   color: var(--danger);
+  background: var(--danger-soft);
+  border-color: transparent;
 }
 
 .history-row {

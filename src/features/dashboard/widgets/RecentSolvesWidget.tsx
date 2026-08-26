@@ -10,6 +10,11 @@ export function RecentSolvesWidget() {
   const { solves, updateSolvePenalty, deleteSolve } = useApp()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const recent = solves.slice(0, 10)
+  
+  const recentTimes = recent.map(s => s.penalty === 'dnf' ? Infinity : s.durationMs + (s.penalty === 'plus_two' ? 2000 : 0))
+  const minTime = recent.length > 1 ? Math.min(...recentTimes) : Infinity
+  const maxTime = recent.length > 1 ? Math.max(...recentTimes) : -1
+
   if (recent.length === 0) {
     return (
       <EmptyState
@@ -26,10 +31,15 @@ export function RecentSolvesWidget() {
   return (
     <>
       <ul className="recent-solves">
-        {recent.map((solve, index) => (
-          <li key={solve.id} className="recent-solve-row">
-            <span className="recent-solve-number">#{solves.length - index}</span>
-            <span className="recent-solve-time">{formatSolveTime(solve)}</span>
+        {recent.map((solve, index) => {
+          const time = solve.penalty === 'dnf' ? Infinity : solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+          const isBest = time === minTime && time !== Infinity && minTime !== maxTime
+          const isWorst = time === maxTime && minTime !== maxTime
+
+          return (
+            <li key={solve.id} className="recent-solve-row">
+              <span className="recent-solve-number">#{solves.length - index}</span>
+              <span className={`recent-solve-time ${isBest ? 'best' : ''} ${isWorst ? 'worst' : ''}`.trim()}>{formatSolveTime(solve)}</span>
             <span className="solve-controls">
               <Button
                 type="button"
@@ -62,7 +72,8 @@ export function RecentSolvesWidget() {
               </Button>
             </span>
           </li>
-        ))}
+        )
+      })}
       </ul>
       {pendingDelete ? (
         <Dialog
