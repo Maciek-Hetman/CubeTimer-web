@@ -4,7 +4,7 @@ import { EVENTS, eventLabel, type CubeEvent, type TimerFont, type TimerSize } fr
 import { averageOfN, bestAverageOfN, bestSingle } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
-import { RefreshIcon } from '../../ui/NavIcons'
+import { ListIcon, RefreshIcon } from '../../ui/NavIcons'
 import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
 import { Select } from '../../ui/Select'
@@ -84,7 +84,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     settings,
     setEvent,
     solves,
-    currentSession,
     saveSolve,
     scramble,
     scrambleState,
@@ -329,71 +328,48 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {liveMessage}
       </div>
 
-      <header className="row wrap" style={{ justifyContent: 'space-between' }}>
+      <div className="row wrap timer-toolbar">
         <Select
+          size="small"
           aria-label="Event"
           value={settings.event}
           disabled={busy}
           onChange={(val) => void setEvent(val as CubeEvent)}
-          style={{ width: 110 }}
+          style={{ width: 92 }}
           options={EVENTS.map((item) => ({
             value: item,
             label: eventLabel(item)
           }))}
         />
+        <span className="scramble">
+          {hideScramble ? null : scrambleState === 'loading' ? (
+            <span className="muted">Generating scramble…</span>
+          ) : scrambleState === 'error' ? (
+            <span role="alert">Could not generate scramble</span>
+          ) : (
+            scramble
+          )}
+        </span>
         {settings.sessionMode === 'manual' ? (
-          <Button type="button" disabled={busy} aria-label="Sessions" onClick={() => setSessionOpen(true)}>
-            {currentSession?.name ?? 'Sessions'}
+          <Button type="button" variant="ghost" className="icon" disabled={busy} aria-label="Sessions" title="Sessions" onClick={() => setSessionOpen(true)}>
+            <ListIcon />
           </Button>
-        ) : (
-          <span className="muted">{currentSession?.name ?? 'Automatic session'}</span>
-        )}
+        ) : null}
+        {!hideScramble ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="icon"
+            disabled={busy}
+            aria-label={scrambleState === 'error' ? 'Retry' : 'New scramble'}
+            title={scrambleState === 'error' ? 'Retry' : 'New scramble'}
+            onClick={() => void loadScramble()}
+          >
+            <RefreshIcon />
+          </Button>
+        ) : null}
         {!isWide && variant !== 'desktop' ? <ThemeToggle /> : null}
-      </header>
-
-      {!hideScramble ? (
-        <Panel muted className="scramble">
-          <div className="scramble-row">
-            {scrambleState === 'loading' ? <span className="muted scramble-text">Generating scramble…</span> : null}
-            {scrambleState === 'error' ? (
-              <>
-                <span className="scramble-text" role="alert">
-                  Could not generate scramble
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="icon"
-                  disabled={busy}
-                  aria-label="Retry"
-                  title="Retry"
-                  onClick={() => void loadScramble()}
-                >
-                  <RefreshIcon />
-                </Button>
-              </>
-            ) : null}
-            {scrambleState === 'ready' ? (
-              <>
-                <span className="scramble-text">{scramble}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="icon"
-                  disabled={busy}
-                  aria-label="New scramble"
-                  title="New scramble"
-                  onClick={() => void loadScramble()}
-                >
-                  <RefreshIcon />
-                </Button>
-              </>
-            ) : null}
-          </div>
-        </Panel>
-      ) : (
-        <div style={{ minHeight: 48 }} />
-      )}
+      </div>
 
       <button
         type="button"

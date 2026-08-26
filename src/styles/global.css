@@ -677,25 +677,37 @@ input[type='range'] {
   animation: ready-pulse 1s var(--ease) infinite;
 }
 
+.timer-toolbar {
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.timer-toolbar .btn.icon {
+  height: auto;
+}
+
+.timer-toolbar .custom-select-container {
+  display: flex;
+  align-items: stretch;
+}
+
+.timer-toolbar .custom-select-trigger {
+  height: 100%;
+}
+
 .scramble {
   font-family: var(--mono);
   text-align: center;
-  line-height: 1.55;
+  line-height: 1.35;
   word-break: break-word;
-  font-size: 1.02rem;
-  padding: var(--space-3);
-}
-
-.scramble-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-}
-
-.scramble-text {
-  flex: 1;
+  font-size: 0.95rem;
+  flex: 0 1 auto;
   min-width: 0;
+  margin-inline: auto;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
 }
 
 .chip {
