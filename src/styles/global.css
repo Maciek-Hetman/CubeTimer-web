@@ -916,6 +916,8 @@ input[type='range'] {
   color: var(--danger);
   background: var(--danger-soft);
   border-color: transparent;
+  padding: 0;
+  line-height: 1;
 }
 
 .history-row {
