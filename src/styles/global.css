@@ -269,6 +269,31 @@ h2 {
   width: min(420px, calc(100% - 24px));
 }
 
+.admin-tabs {
+  display: flex;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-4);
+}
+
+.admin-tabs a {
+  padding: var(--space-2) 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.admin-tabs a:hover {
+  color: var(--text);
+}
+
+.admin-tabs a.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 .admin-toolbar {
   justify-content: flex-end;
 }

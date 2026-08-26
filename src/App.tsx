@@ -2,7 +2,10 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppProviders } from './app/AppProviders'
 import { AppShell } from './app/AppShell'
 import { HomePage } from './app/HomePage'
-import { AdminDashboardPage } from './features/admin/AdminDashboardPage'
+import { AdminLayout } from './features/admin/AdminLayout'
+import { AdminOverviewPage } from './features/admin/AdminOverviewPage'
+import { AdminTrafficPage } from './features/admin/AdminTrafficPage'
+import { AdminErrorsPage } from './features/admin/AdminErrorsPage'
 import { AdminRoute } from './features/admin/AdminRoute'
 import { LoginPage } from './features/auth/LoginPage'
 import { RegisterPage } from './features/auth/RegisterPage'
@@ -29,10 +32,15 @@ export default function App() {
               path="/admin"
               element={
                 <AdminRoute>
-                  <AdminDashboardPage />
+                  <AdminLayout />
                 </AdminRoute>
               }
-            />
+            >
+              <Route index element={<Navigate to="overview" replace />} />
+              <Route path="overview" element={<AdminOverviewPage />} />
+              <Route path="traffic" element={<AdminTrafficPage />} />
+              <Route path="errors" element={<AdminErrorsPage />} />
+            </Route>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />

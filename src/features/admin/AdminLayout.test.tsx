@@ -2,10 +2,13 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type AdminErrorStats, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
-import { AdminDashboardPage } from './AdminDashboardPage'
+import { AdminLayout } from './AdminLayout'
+import { AdminOverviewPage } from './AdminOverviewPage'
+import { AdminTrafficPage } from './AdminTrafficPage'
+import { AdminErrorsPage } from './AdminErrorsPage'
 
 const authenticatedRequest = vi.hoisted(() => vi.fn())
 
@@ -82,33 +85,49 @@ function mockStats() {
   })
 }
 
-describe('AdminDashboardPage', () => {
+function renderAdminApp(initialRoute = '/admin/overview') {
+  return render(
+    <MemoryRouter initialEntries={[initialRoute]}>
+      <Routes>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route path="overview" element={<AdminOverviewPage />} />
+          <Route path="traffic" element={<AdminTrafficPage />} />
+          <Route path="errors" element={<AdminErrorsPage />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
+describe('AdminLayout & Pages', () => {
   afterEach(() => {
     cleanup()
     authenticatedRequest.mockReset()
   })
 
-  it('loads overview metrics and aggregates errors', async () => {
+  it('loads overview metrics', async () => {
     mockStats()
-    render(
-      <MemoryRouter>
-        <AdminDashboardPage />
-      </MemoryRouter>,
-    )
-    expect(await screen.findByText('12')).toBeInTheDocument()
-    expect(screen.getByText('/v1/sync')).toBeInTheDocument()
+    renderAdminApp('/admin/overview')
+    expect(await screen.findByText('12')).toBeInTheDocument() // Total Users
+    // 10/12 = 83.3%
+    expect(screen.getByText('83.3%')).toBeInTheDocument()
+  })
+
+  it('loads errors on the errors tab', async () => {
+    mockStats()
+    renderAdminApp('/admin/errors')
+    expect(await screen.findByText('/v1/sync')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
   })
 
-  it('requests a new range when the control changes', async () => {
+  it('requests a new range when the control changes on the traffic tab', async () => {
     mockStats()
     const user = userEvent.setup()
-    render(
-      <MemoryRouter>
-        <AdminDashboardPage />
-      </MemoryRouter>,
-    )
-    await screen.findByText('12')
+    renderAdminApp('/admin/traffic')
+    
+    // Check for chart titles to ensure page loaded
+    expect(await screen.findByText('Volume and status')).toBeInTheDocument()
+    
     await user.click(screen.getByRole('button', { name: '24 hours' }))
     await waitFor(() => {
       const requestPaths = authenticatedRequest.mock.calls
@@ -121,12 +140,10 @@ describe('AdminDashboardPage', () => {
   it('shows an error and retries', async () => {
     authenticatedRequest.mockRejectedValue(new ApiError(403, 'forbidden', 'Forbidden'))
     const user = userEvent.setup()
-    render(
-      <MemoryRouter>
-        <AdminDashboardPage />
-      </MemoryRouter>,
-    )
+    renderAdminApp('/admin/overview')
+    
     expect(await screen.findByText(/do not have permission/i)).toBeInTheDocument()
+    
     mockStats()
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('12')).toBeInTheDocument()
