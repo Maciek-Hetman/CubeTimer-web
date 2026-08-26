@@ -443,6 +443,11 @@ h2 {
   flex-shrink: 0;
 }
 
+.btn.compact {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

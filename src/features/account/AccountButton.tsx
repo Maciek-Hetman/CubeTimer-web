@@ -8,7 +8,7 @@ export function AccountButton() {
 
   if (!user) {
     return (
-      <Link to="/login" className="btn ghost">
+      <Link to="/login" className="btn ghost compact">
         Sign in
       </Link>
     )
