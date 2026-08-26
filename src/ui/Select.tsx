@@ -61,6 +61,9 @@ export function Select({
     ? selectedOption.label 
     : (placeholder || (options.length > 0 && !placeholder ? options[0].label : 'Select...'))
 
+  const textLabel = typeof displayLabel === 'string' ? displayLabel : null
+  const triggerAriaLabel = ariaLabel && textLabel ? `${ariaLabel}: ${textLabel}` : undefined
+
   const handleSelect = (event: React.MouseEvent, option: SelectOption) => {
     event.preventDefault()
     event.stopPropagation()
@@ -84,7 +87,7 @@ export function Select({
           e.stopPropagation()
           if (!disabled) setIsOpen(!isOpen)
         }}
-        aria-label={ariaLabel}
+        aria-label={triggerAriaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
@@ -105,7 +108,7 @@ export function Select({
         </svg>
       </button>
 
-      <div className={`custom-select-menu ${isOpen ? 'open' : ''}`} role="listbox">
+      <div className={`custom-select-menu ${isOpen ? 'open' : ''}`} role="listbox" aria-label={ariaLabel}>
         {options.map((opt) => (
           <button
             type="button"

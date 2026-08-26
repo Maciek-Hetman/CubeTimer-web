@@ -14,6 +14,7 @@ import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
 import confetti from 'canvas-confetti'
 import { getAccentPalette } from '../../styles/accents'
+import { loadTimerFont } from '../../styles/timerFonts'
 
 function isFormTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -48,9 +49,9 @@ function isSystemKey(event: KeyboardEvent): boolean {
 
 function getFontFamily(font?: TimerFont): string | undefined {
   switch (font) {
-    case 'jetbrains': return "'JetBrains Mono', var(--mono)";
-    case 'roboto': return "'Roboto Mono', var(--mono)";
-    case 'fira': return "'Fira Code', var(--mono)";
+    case 'jetbrains': return "'JetBrains Mono Variable', var(--mono)";
+    case 'roboto': return "'Roboto Mono Variable', var(--mono)";
+    case 'fira': return "'Fira Code Variable', var(--mono)";
     case 'inter': return "var(--font)";
     case 'digital': return "'Share Tech Mono', var(--mono)";
     case 'system': return "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
@@ -104,6 +105,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   useEffect(() => {
     snapshotRef.current = snapshot
   }, [snapshot])
+
+  useEffect(() => {
+    loadTimerFont(settings.timerFont ?? 'jetbrains')
+  }, [settings.timerFont])
 
   useEffect(() => {
     engineRef.current = createTimerEngine(() => settings.timerStartDelayMs)
@@ -408,7 +413,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           fontSize: getSizeStyles(settings.timerSize, variant === 'desktop'),
           color: (snapshot.phase === 'idle' || snapshot.phase === 'running' || snapshot.phase === 'finished') && settings.timerColor ? settings.timerColor : undefined
         }}
-        aria-label="Timer"
         onPointerDown={(event) => {
           if (event.button !== 0 || activePointerRef.current !== null) {
             return

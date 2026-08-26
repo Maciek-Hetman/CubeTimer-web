@@ -1,7 +1,11 @@
+import { lazy, Suspense } from 'react'
 import { AveragesWidget } from './widgets/AveragesWidget'
 import { RecentSolvesWidget } from './widgets/RecentSolvesWidget'
-import { RecentTimesChart } from './widgets/RecentTimesChart'
 import { SessionStatsWidget } from './widgets/SessionStatsWidget'
+
+const RecentTimesChart = lazy(() =>
+  import('./widgets/RecentTimesChart').then((m) => ({ default: m.RecentTimesChart })),
+)
 
 export const WIDGET_TYPES = ['recentTimes', 'averages', 'sessionStats', 'recentSolves'] as const
 export type WidgetType = (typeof WIDGET_TYPES)[number]
@@ -29,7 +33,11 @@ export const DEFAULT_WIDGETS: WidgetInstance[] = [
 export function renderWidget(type: WidgetType) {
   switch (type) {
     case 'recentTimes':
-      return <RecentTimesChart />
+      return (
+        <Suspense fallback={null}>
+          <RecentTimesChart />
+        </Suspense>
+      )
     case 'averages':
       return <AveragesWidget />
     case 'sessionStats':
