@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
-import { EVENTS, eventLabel, type CubeEvent } from '../../domain/models'
+import { EVENTS, eventLabel, type CubeEvent, type TimerFont, type TimerSize } from '../../domain/models'
 import { averageOfN, bestAverageOfN, bestSingle } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
@@ -44,6 +44,38 @@ function isSystemKey(event: KeyboardEvent): boolean {
     event.metaKey ||
     event.shiftKey
   )
+}
+
+function getFontFamily(font?: TimerFont): string | undefined {
+  switch (font) {
+    case 'jetbrains': return "'JetBrains Mono', var(--mono)";
+    case 'roboto': return "'Roboto Mono', var(--mono)";
+    case 'fira': return "'Fira Code', var(--mono)";
+    case 'inter': return "var(--font)";
+    case 'digital': return "'Share Tech Mono', var(--mono)";
+    case 'system': return "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+    default: return undefined;
+  }
+}
+
+function getSizeStyles(size?: TimerSize, isDesktop = false): string | undefined {
+  if (isDesktop) {
+     switch (size) {
+        case 'small': return 'clamp(3rem, 10vw, 5rem)';
+        case 'medium': return 'clamp(3.4rem, 14vw, 7rem)';
+        case 'large': return 'clamp(4rem, 18vw, 9rem)';
+        case 'xlarge': return 'clamp(5rem, 24vw, 12rem)';
+        default: return undefined;
+     }
+  } else {
+     switch (size) {
+        case 'small': return 'clamp(2.5rem, 12vw, 4rem)';
+        case 'medium': return 'clamp(3.4rem, 14vw, 7rem)';
+        case 'large': return 'clamp(4.2rem, 18vw, 8rem)';
+        case 'xlarge': return 'clamp(5rem, 22vw, 10rem)';
+        default: return undefined;
+     }
+  }
 }
 
 export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
@@ -371,7 +403,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          paddingBottom: '8vh'
+          paddingBottom: '8vh',
+          fontFamily: getFontFamily(settings.timerFont),
+          fontSize: getSizeStyles(settings.timerSize, variant === 'desktop'),
+          color: (snapshot.phase === 'idle' || snapshot.phase === 'running' || snapshot.phase === 'finished') && settings.timerColor ? settings.timerColor : undefined
         }}
         aria-label="Timer"
         onPointerDown={(event) => {

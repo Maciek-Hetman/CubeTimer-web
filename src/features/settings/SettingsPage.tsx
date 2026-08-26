@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../../app/AppProviders'
-import type { SessionMode, TimerDisplayMode } from '../../domain/models'
+import type { SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
@@ -129,6 +129,68 @@ export function SettingsPage() {
             onChange={(checked) => void updateSettings({ hideWidgetsDuringSolve: checked })}
           />
         )}
+      </Panel>
+
+      <Panel className="stack">
+        <h2>Timer Appearance</h2>
+        
+        <Field label="Timer Font">
+          <Select
+            value={settings.timerFont ?? 'jetbrains'}
+            onChange={(val) => void updateSettings({ timerFont: val as TimerFont })}
+            options={[
+              { value: 'jetbrains', label: 'JetBrains Mono' },
+              { value: 'roboto', label: 'Roboto Mono' },
+              { value: 'fira', label: 'Fira Code' },
+              { value: 'inter', label: 'Inter' },
+              { value: 'digital', label: 'Digital (Share Tech Mono)' },
+              { value: 'system', label: 'System Monospace' }
+            ]}
+          />
+        </Field>
+
+        <Field label="Timer Size">
+          <div className="row wrap">
+            {(['small', 'medium', 'large', 'xlarge'] as const).map((size) => (
+              <Button
+                key={size}
+                type="button"
+                variant={settings.timerSize === size ? 'primary' : 'ghost'}
+                onClick={() => void updateSettings({ timerSize: size })}
+                style={{ textTransform: 'capitalize' }}
+              >
+                {size}
+              </Button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Timer Color Override">
+          <div className="row" style={{ alignItems: 'center', gap: 12 }}>
+            <input
+              type="color"
+              value={settings.timerColor || '#1d4ed8'}
+              onChange={(e) => void updateSettings({ timerColor: e.target.value })}
+              style={{
+                width: 44,
+                height: 44,
+                padding: 0,
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer'
+              }}
+            />
+            {settings.timerColor && (
+              <Button type="button" variant="ghost" onClick={() => void updateSettings({ timerColor: '' })}>
+                Reset to Default
+              </Button>
+            )}
+          </div>
+          <p className="muted" style={{ margin: '4px 0 0' }}>
+            {settings.timerColor ? 'Custom color is set. ' : 'Currently using app accent color. '}
+            Only applies to Idle and Running states.
+          </p>
+        </Field>
       </Panel>
 
       <Panel className="stack">

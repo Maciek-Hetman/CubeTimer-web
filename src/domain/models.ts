@@ -12,6 +12,12 @@ export type SessionMode = SessionKind
 export const TIMER_DISPLAY_MODES = ['show', 'hide_decimals', 'hide'] as const
 export type TimerDisplayMode = (typeof TIMER_DISPLAY_MODES)[number]
 
+export const TIMER_FONTS = ['jetbrains', 'roboto', 'fira', 'inter', 'digital', 'system'] as const
+export type TimerFont = (typeof TIMER_FONTS)[number]
+
+export const TIMER_SIZES = ['small', 'medium', 'large', 'xlarge'] as const
+export type TimerSize = (typeof TIMER_SIZES)[number]
+
 export interface CubeSession {
   id: string
   ownerId: string
@@ -88,6 +94,9 @@ export interface AppSettings {
   backgroundPreset: string
   backgroundImageSizing: 'fill' | 'stretch'
   currentSessionIds: Partial<Record<CubeEvent, string>>
+  timerFont: TimerFont
+  timerSize: TimerSize
+  timerColor: string
 }
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
@@ -106,6 +115,9 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   backgroundPreset: '',
   backgroundImageSizing: 'fill',
   currentSessionIds: {},
+  timerFont: 'jetbrains',
+  timerSize: 'medium',
+  timerColor: '',
 }
 
 export function createId(): string {
