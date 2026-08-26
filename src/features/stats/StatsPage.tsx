@@ -173,74 +173,76 @@ export function StatsPage() {
             </div>
           </Panel>
 
-          <Panel className="stack">
-            <h2>All-time</h2>
-            <StatGrid
-              items={[
-                ['Solves', String(summary.count)],
-                ['Total Time', formatTotalTime(summary.totalTime)],
-                ['Worst', formatAverage(summary.worst)],
-                ['Mean', formatAverage(summary.mean)],
-                ['Std Dev', formatAverage(summary.stdDev)],
-                ['Ao5', formatAverage(summary.ao5)],
-                ['Ao12', formatAverage(summary.ao12)],
-                ['Ao50', formatAverage(summary.ao50)],
-                ['Ao100', formatAverage(summary.ao100)],
-              ]}
-            />
-          </Panel>
+          <div className="row wrap" style={{ gap: 'var(--space-4)', alignItems: 'flex-start' }}>
+            <Panel className="stack" style={{ flex: 1, minWidth: '250px' }}>
+              <h2>All-time</h2>
+              <StatGrid
+                items={[
+                  ['Solves', String(summary.count)],
+                  ['Total Time', formatTotalTime(summary.totalTime)],
+                  ['Worst', formatAverage(summary.worst)],
+                  ['Mean', formatAverage(summary.mean)],
+                  ['Std Dev', formatAverage(summary.stdDev)],
+                  ['Ao5', formatAverage(summary.ao5)],
+                  ['Ao12', formatAverage(summary.ao12)],
+                  ['Ao50', formatAverage(summary.ao50)],
+                  ['Ao100', formatAverage(summary.ao100)],
+                ]}
+              />
+            </Panel>
 
-          <Panel className="stack">
-            <h2>Current session</h2>
-            <StatGrid
-              items={[
-                ['Solves', String(sessionSummary.count)],
-                ['Total Time', formatTotalTime(sessionSummary.totalTime)],
-                [
-                  'Best',
-                  <span key="best">
-                    {formatAverage(sessionSummary.best)}
-                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
-                  </span>,
-                ],
-                [
-                  'Mean',
-                  <span key="mean">
-                    {formatAverage(sessionSummary.mean)}
-                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
-                  </span>,
-                ],
-                [
-                  'Std Dev',
-                  <span key="stdDev">
-                    {formatAverage(sessionSummary.stdDev)}
-                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
-                  </span>,
-                ],
-                [
-                  'Ao5',
-                  <span key="ao5">
-                    {formatAverage(sessionSummary.ao5)}
-                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
-                  </span>,
-                ],
-                [
-                  'Ao50',
-                  <span key="ao50">
-                    {formatAverage(sessionSummary.ao50)}
-                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
-                  </span>,
-                ],
-                [
-                  'Ao100',
-                  <span key="ao100">
-                    {formatAverage(sessionSummary.ao100)}
-                    {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
-                  </span>,
-                ],
-              ]}
-            />
-          </Panel>
+            <Panel className="stack" style={{ flex: 1, minWidth: '250px' }}>
+              <h2>Current session</h2>
+              <StatGrid
+                items={[
+                  ['Solves', String(sessionSummary.count)],
+                  ['Total Time', formatTotalTime(sessionSummary.totalTime)],
+                  [
+                    'Best',
+                    <span key="best">
+                      {formatAverage(sessionSummary.best)}
+                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
+                    </span>,
+                  ],
+                  [
+                    'Mean',
+                    <span key="mean">
+                      {formatAverage(sessionSummary.mean)}
+                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
+                    </span>,
+                  ],
+                  [
+                    'Std Dev',
+                    <span key="stdDev">
+                      {formatAverage(sessionSummary.stdDev)}
+                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
+                    </span>,
+                  ],
+                  [
+                    'Ao5',
+                    <span key="ao5">
+                      {formatAverage(sessionSummary.ao5)}
+                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
+                    </span>,
+                  ],
+                  [
+                    'Ao50',
+                    <span key="ao50">
+                      {formatAverage(sessionSummary.ao50)}
+                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
+                    </span>,
+                  ],
+                  [
+                    'Ao100',
+                    <span key="ao100">
+                      {formatAverage(sessionSummary.ao100)}
+                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
+                    </span>,
+                  ],
+                ]}
+              />
+            </Panel>
+          </div>
         </>
       )}
     </div>
