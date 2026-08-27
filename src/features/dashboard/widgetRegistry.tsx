@@ -2,12 +2,26 @@ import { lazy, Suspense } from 'react'
 import { AveragesWidget } from './widgets/AveragesWidget'
 import { RecentSolvesWidget } from './widgets/RecentSolvesWidget'
 import { SessionStatsWidget } from './widgets/SessionStatsWidget'
+import { PersonalBestsWidget } from './widgets/PersonalBestsWidget'
+import { AllTimeStatsWidget } from './widgets/AllTimeStatsWidget'
 
 const RecentTimesChart = lazy(() =>
   import('./widgets/RecentTimesChart').then((m) => ({ default: m.RecentTimesChart })),
 )
 
-export const WIDGET_TYPES = ['recentTimes', 'averages', 'sessionStats', 'recentSolves'] as const
+const RecentAo5Chart = lazy(() =>
+  import('./widgets/RecentAo5Chart').then((m) => ({ default: m.RecentAo5Chart })),
+)
+
+export const WIDGET_TYPES = [
+  'recentTimes',
+  'recentAo5',
+  'averages',
+  'sessionStats',
+  'recentSolves',
+  'personalBests',
+  'allTimeStats',
+] as const
 export type WidgetType = (typeof WIDGET_TYPES)[number]
 
 export interface WidgetInstance {
@@ -18,9 +32,12 @@ export interface WidgetInstance {
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
   recentTimes: 'Recent times',
+  recentAo5: 'Recent Ao5s',
   averages: 'Averages',
   sessionStats: 'Session stats',
   recentSolves: 'Recent solves',
+  personalBests: 'Personal bests',
+  allTimeStats: 'All time stats',
 }
 
 export const DEFAULT_WIDGETS: WidgetInstance[] = [
@@ -38,11 +55,21 @@ export function renderWidget(type: WidgetType) {
           <RecentTimesChart />
         </Suspense>
       )
+    case 'recentAo5':
+      return (
+        <Suspense fallback={null}>
+          <RecentAo5Chart />
+        </Suspense>
+      )
     case 'averages':
       return <AveragesWidget />
     case 'sessionStats':
       return <SessionStatsWidget />
     case 'recentSolves':
       return <RecentSolvesWidget />
+    case 'personalBests':
+      return <PersonalBestsWidget />
+    case 'allTimeStats':
+      return <AllTimeStatsWidget />
   }
 }

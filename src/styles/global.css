@@ -20,6 +20,7 @@ body {
   background:
     radial-gradient(1200px 480px at 50% -120px, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
     var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -782,7 +783,6 @@ input[type='range'] {
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(220px, 280px);
   gap: var(--space-3);
   min-height: calc(100dvh - var(--header-height) - 28px);
-  height: calc(100dvh - var(--header-height) - 28px);
 }
 
 .desktop-center {
