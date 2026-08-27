@@ -62,13 +62,12 @@ export function AppShell() {
     .filter(Boolean)
     .join(' ')
 
-
   const shellStyle = useMemo(() => {
     if (settings.backgroundType === 'preset' && settings.backgroundPreset) {
       return { background: settings.backgroundPreset }
     }
     if (settings.backgroundType === 'custom' && customBackground) {
-      return { 
+      return {
         backgroundImage: `url(${customBackground})`,
         backgroundSize: settings.backgroundImageSizing === 'stretch' ? '100% 100%' : 'cover',
         backgroundPosition: 'center',
@@ -113,7 +112,7 @@ export function AppShell() {
       ) : null}
       <main className={mainClass}>
         <ConflictBanner />
-        {showSync && !showHeaderNav ? <SyncIndicator /> : null}
+        {showSync && (!showHeaderNav || !user) ? <SyncIndicator /> : null}
 
         <Outlet context={outletContext} />
       </main>

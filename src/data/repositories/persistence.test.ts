@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../db'
-import { deleteSessionCascade, newSession, putSession } from './sessions'
+import { deleteSessionCascade, newSession, putSession, toSessionInput } from './sessions'
 import { newSolve, putSolve } from './solves'
 import { listOutbox } from './outbox'
 import { adoptGuestData } from '../../sync/guestMerge'
@@ -32,6 +32,16 @@ describe('local persistence', () => {
     const outbox = await listOutbox('user-1')
     expect(outbox.some((item) => item.entity === 'session' && item.operation === 'delete')).toBe(true)
     expect(outbox.some((item) => item.entity === 'solve' && item.operation === 'delete')).toBe(true)
+  })
+
+  it('coalesces repeated edits into one pending mutation', async () => {
+    const session = newSession({ ownerId: 'user-1', name: 'Main', event: '3x3', kind: 'manual' })
+    await putSession(session, { enqueue: true, baseVersion: 0 })
+    await putSession({ ...session, name: 'Renamed' }, { enqueue: true, baseVersion: 0 })
+
+    const outbox = await listOutbox('user-1')
+    expect(outbox).toHaveLength(1)
+    expect(outbox[0]?.data).toEqual(toSessionInput({ ...session, name: 'Renamed' }))
   })
 
   it('adopts guest data onto an account and enqueues sessions first', async () => {
@@ -167,5 +177,53 @@ describe('sync outcomes', () => {
     expect(conflicts).toBe(1)
     expect((await db.sessions.get(session.id))?.name).toBe('Server name')
     expect((await db.conflicts.toArray())[0]?.local).toBeTruthy()
+  })
+
+  it('keeps a local edit made while its previous mutation is in flight', async () => {
+    const session = newSession({ ownerId: 'account-1', name: 'Local', event: '3x3', kind: 'manual' })
+    await putSession(session, { enqueue: false, baseVersion: 0 })
+    const sent: MutationRecord = {
+      id: '44444444-4444-4444-4444-444444444444',
+      ownerId: 'account-1',
+      entity: 'session',
+      entityId: session.id,
+      operation: 'upsert',
+      baseVersion: 0,
+      data: toSessionInput(session),
+      createdAt: new Date().toISOString(),
+    }
+    await db.outbox.put(sent)
+
+    await putSession({ ...session, name: 'Edited while syncing' }, { enqueue: true, baseVersion: 0 })
+    await applySyncResponse(
+      'account-1',
+      [sent],
+      [{ mutation_id: sent.id, status: 'accepted', version: 1 }],
+      [],
+      1,
+    )
+
+    expect((await db.sessions.get(session.id))?.name).toBe('Edited while syncing')
+    const pending = await listOutbox('account-1')
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.id).not.toBe(sent.id)
+    expect(pending[0]?.baseVersion).toBe(1)
+  })
+
+  it('keeps rejected mutations pending instead of marking them synced', async () => {
+    const session = newSession({ ownerId: 'account-1', name: 'Local', event: '3x3', kind: 'manual' })
+    await putSession(session, { enqueue: true, baseVersion: 0 })
+    const mutation = (await listOutbox('account-1'))[0]
+    expect(mutation).toBeTruthy()
+
+    await applySyncResponse(
+      'account-1',
+      [mutation!],
+      [{ mutation_id: mutation!.id, status: 'rejected', message: 'Invalid session' }],
+      [],
+      0,
+    )
+
+    expect(await db.outbox.get(mutation!.id)).toBeTruthy()
   })
 })

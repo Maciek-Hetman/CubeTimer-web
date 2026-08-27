@@ -1,5 +1,5 @@
 import { useApp } from '../../../app/AppProviders'
-import { averageOfN, bestAverageOfN, bestSingle } from '../../../domain/stats/averages'
+import { averageOfN, bestAverageOfN } from '../../../domain/stats/averages'
 import { formatAverage } from '../../../domain/stats/formatTime'
 
 const WINDOWS = [5, 12, 25, 50, 100]
@@ -20,7 +20,7 @@ export function AveragesWidget() {
           <tr key={n}>
             <td>Ao{n}</td>
             <td className="center">{formatAverage(averageOfN(solves, n))}</td>
-            <td className="center best-time">{formatAverage(n === 1 ? bestSingle(solves) : bestAverageOfN(solves, n))}</td>
+            <td className="center best-time">{formatAverage(bestAverageOfN(solves, n))}</td>
           </tr>
         ))}
       </tbody>

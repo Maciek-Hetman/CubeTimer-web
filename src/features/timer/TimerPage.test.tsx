@@ -70,7 +70,7 @@ describe('TimerPage', () => {
     await waitFor(() => {
       expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
     })
-    const timer = screen.getByRole('button', { name: /Hold Space or tap and hold to start/i })
+    const timer = screen.getByRole('button', { name: 'Timer' })
     fireEvent.pointerDown(timer, { pointerId: 1 })
     await waitFor(() => {
       expect(within(timer).getByText(/Hold…/)).toBeInTheDocument()
@@ -87,7 +87,7 @@ describe('TimerPage', () => {
       expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
     })
 
-    const timer = screen.getByRole('button', { name: /Hold Space or tap and hold to start/i })
+    const timer = screen.getByRole('button', { name: 'Timer' })
     fireEvent.pointerDown(timer, { pointerId: 1 })
     await waitFor(
       () => {

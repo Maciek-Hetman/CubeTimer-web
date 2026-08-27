@@ -69,6 +69,7 @@ export function HistoryPage() {
                         <Button
                           type="button"
                           className="delete"
+                          aria-label="Delete solve"
                           onClick={() => setPendingDelete(solve.id)}
                           title="Delete solve"
                         >

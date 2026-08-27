@@ -4,10 +4,12 @@ import { db } from '../db'
 import { enqueueMutation } from './outbox'
 
 export async function listSolves(ownerId: string, event?: CubeEvent): Promise<Solve[]> {
-  const solves = await db.solves.where('ownerId').equals(ownerId).toArray()
+  const solves = event
+    ? await db.solves.where('[ownerId+event]').equals([ownerId, event]).toArray()
+    : await db.solves.where('ownerId').equals(ownerId).toArray()
   return solves
     .filter((solve) => !solve.deletedAt && (!event || solve.event === event))
-    .sort((a, b) => (a.solvedAt < b.solvedAt ? 1 : -1))
+    .sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
 }
 
 export async function putSolve(

@@ -232,11 +232,11 @@ test('hides account solves once a stored session is revoked', async ({ page }) =
   expect(currentOwner.startsWith('guest:')).toBe(true)
 })
 
-test('closes the stats delete dialog with Escape', async ({ page }) => {
+test('closes the history delete dialog with Escape', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await completeSolve(page)
-  await page.getByRole('link', { name: 'Stats', exact: true }).click()
+  await page.getByRole('link', { name: 'History', exact: true }).click()
   await page.getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByRole('dialog', { name: /delete solve/i })).toBeVisible()
   await page.keyboard.press('Escape')
@@ -347,6 +347,7 @@ test('shows admin metrics for an admin account', async ({ page }) => {
   await page.getByRole('link', { name: 'Admin', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible()
   await expect(page.locator('.stat-card').filter({ hasText: 'Users' }).locator('.value')).toHaveText('12')
+  await page.getByRole('link', { name: 'Errors', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Errors by route' })).toBeVisible()
   await expect(page.getByText('/v1/sync')).toBeVisible()
 })
@@ -363,4 +364,3 @@ test('denies the admin dashboard to signed-in users', async ({ page }) => {
   await page.goto('/admin')
   await expect(page.getByText('Access denied')).toBeVisible()
 })
-

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { verifyEmail } from '../../api/auth'
 import { useApp } from '../../app/AppProviders'
@@ -13,21 +13,29 @@ export function VerifyEmailPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const token = params.get('token') ?? ''
+  const verificationRef = useRef<{ token: string; promise: Promise<void> } | null>(null)
 
   useEffect(() => {
     if (!token) {
-      setError('Missing verification token')
       return
     }
+    let verification = verificationRef.current
+    if (!verification || verification.token !== token) {
+      verification = {
+        token,
+        promise: verifyEmail(token).then((session) => applyAuthSession(session, { mergeGuest: true })),
+      }
+      verificationRef.current = verification
+    }
     let cancelled = false
-    void verifyEmail(token)
-      .then(async (session) => {
-        await applyAuthSession(session, { mergeGuest: true })
+    let timeout: number | undefined
+    void verification.promise
+      .then(() => {
         if (cancelled) {
           return
         }
         setSuccess(true)
-        window.setTimeout(() => {
+        timeout = window.setTimeout(() => {
           if (!cancelled) {
             navigate('/')
           }
@@ -40,14 +48,17 @@ export function VerifyEmailPage() {
       })
     return () => {
       cancelled = true
+      if (timeout !== undefined) {
+        window.clearTimeout(timeout)
+      }
     }
   }, [applyAuthSession, navigate, token])
 
   return (
     <AuthLayout title="Verify email">
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error || !token ? <Alert tone="error">{error || 'Missing verification token'}</Alert> : null}
       {success ? <Alert tone="success" role="status">Email verified. Taking you to the timer…</Alert> : null}
-      {!error && !success ? <p className="muted">Verifying…</p> : null}
+      {!error && token && !success ? <p className="muted">Verifying…</p> : null}
       <div className="auth-links">
         <Link to="/login">Back to sign in</Link>
       </div>

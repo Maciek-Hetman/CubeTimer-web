@@ -10,6 +10,20 @@ describe('timer machine', () => {
     expect(snapshot.phase).toBe('idle')
   })
 
+  it('starts immediately when the hold delay is disabled', () => {
+    const engine = createTimerEngine(() => 0)
+
+    expect(engine.press(100).phase).toBe('ready')
+    expect(engine.release(100).phase).toBe('running')
+  })
+
+  it('starts when release reaches the hold threshold before a tick', () => {
+    const engine = createTimerEngine(() => 500)
+
+    engine.press(0)
+    expect(engine.release(500).phase).toBe('running')
+  })
+
   it('starts after a completed hold and records elapsed time on stop', () => {
     const engine = createTimerEngine(() => 500)
     engine.press(0)

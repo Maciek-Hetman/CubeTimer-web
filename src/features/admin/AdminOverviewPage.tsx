@@ -43,8 +43,8 @@ export function AdminOverviewPage() {
             ['Verification Rate', `${verificationRate.toFixed(1)}%`],
             ['30d Active Ratio', `${activeRatio30d.toFixed(1)}%`],
             ['DAU / MAU Ratio', `${dauMauRatio.toFixed(1)}%`],
-            ['Avg Solves / Session', formatCount(Math.round(avgSolvesSession))],
-            ['Avg Devices / User', formatCount(Math.round(avgDevicesUser))],
+            ['Avg Solves / Session', formatAverage(avgSolvesSession)],
+            ['Avg Devices / User', formatAverage(avgDevicesUser)],
           ]}
         />
       </Panel>
@@ -81,4 +81,8 @@ export function AdminOverviewPage() {
 
 function formatCount(value: number) {
   return value.toLocaleString()
+}
+
+function formatAverage(value: number) {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 1 })
 }

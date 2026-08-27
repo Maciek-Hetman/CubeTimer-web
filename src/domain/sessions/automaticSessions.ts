@@ -22,9 +22,12 @@ export function automaticSessionName(date: Date): string {
 }
 
 export function latestSolveInSession(solves: Solve[], sessionId: string): Solve | undefined {
-  return solves
-    .filter((solve) => solve.sessionId === sessionId && !solve.deletedAt)
-    .sort((a, b) => (a.solvedAt < b.solvedAt ? 1 : -1))[0]
+  return solves.reduce<Solve | undefined>((latest, solve) => {
+    if (solve.sessionId !== sessionId || solve.deletedAt) {
+      return latest
+    }
+    return !latest || latest.solvedAt < solve.solvedAt ? solve : latest
+  }, undefined)
 }
 
 export function shouldReuseAutomaticSession(options: {

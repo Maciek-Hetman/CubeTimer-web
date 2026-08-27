@@ -12,6 +12,8 @@ import {
   type DragStartEvent,
   type DragOverEvent,
   type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -52,17 +54,24 @@ export function DesktopDashboard() {
   const [activeId, setActiveId] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     setHydrated(false)
+    setStore({ widgets: DEFAULT_WIDGETS })
     void db.widgetLayouts.get(ownerId).then((record) => {
+      if (cancelled) {
+        return
+      }
       const layout = record?.layout as StoredDashboard | undefined
-      if (layout?.widgets) {
-        const known = new Set(WIDGET_TYPES)
-        const knownWidgets = layout.widgets.filter((widget) => known.has(widget.type))
+      if (layout && Array.isArray(layout.widgets)) {
+        const knownWidgets = layout.widgets.filter(isWidgetInstance)
         const widgets = knownWidgets.length > 0 ? knownWidgets : DEFAULT_WIDGETS
         setStore({ widgets })
       }
       setHydrated(true)
     })
+    return () => {
+      cancelled = true
+    }
   }, [ownerId])
 
   useEffect(() => {
@@ -127,9 +136,9 @@ export function DesktopDashboard() {
 
       if (isActiveColumn) {
         if (activeWidget.side !== overId) {
-          activeWidget.side = overId as 'left' | 'right'
+          const movedWidget = { ...activeWidget, side: overId as 'left' | 'right' }
           newWidgets.splice(activeIndex, 1)
-          newWidgets.push(activeWidget)
+          newWidgets.push(movedWidget)
           return { widgets: newWidgets }
         }
         return current
@@ -138,7 +147,7 @@ export function DesktopDashboard() {
       if (overIndex !== -1) {
         const overWidget = newWidgets[overIndex]
         if (activeWidget.side !== overWidget.side) {
-          activeWidget.side = overWidget.side
+          newWidgets[activeIndex] = { ...activeWidget, side: overWidget.side }
         }
         return { widgets: arrayMove(newWidgets, activeIndex, overIndex) }
       }
@@ -213,6 +222,19 @@ export function DesktopDashboard() {
   )
 }
 
+function isWidgetInstance(value: unknown): value is WidgetInstance {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const widget = value as Partial<WidgetInstance>
+  return (
+    typeof widget.i === 'string' &&
+    typeof widget.type === 'string' &&
+    WIDGET_TYPES.includes(widget.type as WidgetType) &&
+    (widget.side === 'left' || widget.side === 'right')
+  )
+}
+
 function WidgetColumn({
   side,
   store,
@@ -244,14 +266,18 @@ function WidgetColumn({
             placeholder={available.length === 0 ? 'All widgets added' : 'Choose…'}
             options={available.map((type) => ({
               value: type,
-              label: WIDGET_LABELS[type]
+              label: WIDGET_LABELS[type],
             }))}
           />
         </Field>
       ) : null}
-      
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: '200px' }}>
-        <SortableContext id={side} items={widgets.map(w => w.i)} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          id={side}
+          items={widgets.map((widget) => widget.i)}
+          strategy={verticalListSortingStrategy}
+        >
           {widgets.map((widget) => (
             <SortableWidget key={widget.i} widget={widget} editing={editing} onRemove={onRemove} />
           ))}
@@ -261,7 +287,11 @@ function WidgetColumn({
   )
 }
 
-function SortableWidget({ widget, editing, onRemove }: { widget: WidgetInstance, editing: boolean, onRemove: (id: string) => void }) {
+function SortableWidget({ widget, editing, onRemove }: {
+  widget: WidgetInstance
+  editing: boolean
+  onRemove: (id: string) => void
+}) {
   const {
     attributes,
     listeners,
@@ -279,41 +309,48 @@ function SortableWidget({ widget, editing, onRemove }: { widget: WidgetInstance,
 
   return (
     <div ref={setNodeRef} style={style}>
-      <WidgetCard 
-        widget={widget} 
-        editing={editing} 
-        onRemove={onRemove} 
-        dragHandleProps={editing ? { ...attributes, ...listeners } : undefined} 
+      <WidgetCard
+        widget={widget}
+        editing={editing}
+        onRemove={onRemove}
+        dragHandleAttributes={editing ? attributes : undefined}
+        dragHandleListeners={editing ? listeners : undefined}
       />
     </div>
   )
 }
 
-function WidgetCard({ 
-  widget, 
-  editing, 
-  onRemove, 
-  dragHandleProps,
-  overlay = false 
-}: { 
+function WidgetCard({
+  widget,
+  editing,
+  onRemove,
+  dragHandleAttributes,
+  dragHandleListeners,
+  overlay = false,
+}: {
   widget: WidgetInstance
   editing: boolean
   onRemove: (id: string) => void
-  dragHandleProps?: Record<string, any>
+  dragHandleAttributes?: DraggableAttributes
+  dragHandleListeners?: DraggableSyntheticListeners
   overlay?: boolean
 }) {
   const { currentSession } = useApp()
-  
+
   return (
-    <div className="widget-grid-item" style={{ 
-      margin: 0, 
-      ...(overlay ? { opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' } : {})
-    }}>
+    <div
+      className="widget-grid-item"
+      style={{
+        margin: 0,
+        ...(overlay ? { opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' } : {}),
+      }}
+    >
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 
-          className="widget-drag" 
+        <h3
+          className="widget-drag"
           style={{ cursor: editing ? (overlay ? 'grabbing' : 'grab') : 'default' }}
-          {...dragHandleProps}
+          {...dragHandleAttributes}
+          {...dragHandleListeners}
         >
           {widget.type === 'sessionStats' && currentSession?.name
             ? `${WIDGET_LABELS[widget.type]} — ${currentSession.name}`

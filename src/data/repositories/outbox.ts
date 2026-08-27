@@ -9,16 +9,29 @@ export async function enqueueMutation(input: {
   baseVersion: number
   data?: SessionInput | SolveInput
 }): Promise<MutationRecord> {
-  const record: MutationRecord = {
-    id: createId(),
-    ownerId: input.ownerId,
-    entity: input.entity,
-    entityId: input.entityId,
-    operation: input.operation,
-    baseVersion: input.baseVersion,
-    data: input.data,
-    createdAt: nowIso(),
-  }
+  const existing = await db.outbox
+    .where('ownerId')
+    .equals(input.ownerId)
+    .filter((record) => record.entity === input.entity && record.entityId === input.entityId)
+    .first()
+
+  const record: MutationRecord = existing
+    ? {
+        ...existing,
+        operation: input.operation,
+        // Keep the original base version: all local edits are one pending change.
+        data: input.data,
+      }
+    : {
+        id: createId(),
+        ownerId: input.ownerId,
+        entity: input.entity,
+        entityId: input.entityId,
+        operation: input.operation,
+        baseVersion: input.baseVersion,
+        data: input.data,
+        createdAt: nowIso(),
+      }
   await db.outbox.put(record)
   return record
 }

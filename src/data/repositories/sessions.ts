@@ -4,14 +4,12 @@ import { db } from '../db'
 import { enqueueMutation } from './outbox'
 
 export async function listSessions(ownerId: string, event?: CubeEvent): Promise<CubeSession[]> {
-  const sessions = await db.sessions.where('ownerId').equals(ownerId).toArray()
+  const sessions = event
+    ? await db.sessions.where('[ownerId+event]').equals([ownerId, event]).toArray()
+    : await db.sessions.where('ownerId').equals(ownerId).toArray()
   return sessions
     .filter((session) => !session.deletedAt && (!event || session.event === event))
-    .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1))
-}
-
-export async function getSession(id: string): Promise<CubeSession | undefined> {
-  return db.sessions.get(id)
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
 }
 
 export async function putSession(

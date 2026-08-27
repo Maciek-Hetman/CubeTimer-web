@@ -5,7 +5,6 @@ export interface RequestOptions {
   method?: string
   body?: unknown
   accessToken?: string | null
-  retry?: boolean
 }
 
 export type AuthenticatedRequest = <T>(path: string, options?: Omit<RequestOptions, 'accessToken'>) => Promise<T>
@@ -29,7 +28,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     return undefined as T
   }
   const text = await response.text()
-  const payload = text ? (JSON.parse(text) as unknown) : undefined
+  let payload: unknown
+  if (text) {
+    try {
+      payload = JSON.parse(text) as unknown
+    } catch {
+      throw new ApiError(response.status, 'invalid_response', 'The server returned an invalid response')
+    }
+  }
   if (!response.ok) {
     const errorBody = payload as ApiErrorBody | undefined
     throw new ApiError(

@@ -8,6 +8,10 @@ export async function adoptGuestData(guestOwnerId: string, accountOwnerId: strin
   sessions: number
   solves: number
 }> {
+  if (guestOwnerId === accountOwnerId) {
+    return { sessions: 0, solves: 0 }
+  }
+
   const sessions = await db.sessions.where('ownerId').equals(guestOwnerId).toArray()
   const solves = await db.solves.where('ownerId').equals(guestOwnerId).toArray()
   const settings = await db.settings.get(guestOwnerId)

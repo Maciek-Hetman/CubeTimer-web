@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApp } from '../../app/AppProviders'
-import { eventLabel } from '../../domain/models'
+import { effectiveTimeMs, eventLabel } from '../../domain/models'
 import { averageOfN, bestAverageOfN, bestSingle, meanOfSolves, worstSingle, standardDeviation, totalTime } from '../../domain/stats/averages'
 import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
 import { EmptyState } from '../../ui/EmptyState'
@@ -27,7 +27,7 @@ export function StatsPage() {
   const { solves, sessions, settings, currentSession } = useApp()
 
   const sessionSolves = useMemo(
-    () => (currentSession ? solves.filter((solve) => solve.sessionId === currentSession.id) : solves),
+    () => (currentSession ? solves.filter((solve) => solve.sessionId === currentSession.id) : []),
     [currentSession, solves],
   )
 
@@ -99,10 +99,10 @@ export function StatsPage() {
   const chartData = useMemo(() => {
     const reversed = [...solves].reverse()
     return reversed.map((solve, i) => {
-      const time = solve.penalty === 'dnf' ? null : solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+      const time = effectiveTimeMs(solve)
       return {
         index: i + 1,
-        time: time ? time / 1000 : null,
+        time: time === null ? null : time / 1000,
       }
     })
   }, [solves])
@@ -167,7 +167,10 @@ export function StatsPage() {
                   <Line type="monotone" dataKey="time" stroke="#8884d8" dot={false} isAnimationActive={false} />
                   <XAxis dataKey="index" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} width={40} />
-                  <Tooltip labelFormatter={(label) => `Solve ${label}`} formatter={(val: any) => [`${Number(val).toFixed(2)}s`, 'Time']} />
+                  <Tooltip
+                    labelFormatter={(label) => `Solve ${label}`}
+                    formatter={(value) => [`${Number(value).toFixed(2)}s`, 'Time']}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>

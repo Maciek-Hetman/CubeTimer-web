@@ -6,7 +6,7 @@ import { listOutbox, removeOutbox } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
 import type { CubeSession, MutationRecord, Solve } from '../domain/models'
-import { nowIso } from '../domain/models'
+import { createId, nowIso } from '../domain/models'
 
 export type SyncStatus = 'idle' | 'syncing' | 'pending' | 'offline' | 'error' | 'conflict'
 
@@ -36,6 +36,7 @@ export async function runSync(options: SyncEngineOptions): Promise<{
   let hasMore = true
   let conflicts = 0
   let loops = 0
+  let refreshedForRequest = false
   while (hasMore && loops < 50) {
     loops += 1
     const mutations = await listOutbox(options.ownerId)
@@ -49,19 +50,25 @@ export async function runSync(options: SyncEngineOptions): Promise<{
         limit: 1000,
       })
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401 && options.getAccessToken) {
+      if (error instanceof ApiError && error.status === 401 && options.getAccessToken && !refreshedForRequest) {
+        refreshedForRequest = true
         accessToken = await options.getAccessToken()
         continue
       }
       throw error
     }
+    refreshedForRequest = false
     conflicts += await applySyncResponse(options.ownerId, mutations, response.outcomes, response.changes, response.next_cursor)
+    const rejected = response.outcomes.find((outcome) => outcome.status === 'rejected')
+    if (rejected) {
+      throw new ApiError(400, rejected.code ?? 'mutation_rejected', rejected.message ?? 'A local change was rejected')
+    }
     hasMore = response.has_more || (await listOutbox(options.ownerId)).length > 0
     if (!response.has_more && mutations.length === 0) {
       break
     }
   }
-  return { status: conflicts > 0 ? 'conflict' : 'idle', conflicts }
+  return { status: conflicts > 0 ? 'conflict' : hasMore ? 'pending' : 'idle', conflicts }
 }
 
 export async function applySyncResponse(
@@ -72,6 +79,14 @@ export async function applySyncResponse(
   nextCursor: number,
 ): Promise<number> {
   const sentById = new Map(sent.map((record) => [record.id, record]))
+  const latestSentByEntity = new Map<string, MutationRecord>()
+  for (const record of sent) {
+    const key = `${record.entity}:${record.entityId}`
+    const latest = latestSentByEntity.get(key)
+    if (!latest || latest.createdAt < record.createdAt) {
+      latestSentByEntity.set(key, record)
+    }
+  }
   let conflicts = 0
   await db.transaction('rw', db.sessions, db.solves, db.outbox, db.conflicts, db.meta, async () => {
     const acceptedIds: string[] = []
@@ -80,21 +95,41 @@ export async function applySyncResponse(
       if (!local) {
         continue
       }
+      const pending = await db.outbox.get(local.id)
+      const changedWhileSending = pending !== undefined && !sameMutation(pending, local)
       if (outcome.status === 'accepted') {
         acceptedIds.push(outcome.mutation_id)
+        if (changedWhileSending && pending) {
+          await rebasePendingMutation(pending, outcome.version)
+          continue
+        }
         if (local.entity === 'session') {
           const session = await db.sessions.get(local.entityId)
-          if (session && outcome.version !== undefined) {
-            await db.sessions.put({ ...session, version: outcome.version, updatedAt: nowIso() })
+          if (
+            session &&
+            outcome.version !== undefined &&
+            outcome.version >= session.version &&
+            latestSentByEntity.get(`session:${local.entityId}`)?.id === local.id &&
+            matchesMutation(session, local)
+          ) {
+            await db.sessions.put({ ...session, version: outcome.version })
           }
         } else {
           const solve = await db.solves.get(local.entityId)
-          if (solve && outcome.version !== undefined) {
-            await db.solves.put({ ...solve, version: outcome.version, updatedAt: nowIso() })
+          if (
+            solve &&
+            outcome.version !== undefined &&
+            outcome.version >= solve.version &&
+            latestSentByEntity.get(`solve:${local.entityId}`)?.id === local.id &&
+            matchesMutation(solve, local)
+          ) {
+            await db.solves.put({ ...solve, version: outcome.version })
           }
         }
       } else if (outcome.status === 'rejected') {
-        acceptedIds.push(outcome.mutation_id)
+        if (changedWhileSending && pending) {
+          await rebasePendingMutation(pending, outcome.version)
+        }
       } else if (outcome.status === 'conflict' && outcome.current) {
         acceptedIds.push(outcome.mutation_id)
         conflicts += 1
@@ -143,11 +178,19 @@ export function toApiMutation(record: MutationRecord): Mutation {
 }
 
 async function applyChange(ownerId: string, change: Change): Promise<void> {
+  const pending = await db.outbox
+    .where('entityId')
+    .equals(change.entity_id)
+    .filter((record) => record.ownerId === ownerId)
+    .count()
+  if (pending > 0) {
+    return
+  }
   const mapped = mapChangeData(ownerId, change.entity, change.data)
   if (change.entity === 'session') {
     const session = mapped as CubeSession
     const existing = await db.sessions.get(session.id)
-    if (existing && existing.version > session.version) {
+    if (existing && existing.version >= session.version) {
       return
     }
     await db.sessions.put(session)
@@ -155,10 +198,41 @@ async function applyChange(ownerId: string, change: Change): Promise<void> {
   }
   const solve = mapped as Solve
   const existing = await db.solves.get(solve.id)
-  if (existing && existing.version > solve.version) {
+  if (existing && existing.version >= solve.version) {
     return
   }
   await db.solves.put(solve)
+}
+
+function sameMutation(left: MutationRecord, right: MutationRecord): boolean {
+  return (
+    left.operation === right.operation &&
+    left.baseVersion === right.baseVersion &&
+    JSON.stringify(left.data) === JSON.stringify(right.data)
+  )
+}
+
+function matchesMutation(entity: CubeSession | Solve, mutation: MutationRecord): boolean {
+  if (mutation.operation === 'delete') {
+    return entity.deletedAt !== null
+  }
+  if (!mutation.data) {
+    return true
+  }
+  const payload = mutation.entity === 'session'
+    ? toSessionInput(entity as CubeSession)
+    : toSolveInput(entity as Solve)
+  return JSON.stringify(payload) === JSON.stringify(mutation.data)
+}
+
+async function rebasePendingMutation(record: MutationRecord, baseVersion?: number): Promise<void> {
+  await db.outbox.delete(record.id)
+  await db.outbox.put({
+    ...record,
+    id: createId(),
+    baseVersion: baseVersion ?? record.baseVersion,
+    createdAt: nowIso(),
+  })
 }
 
 export function mapChangeData(
@@ -194,14 +268,6 @@ export function mapChangeData(
     updatedAt: String(data.updated_at ?? nowIso()),
     deletedAt: (data.deleted_at as string | null) ?? null,
   }
-}
-
-export function localToSessionPayload(session: CubeSession) {
-  return toSessionInput(session)
-}
-
-export function localToSolvePayload(solve: Solve) {
-  return toSolveInput(solve)
 }
 
 export async function withBackoff<T>(

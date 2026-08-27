@@ -82,6 +82,8 @@ export interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null)
 
 let mountRefreshPromise: Promise<AuthSession> | null = null
+const EMPTY_SESSIONS: CubeSession[] = []
+const EMPTY_SOLVES: Solve[] = []
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
@@ -116,6 +118,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [])
 
   const transitionToGuest = useCallback(async () => {
+    if (syncTimer.current) {
+      window.clearTimeout(syncTimer.current)
+      syncTimer.current = null
+    }
     await clearAuth()
     refreshTokenRef.current = null
     setAccessToken(null)
@@ -146,24 +152,28 @@ export function AppProviders({ children }: { children: ReactNode }) {
           setUser(storedUser)
         }
       }
-        if (refreshToken) {
-          refreshTokenRef.current = refreshToken
-          try {
-            if (!mountRefreshPromise) {
-              mountRefreshPromise = authApi.refresh(refreshToken)
-            }
-            const session = await mountRefreshPromise
-            if (!cancelled) {
-              await persistSession(session, false)
-            } else {
-              // Still persist the new tokens to IDB so they aren't lost if the second mount reads from IDB
-              void persistSession(session, false)
-            }
-          } catch {
-            mountRefreshPromise = null
-            await transitionToGuest()
+      if (refreshToken) {
+        refreshTokenRef.current = refreshToken
+        try {
+          if (!mountRefreshPromise) {
+            mountRefreshPromise = authApi.refresh(refreshToken)
           }
+          const refreshPromise = mountRefreshPromise
+          const session = await refreshPromise
+          if (mountRefreshPromise === refreshPromise) {
+            mountRefreshPromise = null
+          }
+          if (!cancelled) {
+            await persistSession(session, false)
+          } else {
+            // Still persist the new tokens to IDB so they aren't lost if the second mount reads from IDB.
+            void persistSession(session, false)
+          }
+        } catch {
+          mountRefreshPromise = null
+          await transitionToGuest()
         }
+      }
       if (!cancelled) {
         setReady(true)
       }
@@ -174,7 +184,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [persistSession, transitionToGuest])
 
   const settingsQuery = useLiveQuery(async () => (ownerId ? db.settings.get(ownerId) : undefined), [ownerId])
-  const settings = settingsQuery ? { ...DEFAULT_SETTINGS, ...settingsQuery } : { ownerId, ...DEFAULT_SETTINGS }
+  const settings = useMemo(
+    () => (settingsQuery ? { ...DEFAULT_SETTINGS, ...settingsQuery } : { ownerId, ...DEFAULT_SETTINGS }),
+    [ownerId, settingsQuery],
+  )
 
   const customBackground = useLiveQuery(
     async () => (ownerId ? getMeta<string | null>(`custom_bg_${ownerId}`, null) : null),
@@ -186,17 +199,17 @@ export function AppProviders({ children }: { children: ReactNode }) {
     await setMeta(`custom_bg_${ownerId}`, bg)
   }, [ownerId])
 
-  const sessions =
-    useLiveQuery(
-      async () => (ownerId ? listSessions(ownerId, settingsQuery?.event) : []),
-      [ownerId, settingsQuery?.event],
-    ) ?? []
+  const sessionsQuery = useLiveQuery(
+    async () => (ownerId ? listSessions(ownerId, settings.event) : EMPTY_SESSIONS),
+    [ownerId, settings.event],
+  )
+  const sessions = sessionsQuery ?? EMPTY_SESSIONS
 
-  const solves =
-    useLiveQuery(
-      async () => (ownerId ? listSolves(ownerId, settingsQuery?.event) : []),
-      [ownerId, settingsQuery?.event],
-    ) ?? []
+  const solvesQuery = useLiveQuery(
+    async () => (ownerId ? listSolves(ownerId, settings.event) : EMPTY_SOLVES),
+    [ownerId, settings.event],
+  )
+  const solves = solvesQuery ?? EMPTY_SOLVES
 
   const pendingMutations =
     useLiveQuery(async () => (ownerId ? db.outbox.where('ownerId').equals(ownerId).count() : 0), [ownerId]) ?? 0
@@ -209,7 +222,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return sessions.find((session) => session.id === id) ?? null
   }, [sessions, settings])
 
-  const enqueueWrites = Boolean(user && ownerId && !isGuestOwner(ownerId))
+  const enqueueWrites = Boolean(user?.email_verified && ownerId && !isGuestOwner(ownerId))
 
   const [scramble, setScramble] = useState('')
   const [scrambleState, setScrambleState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -295,7 +308,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   )
 
   const doSync = useCallback(async () => {
-    if (!ownerId || isGuestOwner(ownerId) || syncingRef.current) {
+    if (!user?.email_verified || !ownerId || isGuestOwner(ownerId) || syncingRef.current) {
       return
     }
     let token = accessTokenRef.current
@@ -328,19 +341,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
     } finally {
       syncingRef.current = false
     }
-  }, [conflictCount, ownerId, refreshAccessToken])
+  }, [conflictCount, ownerId, refreshAccessToken, user])
 
   const requestSync = useCallback(() => {
     if (syncTimer.current) {
       window.clearTimeout(syncTimer.current)
     }
     syncTimer.current = window.setTimeout(() => {
+      syncTimer.current = null
       void doSync()
     }, 400)
   }, [doSync])
 
   useEffect(() => {
-    if (!ready || !user || isGuestOwner(ownerId)) {
+    if (!ready || !user?.email_verified || isGuestOwner(ownerId)) {
       return
     }
     requestSync()
@@ -357,6 +371,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
       window.clearInterval(interval)
     }
   }, [ownerId, ready, requestSync, user])
+
+  useEffect(() => {
+    return () => {
+      if (syncTimer.current) {
+        window.clearTimeout(syncTimer.current)
+        syncTimer.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const root = document.documentElement
@@ -401,8 +424,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (!ownerId) {
         return
       }
-      const current = (await db.settings.get(ownerId)) ?? { ownerId, ...DEFAULT_SETTINGS }
-      await db.settings.put({ ...current, ...patch, ownerId })
+      await db.transaction('rw', db.settings, async () => {
+        const current = await getOrCreateSettings(ownerId)
+        await db.settings.put({ ...current, ...patch, ownerId })
+      })
     },
     [ownerId],
   )
@@ -419,12 +444,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (!ownerId) {
         throw new Error('App not ready')
       }
-      const current = (await db.settings.get(ownerId)) ?? { ownerId, ...DEFAULT_SETTINGS }
+      const current = await getOrCreateSettings(ownerId)
       const now = Date.now()
       let sessionId = current.currentSessionIds[current.event] ?? null
       if (current.sessionMode === 'automatic') {
-        const allSessions = await listSessions(ownerId, current.event)
-        const allSolves = await listSolves(ownerId, current.event)
+        const [allSessions, allSolves] = await Promise.all([
+          listSessions(ownerId, current.event),
+          listSolves(ownerId, current.event),
+        ])
         const open = findOpenAutomaticSession(allSessions, current.event)
         const last = open ? latestSolveInSession(allSolves, open.id) : undefined
         const reuse = shouldReuseAutomaticSession({
@@ -489,7 +516,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const updateSolvePenalty = useCallback(
     async (solveId: string, penalty: Penalty) => {
       const solve = await db.solves.get(solveId)
-      if (!solve) {
+      if (!solve || solve.ownerId !== ownerId) {
         return
       }
       await putSolve({ ...solve, penalty }, { enqueue: enqueueWrites, baseVersion: solve.version })
@@ -497,13 +524,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
         requestSync()
       }
     },
-    [enqueueWrites, requestSync],
+    [enqueueWrites, ownerId, requestSync],
   )
 
   const deleteSolve = useCallback(
     async (solveId: string) => {
       const solve = await db.solves.get(solveId)
-      if (!solve) {
+      if (!solve || solve.ownerId !== ownerId) {
         return
       }
       await putSolve({ ...solve, deletedAt: nowIso() }, { enqueue: enqueueWrites, baseVersion: solve.version })
@@ -511,7 +538,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
         requestSync()
       }
     },
-    [enqueueWrites, requestSync],
+    [enqueueWrites, ownerId, requestSync],
   )
 
   const createSession = useCallback(
@@ -519,7 +546,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (!ownerId) {
         throw new Error('App not ready')
       }
-      const current = (await db.settings.get(ownerId)) ?? { ownerId, ...DEFAULT_SETTINGS }
+      const current = await getOrCreateSettings(ownerId)
       const session = newSession({ ownerId, name, event: current.event, kind: 'manual' })
       await putSession(session, { enqueue: enqueueWrites, baseVersion: 0 })
       await updateSettings({
@@ -536,7 +563,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const renameSession = useCallback(
     async (sessionId: string, name: string) => {
       const session = await db.sessions.get(sessionId)
-      if (!session) {
+      if (!session || session.ownerId !== ownerId) {
         return
       }
       await putSession({ ...session, name }, { enqueue: enqueueWrites, baseVersion: session.version })
@@ -544,7 +571,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
         requestSync()
       }
     },
-    [enqueueWrites, requestSync],
+    [enqueueWrites, ownerId, requestSync],
   )
 
   const switchSession = useCallback(
@@ -552,7 +579,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (!ownerId) {
         return
       }
-      const current = (await db.settings.get(ownerId)) ?? { ownerId, ...DEFAULT_SETTINGS }
+      const current = await getOrCreateSettings(ownerId)
+      const session = await db.sessions.get(sessionId)
+      if (!session || session.ownerId !== ownerId || session.event !== current.event || session.deletedAt) {
+        return
+      }
       await updateSettings({
         currentSessionIds: { ...current.currentSessionIds, [current.event]: sessionId },
       })
@@ -562,11 +593,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const removeSession = useCallback(
     async (sessionId: string) => {
+      const session = await db.sessions.get(sessionId)
+      if (!session || session.ownerId !== ownerId) {
+        return 0
+      }
       const count = await deleteSessionCascade(sessionId, { enqueue: enqueueWrites })
       if (!ownerId) {
         return count
       }
-      const current = (await db.settings.get(ownerId)) ?? { ownerId, ...DEFAULT_SETTINGS }
+      const current = await getOrCreateSettings(ownerId)
       if (current.currentSessionIds[current.event] === sessionId) {
         const next = { ...current.currentSessionIds }
         delete next[current.event]

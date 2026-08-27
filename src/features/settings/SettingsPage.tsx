@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
-import type { SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
+import type { AppSettings, SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
@@ -36,6 +36,10 @@ export function SettingsPage() {
   const { settings, updateSettings, setCustomBackground } = useApp()
   const [sessionOpen, setSessionOpen] = useState(false)
   const [gapDraft, setGapDraft] = useState(String(settings.inactivityGapMinutes))
+
+  useEffect(() => {
+    setGapDraft(String(settings.inactivityGapMinutes))
+  }, [settings.inactivityGapMinutes])
 
   const gapValue = Number(gapDraft)
   const gapInvalid = !Number.isFinite(gapValue) || gapValue < 5 || gapValue > 240
@@ -233,7 +237,7 @@ export function SettingsPage() {
         <Field label="Background">
           <Select
             value={settings.backgroundType ?? 'theme'}
-            onChange={(val) => void updateSettings({ backgroundType: val as any })}
+            onChange={(val) => void updateSettings({ backgroundType: val as AppSettings['backgroundType'] })}
             options={[
               { value: 'theme', label: 'Theme Default' },
               { value: 'preset', label: 'Solid Color' },
@@ -279,7 +283,9 @@ export function SettingsPage() {
             <Field label="Image scaling">
               <Select
                 value={settings.backgroundImageSizing ?? 'fill'}
-                onChange={(val) => void updateSettings({ backgroundImageSizing: val as any })}
+                onChange={(val) =>
+                  void updateSettings({ backgroundImageSizing: val as AppSettings['backgroundImageSizing'] })
+                }
                 options={[
                   { value: 'fill', label: 'Fill (Cropped)' },
                   { value: 'stretch', label: 'Stretch (Distorted)' }

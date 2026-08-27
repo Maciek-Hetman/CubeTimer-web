@@ -15,7 +15,10 @@ export function loadTimerFont(font: TimerFont): void {
   const loader = LOADERS[font]
   if (!loader) return
   if (!pending.has(font)) {
-    pending.set(font, loader())
+    const promise = loader().catch(() => {
+      pending.delete(font)
+    })
+    pending.set(font, promise)
   }
   void pending.get(font)
 }

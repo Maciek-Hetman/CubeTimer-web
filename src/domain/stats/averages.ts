@@ -8,7 +8,7 @@ export function averageOfN(solves: Solve[], n: number): number | null {
 }
 
 export function bestAverageOfN(solves: Solve[], n: number): number | null {
-  if (solves.length < n) {
+  if (n <= 0 || solves.length < n) {
     return null
   }
   let best: number | null = null
@@ -63,9 +63,10 @@ export function worstSingle(solves: Solve[]): number | null {
 }
 
 export function totalTime(solves: Solve[]): number {
-  return solves.reduce((sum, solve) => {
-    return sum + solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
-  }, 0)
+  return solves.reduce(
+    (sum, solve) => sum + solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0),
+    0,
+  )
 }
 
 export function standardDeviation(solves: Solve[]): number | null {

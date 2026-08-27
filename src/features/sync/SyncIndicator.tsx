@@ -29,6 +29,15 @@ export function SyncIndicator() {
     )
   }
 
+  if (!user.email_verified) {
+    return (
+      <div className="sync-pill" title="Verify your email to enable sync">
+        <span className="sync-dot warn" />
+        Verify email to sync
+      </div>
+    )
+  }
+
   const tone = syncStatus === 'error' || syncStatus === 'conflict' ? 'bad' : syncStatus === 'offline' || syncStatus === 'pending' ? 'warn' : 'ok'
   const label = LABELS[syncStatus] ?? syncStatus
   const hint = HINTS[syncStatus] ?? 'Tap to sync'

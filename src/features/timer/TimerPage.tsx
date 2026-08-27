@@ -1,6 +1,14 @@
+import confetti from 'canvas-confetti'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
-import { EVENTS, eventLabel, type CubeEvent, type TimerFont, type TimerSize } from '../../domain/models'
+import {
+  EVENTS,
+  eventLabel,
+  type CubeEvent,
+  type TimerDisplayMode,
+  type TimerFont,
+  type TimerSize,
+} from '../../domain/models'
 import { averageOfN, bestAverageOfN, bestSingle } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
@@ -12,7 +20,6 @@ import { ThemeToggle } from '../../ui/ThemeToggle'
 import { useMediaQuery } from '../../ui/useMediaQuery'
 import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
-import confetti from 'canvas-confetti'
 import { getAccentPalette } from '../../styles/accents'
 import { loadTimerFont } from '../../styles/timerFonts'
 
@@ -48,35 +55,35 @@ function isSystemKey(event: KeyboardEvent): boolean {
 }
 
 function getFontFamily(font?: TimerFont): string | undefined {
-  switch (font) {
-    case 'jetbrains': return "'JetBrains Mono Variable', var(--mono)";
-    case 'roboto': return "'Roboto Mono Variable', var(--mono)";
-    case 'fira': return "'Fira Code Variable', var(--mono)";
-    case 'inter': return "var(--font)";
-    case 'digital': return "'Share Tech Mono', var(--mono)";
-    case 'system': return "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
-    default: return undefined;
-  }
+  return font ? TIMER_FONT_FAMILIES[font] : undefined
 }
 
 function getSizeStyles(size?: TimerSize, isDesktop = false): string | undefined {
-  if (isDesktop) {
-     switch (size) {
-        case 'small': return 'clamp(3rem, 10vw, 5rem)';
-        case 'medium': return 'clamp(3.4rem, 14vw, 7rem)';
-        case 'large': return 'clamp(4rem, 18vw, 9rem)';
-        case 'xlarge': return 'clamp(5rem, 24vw, 12rem)';
-        default: return undefined;
-     }
-  } else {
-     switch (size) {
-        case 'small': return 'clamp(2.5rem, 12vw, 4rem)';
-        case 'medium': return 'clamp(3.4rem, 14vw, 7rem)';
-        case 'large': return 'clamp(4.2rem, 18vw, 8rem)';
-        case 'xlarge': return 'clamp(5rem, 22vw, 10rem)';
-        default: return undefined;
-     }
-  }
+  return size ? TIMER_SIZE_STYLES[isDesktop ? 'desktop' : 'mobile'][size] : undefined
+}
+
+const TIMER_FONT_FAMILIES: Record<TimerFont, string> = {
+  jetbrains: "'JetBrains Mono Variable', var(--mono)",
+  roboto: "'Roboto Mono Variable', var(--mono)",
+  fira: "'Fira Code Variable', var(--mono)",
+  inter: 'var(--font)',
+  digital: "'Share Tech Mono', var(--mono)",
+  system: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+}
+
+const TIMER_SIZE_STYLES: Record<'mobile' | 'desktop', Record<TimerSize, string>> = {
+  mobile: {
+    small: 'clamp(2.5rem, 12vw, 4rem)',
+    medium: 'clamp(3.4rem, 14vw, 7rem)',
+    large: 'clamp(4.2rem, 18vw, 8rem)',
+    xlarge: 'clamp(5rem, 22vw, 10rem)',
+  },
+  desktop: {
+    small: 'clamp(3rem, 10vw, 5rem)',
+    medium: 'clamp(3.4rem, 14vw, 7rem)',
+    large: 'clamp(4rem, 18vw, 9rem)',
+    xlarge: 'clamp(5rem, 24vw, 12rem)',
+  },
 }
 
 export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
@@ -99,7 +106,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const activeKeyRef = useRef<string | null>(null)
   const activePointerRef = useRef<number | null>(null)
   const isWide = useMediaQuery('(min-width: 768px)')
-  const busy = isTimerBusy(snapshot.phase)
+  const isSolvingOrPreparing = isTimerBusy(snapshot.phase)
 
   useEffect(() => {
     snapshotRef.current = snapshot
@@ -117,7 +124,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   useEffect(() => {
     let frame = 0
     const loop = (now: number) => {
-      setSnapshot(engineRef.current.tick(now))
+      const next = engineRef.current.tick(now)
+      if (next.phase !== 'idle' && next.phase !== 'finished') {
+        setSnapshot(next)
+      }
       frame = requestAnimationFrame(loop)
     }
     frame = requestAnimationFrame(loop)
@@ -166,12 +176,12 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       if (broken.length > 0) {
         const palette = getAccentPalette(settings.accentColor || 'blue')
         const colors = [palette.light.main, palette.dark.main, palette.light.soft, palette.dark.soft]
-        
+
         confetti({
           particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
-          colors
+          colors,
         })
         setNotice(`New PB! ${broken.join(' & ')}`)
       } else {
@@ -192,7 +202,9 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       return
     }
     autoSavedRef.current = true
-    void finish()
+    void finish().catch(() => {
+      setNotice('Could not save solve')
+    })
   }, [finish, snapshot.finishedMs, snapshot.phase])
 
   useEffect(() => {
@@ -223,10 +235,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     if (snapshot.phase !== 'running') {
       return
     }
-    setLiveMessage(`Running ${formatDuration(snapshot.elapsedMs)}`)
-    const timer = window.setInterval(() => {
+    const updateLiveMessage = () => {
       setLiveMessage(`Running ${formatDuration(snapshotRef.current.elapsedMs)}`)
-    }, 1000)
+    }
+    updateLiveMessage()
+    const timer = window.setInterval(updateLiveMessage, 1000)
     return () => window.clearInterval(timer)
   }, [snapshot.phase])
 
@@ -257,7 +270,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       }
       activeKeyRef.current = null
       event.preventDefault()
-      setSnapshot(isSystemKey(event) ? engineRef.current.cancel() : engineRef.current.release(performance.now()))
+      const next = isSystemKey(event)
+        ? engineRef.current.cancel()
+        : engineRef.current.release(performance.now())
+      setSnapshot(next)
     }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
@@ -270,7 +286,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const ao5 = useMemo(() => averageOfN(solves, 5), [solves])
   const ao12 = useMemo(() => averageOfN(solves, 12), [solves])
   const recent = solves.slice(0, 5)
-  const isSolvingOrPreparing = snapshot.phase === 'running' || snapshot.phase === 'ready' || snapshot.phase === 'holding'
   const hideScramble = settings.hideScrambleDuringSolve && isSolvingOrPreparing
 
   useEffect(() => {
@@ -333,13 +348,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           size="small"
           aria-label="Event"
           value={settings.event}
-          disabled={busy}
+          disabled={isSolvingOrPreparing}
           onChange={(val) => void setEvent(val as CubeEvent)}
           style={{ width: 92 }}
-          options={EVENTS.map((item) => ({
-            value: item,
-            label: eventLabel(item)
-          }))}
+          options={EVENTS.map((item) => ({ value: item, label: eventLabel(item) }))}
         />
         <span className="scramble">
           {hideScramble ? null : scrambleState === 'loading' ? (
@@ -351,7 +363,15 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           )}
         </span>
         {settings.sessionMode === 'manual' ? (
-          <Button type="button" variant="ghost" className="icon" disabled={busy} aria-label="Sessions" title="Sessions" onClick={() => setSessionOpen(true)}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="icon"
+            disabled={isSolvingOrPreparing}
+            aria-label="Sessions"
+            title="Sessions"
+            onClick={() => setSessionOpen(true)}
+          >
             <ListIcon />
           </Button>
         ) : null}
@@ -360,7 +380,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             type="button"
             variant="ghost"
             className="icon"
-            disabled={busy}
+            disabled={isSolvingOrPreparing}
             aria-label={scrambleState === 'error' ? 'Retry' : 'New scramble'}
             title={scrambleState === 'error' ? 'Retry' : 'New scramble'}
             onClick={() => void loadScramble()}
@@ -374,6 +394,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       <button
         type="button"
         className={`timer-display ${colorClass}`}
+        aria-label="Timer"
+        aria-describedby={`timer-hint-${variant}`}
         style={{
           flex: 1,
           width: '100%',
@@ -387,7 +409,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           paddingBottom: '8vh',
           fontFamily: getFontFamily(settings.timerFont),
           fontSize: getSizeStyles(settings.timerSize, variant === 'desktop'),
-          color: (snapshot.phase === 'idle' || snapshot.phase === 'running' || snapshot.phase === 'finished') && settings.timerColor ? settings.timerColor : undefined
+          color:
+            (snapshot.phase === 'idle' || snapshot.phase === 'running' || snapshot.phase === 'finished') &&
+            settings.timerColor
+              ? settings.timerColor
+              : undefined,
         }}
         onPointerDown={(event) => {
           if (event.button !== 0 || activePointerRef.current !== null) {
@@ -409,8 +435,14 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         onLostPointerCapture={cancelHold}
         onContextMenu={(event) => event.preventDefault()}
       >
-        <TimeDigits ms={timeMs} mode={settings.timerDisplayMode ?? 'show'} isRunning={snapshot.phase === 'running'} />
-        <div className="timer-hint">{hint}</div>
+        <TimeDigits
+          ms={timeMs}
+          mode={settings.timerDisplayMode ?? 'show'}
+          isRunning={snapshot.phase === 'running'}
+        />
+        <div id={`timer-hint-${variant}`} className="timer-hint">
+          {hint}
+        </div>
         {snapshot.phase === 'holding' ? (
           <div className="progress" aria-hidden="true">
             <span style={{ animation: `fill-progress ${settings.timerStartDelayMs}ms linear forwards` }} />
@@ -441,7 +473,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   )
 }
 
-function TimeDigits({ ms, mode, isRunning }: { ms: number; mode: string; isRunning: boolean }) {
+function TimeDigits({ ms, mode, isRunning }: { ms: number; mode: TimerDisplayMode; isRunning: boolean }) {
   const formatted = formatDuration(ms)
   const [main, decimals] = formatted.includes('.') ? formatted.split('.') : [formatted, '00']
 

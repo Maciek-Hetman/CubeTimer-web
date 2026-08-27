@@ -69,7 +69,12 @@ export async function setMeta(key: string, value: unknown): Promise<void> {
 export async function getOrCreateSettings(ownerId: string): Promise<AppSettings> {
   const existing = await db.settings.get(ownerId)
   if (existing) {
-    return existing
+    return {
+      ...DEFAULT_SETTINGS,
+      ...existing,
+      ownerId,
+      currentSessionIds: existing.currentSessionIds ?? {},
+    }
   }
   const settings: AppSettings = { ownerId, ...DEFAULT_SETTINGS }
   await db.settings.put(settings)

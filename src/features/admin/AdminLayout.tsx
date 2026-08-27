@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { getErrorStats, getOverviewStats, getRequestStats } from '../../api/admin'
 import { ApiError, type AdminErrorStatsPoint, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
@@ -26,8 +26,10 @@ export function AdminLayout() {
   const [overview, setOverview] = useState<AdminOverviewStats | null>(null)
   const [requests, setRequests] = useState<AdminRequestStats | null>(null)
   const [errors, setErrors] = useState<AdminErrorStatsPoint[]>([])
+  const loadIdRef = useRef(0)
 
   const load = useCallback(async () => {
+    const loadId = ++loadIdRef.current
     setLoading(true)
     setError('')
     const query = adminStatsQueryForRange(range)
@@ -37,10 +39,16 @@ export function AdminLayout() {
         getRequestStats(authenticatedRequest, query),
         getErrorStats(authenticatedRequest, query),
       ])
+      if (loadId !== loadIdRef.current) {
+        return
+      }
       setOverview(nextOverview)
       setRequests(nextRequests)
       setErrors(nextErrors.points)
     } catch (err) {
+      if (loadId !== loadIdRef.current) {
+        return
+      }
       setOverview(null)
       setRequests(null)
       setErrors([])
@@ -52,7 +60,9 @@ export function AdminLayout() {
         setError(err instanceof ApiError ? err.message : 'Could not load admin metrics.')
       }
     } finally {
-      setLoading(false)
+      if (loadId === loadIdRef.current) {
+        setLoading(false)
+      }
     }
   }, [authenticatedRequest, range])
 
