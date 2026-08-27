@@ -1,6 +1,6 @@
 import type { AuthenticatedRequest } from './client'
 import type {
-  AdminErrorStats,
+  AdminErrorLogResponse,
   AdminOverviewStats,
   AdminRequestStats,
   AdminStatsQuery,
@@ -40,8 +40,18 @@ export function getRequestStats(request: AuthenticatedRequest, query: AdminStats
   return request<AdminRequestStats>(`/v1/admin/stats/requests${buildAdminStatsSearch(query)}`)
 }
 
-export function getErrorStats(request: AuthenticatedRequest, query: AdminStatsQuery = {}) {
-  return request<AdminErrorStats>(`/v1/admin/stats/errors${buildAdminStatsSearch(query)}`)
+export interface AdminErrorLogsQuery {
+  before?: string
+}
+
+export function getErrorLogs(request: AuthenticatedRequest, query: AdminErrorLogsQuery = {}) {
+  const params = new URLSearchParams()
+  if (query.before) {
+    assertDateTime(query.before, 'before')
+    params.set('before', query.before)
+  }
+  const search = params.toString()
+  return request<AdminErrorLogResponse>(`/v1/admin/stats/errors${search ? `?${search}` : ''}`)
 }
 
 function assertDateTime(value: string, name: string) {

@@ -1,20 +1,49 @@
-import { useMemo } from 'react'
-import { useOutletContext } from 'react-router-dom'
-import type { AdminErrorStatsPoint } from '../../api/types'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { getErrorLogs } from '../../api/admin'
+import { ApiError, type AdminErrorLog } from '../../api/types'
+import { useApp } from '../../app/AppProviders'
+import { Alert } from '../../ui/Alert'
+import { Button } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { Panel } from '../../ui/Panel'
-import type { AdminContextType } from './AdminLayout'
 
 export function AdminErrorsPage() {
-  const { errors, loading } = useOutletContext<AdminContextType>()
+  const { authenticatedRequest } = useApp()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [logs, setLogs] = useState<AdminErrorLog[]>([])
+  const [nextCursor, setNextCursor] = useState<string | undefined>()
+  const [expandedTraceId, setExpandedTraceId] = useState<number | null>(null)
 
-  const errorRows = useMemo(() => aggregateErrors(errors), [errors])
+  const load = useCallback(async (before?: string, append = false) => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await getErrorLogs(authenticatedRequest, { before })
+      setLogs((prev) => (append ? [...prev, ...response.errors] : response.errors))
+      setNextCursor(response.next_cursor)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setError('You do not have permission to view admin metrics.')
+      } else if (err instanceof ApiError && err.status === 401) {
+        setError('Sign in again to view admin metrics.')
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Could not load error logs.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [authenticatedRequest])
 
-  if (loading && errors.length === 0) {
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  if (loading && logs.length === 0) {
     return (
       <Panel className="stack" role="status">
         <p className="muted" style={{ margin: 0 }}>
-          Loading error data…
+          Loading error logs…
         </p>
       </Panel>
     )
@@ -22,57 +51,74 @@ export function AdminErrorsPage() {
 
   return (
     <Panel className="stack">
-      <h2>Errors by route</h2>
-      {errorRows.length === 0 ? (
-        <EmptyState title="No errors" description="No 4xx or 5xx responses were recorded in this range." />
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <h2>Error Logs</h2>
+        <Button onClick={() => void load()} loading={loading}>Refresh</Button>
+      </div>
+      
+      {error && <Alert tone="error">{error}</Alert>}
+      
+      {logs.length === 0 ? (
+        <EmptyState title="No errors" description="No errors were found." />
       ) : (
         <div className="admin-table-wrap">
           <table className="data-table admin-table">
             <thead>
               <tr>
+                <th>Timestamp</th>
                 <th>Method</th>
                 <th>Route</th>
                 <th className="num">Status</th>
-                <th className="num">Count</th>
+                <th>User ID</th>
+                <th>Message</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {errorRows.map((row) => (
-                <tr key={`${row.method}:${row.route}:${row.status_code}`}>
-                  <td>{row.method}</td>
-                  <td>{row.route}</td>
-                  <td className="num">{row.status_code}</td>
-                  <td className="num">{formatCount(row.request_count)}</td>
-                </tr>
+              {logs.map((log) => (
+                <Fragment key={log.id}>
+                  <tr>
+                    <td style={{ whiteSpace: 'nowrap' }}>{new Date(log.created_at).toLocaleString()}</td>
+                    <td>{log.method}</td>
+                    <td>{log.route}</td>
+                    <td className="num">{log.status}</td>
+                    <td>{log.user_id ? <span className="chip">{log.user_id}</span> : <span className="muted">-</span>}</td>
+                    <td>
+                      <div><strong>{log.code}</strong></div>
+                      <div className="muted">{log.message}</div>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button 
+                        className="btn compact ghost" 
+                        onClick={() => setExpandedTraceId(expandedTraceId === log.id ? null : log.id)}
+                      >
+                        {expandedTraceId === log.id ? 'Hide Details' : 'View Details'}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedTraceId === log.id && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: '16px', background: 'var(--surface-muted)', borderTop: '1px solid var(--border)' }}>
+                        <pre style={{ margin: 0, padding: '12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                          <code>{JSON.stringify(log, null, 2)}</code>
+                        </pre>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
+          
+          {nextCursor && (
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <Button onClick={() => void load(nextCursor, true)} loading={loading}>
+                Load More
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </Panel>
   )
-}
-
-function aggregateErrors(points: AdminErrorStatsPoint[]) {
-  const totals = new Map<string, AdminErrorStatsPoint>()
-  for (const point of points) {
-    const key = `${point.method}\0${point.route}\0${point.status_code}`
-    const current = totals.get(key)
-    if (current) {
-      current.request_count += point.request_count
-    } else {
-      totals.set(key, {
-        bucket: point.bucket,
-        method: point.method,
-        route: point.route,
-        status_code: point.status_code,
-        request_count: point.request_count,
-      })
-    }
-  }
-  return [...totals.values()].sort((a, b) => b.request_count - a.request_count || a.route.localeCompare(b.route))
-}
-
-function formatCount(value: number) {
-  return value.toLocaleString()
 }

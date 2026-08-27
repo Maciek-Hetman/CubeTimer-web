@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, type AdminErrorStats, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
+import { ApiError, type AdminErrorLogResponse, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
 import { AdminLayout } from './AdminLayout'
 import { AdminOverviewPage } from './AdminOverviewPage'
 import { AdminTrafficPage } from './AdminTrafficPage'
@@ -48,24 +48,25 @@ const requests: AdminRequestStats = {
   ],
 }
 
-const errors: AdminErrorStats = {
-  from: '2026-08-18T00:00:00.000Z',
-  to: '2026-08-25T00:00:00.000Z',
-  interval: 'day',
-  points: [
+const errors: AdminErrorLogResponse = {
+  errors: [
     {
-      bucket: '2026-08-24T00:00:00.000Z',
+      id: 1,
+      created_at: '2026-08-24T00:00:00.000Z',
       method: 'POST',
       route: '/v1/sync',
-      status_code: 409,
-      request_count: 2,
+      status: 409,
+      code: 'conflict',
+      message: 'data conflict',
     },
     {
-      bucket: '2026-08-25T00:00:00.000Z',
+      id: 2,
+      created_at: '2026-08-25T00:00:00.000Z',
       method: 'POST',
       route: '/v1/sync',
-      status_code: 409,
-      request_count: 3,
+      status: 409,
+      code: 'conflict',
+      message: 'data conflict',
     },
   ],
 }
@@ -116,8 +117,9 @@ describe('AdminLayout & Pages', () => {
   it('loads errors on the errors tab', async () => {
     mockStats()
     renderAdminApp('/admin/errors')
-    expect(await screen.findByText('/v1/sync')).toBeInTheDocument()
-    expect(screen.getByText('5')).toBeInTheDocument()
+    const elements = await screen.findAllByText('/v1/sync')
+    expect(elements[0]).toBeInTheDocument()
+    expect(screen.getAllByText('conflict')[0]).toBeInTheDocument()
   })
 
   it('requests a new range when the control changes on the traffic tab', async () => {

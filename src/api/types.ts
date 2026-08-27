@@ -108,19 +108,20 @@ export interface AdminRequestStats {
   points: AdminRequestStatsPoint[]
 }
 
-export interface AdminErrorStatsPoint {
-  bucket: string
+export interface AdminErrorLog {
+  id: number
+  created_at: string
+  user_id?: string
   method: string
   route: string
-  status_code: number
-  request_count: number
+  status: number
+  code: string
+  message: string
 }
 
-export interface AdminErrorStats {
-  from: string
-  to: string
-  interval: StatsInterval
-  points: AdminErrorStatsPoint[]
+export interface AdminErrorLogResponse {
+  errors: AdminErrorLog[]
+  next_cursor?: string
 }
 
 export class ApiError extends Error {

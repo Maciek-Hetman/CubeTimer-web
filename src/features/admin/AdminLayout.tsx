@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { getErrorStats, getOverviewStats, getRequestStats } from '../../api/admin'
-import { ApiError, type AdminErrorStatsPoint, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
+import { getOverviewStats, getRequestStats } from '../../api/admin'
+import { ApiError, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
 import { useApp } from '../../app/AppProviders'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -11,7 +11,6 @@ import { ADMIN_RANGE_LABELS, ADMIN_RANGES, adminStatsQueryForRange, type AdminRa
 export interface AdminContextType {
   overview: AdminOverviewStats | null
   requests: AdminRequestStats | null
-  errors: AdminErrorStatsPoint[]
   loading: boolean
   error: string
   load: () => Promise<void>
@@ -25,7 +24,6 @@ export function AdminLayout() {
   const [error, setError] = useState('')
   const [overview, setOverview] = useState<AdminOverviewStats | null>(null)
   const [requests, setRequests] = useState<AdminRequestStats | null>(null)
-  const [errors, setErrors] = useState<AdminErrorStatsPoint[]>([])
   const loadIdRef = useRef(0)
 
   const load = useCallback(async () => {
@@ -34,24 +32,21 @@ export function AdminLayout() {
     setError('')
     const query = adminStatsQueryForRange(range)
     try {
-      const [nextOverview, nextRequests, nextErrors] = await Promise.all([
+      const [nextOverview, nextRequests] = await Promise.all([
         getOverviewStats(authenticatedRequest),
         getRequestStats(authenticatedRequest, query),
-        getErrorStats(authenticatedRequest, query),
       ])
       if (loadId !== loadIdRef.current) {
         return
       }
       setOverview(nextOverview)
       setRequests(nextRequests)
-      setErrors(nextErrors.points)
     } catch (err) {
       if (loadId !== loadIdRef.current) {
         return
       }
       setOverview(null)
       setRequests(null)
-      setErrors([])
       if (err instanceof ApiError && err.status === 403) {
         setError('You do not have permission to view admin metrics.')
       } else if (err instanceof ApiError && err.status === 401) {
@@ -71,6 +66,7 @@ export function AdminLayout() {
   }, [load])
 
   const isOverview = location.pathname === '/admin' || location.pathname === '/admin/overview'
+  const isErrors = location.pathname === '/admin/errors'
 
   return (
     <div className="stack admin-dashboard">
@@ -79,7 +75,7 @@ export function AdminLayout() {
         subtitle="CubeSync platform metrics"
         actions={
           <div className="row wrap admin-toolbar">
-            {!isOverview && (
+            {!isOverview && !isErrors && (
               <div className="segmented" role="group" aria-label="Time range">
                 {ADMIN_RANGES.map((value) => (
                   <Button
@@ -94,9 +90,11 @@ export function AdminLayout() {
                 ))}
               </div>
             )}
-            <Button type="button" onClick={() => void load()} loading={loading}>
-              Retry
-            </Button>
+            {!isErrors && (
+              <Button type="button" onClick={() => void load()} loading={loading}>
+                Retry
+              </Button>
+            )}
           </div>
         }
       />
@@ -109,7 +107,7 @@ export function AdminLayout() {
 
       {error ? <Alert tone="error">{error}</Alert> : null}
 
-      <Outlet context={{ overview, requests, errors, loading, error, load } satisfies AdminContextType} />
+      <Outlet context={{ overview, requests, loading, error, load } satisfies AdminContextType} />
     </div>
   )
 }
