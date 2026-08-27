@@ -20,7 +20,8 @@ export function AdminErrorsPage() {
     setError('')
     try {
       const response = await getErrorLogs(authenticatedRequest, { before })
-      setLogs((prev) => (append ? [...prev, ...response.errors] : response.errors))
+      const incoming = response.errors || []
+      setLogs((prev) => (append ? [...prev, ...incoming] : incoming))
       setNextCursor(response.next_cursor)
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
