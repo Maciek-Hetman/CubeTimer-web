@@ -587,6 +587,8 @@ input[type='range'] {
   position: fixed;
   inset: 0;
   background: rgb(8 10 16 / 0.48);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: grid;
   place-items: end center;
   z-index: 50;
@@ -937,14 +939,14 @@ input[type='range'] {
 .solve-controls {
   display: inline-flex;
   flex-shrink: 0;
-  gap: 2px;
+  gap: 4px;
 }
 
 .solve-controls .btn {
-  min-width: 24px;
-  min-height: 24px;
-  padding: 2px 4px;
-  font-size: var(--text-xs);
+  min-width: 32px;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: var(--text-sm);
   box-shadow: none;
 }
 
@@ -958,7 +960,7 @@ input[type='range'] {
   color: var(--danger);
   background: var(--danger-soft);
   border-color: transparent;
-  padding: 0;
+  padding: 4px;
   line-height: 1;
 }
 
@@ -966,7 +968,7 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--border);
 }
 
@@ -1072,7 +1074,6 @@ input[type='range'] {
 /* Transparent UI Glassmorphism */
 html[data-transparent-ui="true"] .panel,
 html[data-transparent-ui="true"] .widget-grid-item,
-html[data-transparent-ui="true"] .dialog,
 html[data-transparent-ui="true"] .custom-select-trigger {
   background: color-mix(in srgb, var(--surface) var(--ui-opacity), transparent) !important;
   backdrop-filter: blur(16px) !important;

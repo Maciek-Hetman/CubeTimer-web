@@ -117,3 +117,20 @@ export function UserIcon() {
     </svg>
   )
 }
+
+export function EyeIcon({ className, style }: { className?: string, style?: React.CSSProperties }) {
+  return (
+    <svg className={className || "nav-icon"} style={{ width: '1.2em', height: '1.2em', ...style }} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function ChevronDownIcon({ className, style }: { className?: string, style?: React.CSSProperties }) {
+  return (
+    <svg className={className || "nav-icon"} style={{ width: '1.2em', height: '1.2em', transition: 'transform 0.2s ease', ...style }} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
