@@ -215,6 +215,28 @@ h2 {
   padding-bottom: var(--space-5);
 }
 
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.app-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color var(--duration) var(--ease);
+}
+
+.app-footer a:hover {
+  color: var(--accent);
+}
+
 .bottom-nav {
   position: fixed;
   left: 50%;

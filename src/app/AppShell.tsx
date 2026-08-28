@@ -5,6 +5,7 @@ import { SyncIndicator } from '../features/sync/SyncIndicator'
 import { AccountButton, AccountTabIcon } from '../features/account/AccountButton'
 import { AppBrand } from '../ui/AppBrand'
 import { Button } from '../ui/Button'
+import { Footer } from '../ui/Footer'
 import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerIcon, HistoryIcon } from '../ui/NavIcons'
 import { useMediaQuery } from '../ui/useMediaQuery'
 import { ThemeToggle } from '../ui/ThemeToggle'
@@ -116,6 +117,7 @@ export function AppShell() {
 
         <Outlet context={outletContext} />
       </main>
+      {!isHome ? <Footer /> : null}
       {showBottomNav ? (
         <nav className={['bottom-nav', isAdmin ? 'has-admin' : ''].filter(Boolean).join(' ')} aria-label="Primary">
           {navItems.map((item) => (
