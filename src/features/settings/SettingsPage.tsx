@@ -10,28 +10,77 @@ import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
 import { SessionManager } from '../sessions/SessionManager'
-import { ACCENT_PRESETS } from '../../styles/accents'
+import { ACCENT_PRESETS, ACCENT_TIERS } from '../../styles/accents'
 
 const HOLD_PRESETS = [0, 250, 300, 500, 550, 1000] as const
 
-const BACKGROUND_PRESETS = [
-  { label: 'Slate', value: '#64748b' },
-  { label: 'Navy', value: '#1e3a8a' },
-  { label: 'Forest', value: '#064e3b' },
-  { label: 'Plum', value: '#701a75' },
-  { label: 'Charcoal', value: '#171717' },
-  { label: 'Crimson', value: '#991b1b' },
-  { label: 'Rust', value: '#9a3412' },
-  { label: 'Olive', value: '#3f6212' },
-  { label: 'Teal', value: '#115e59' },
-  { label: 'Ocean', value: '#0369a1' },
-  { label: 'Midnight', value: '#020617' },
-  { label: 'Mocha', value: '#3b2f2f' },
-  { label: 'Sage', value: '#4b5563' },
-  { label: 'Lavender', value: '#581c87' },
-  { label: 'Coral', value: '#9f1239' },
-  { label: 'Steel', value: '#334155' },
+interface BackgroundPreset {
+  label: string
+  value: string
+  tier: 'light' | 'vivid' | 'deep'
+}
+
+const BACKGROUND_TIERS: { id: BackgroundPreset['tier']; label: string }[] = [
+  { id: 'light', label: 'Light' },
+  { id: 'vivid', label: 'Vivid' },
+  { id: 'deep', label: 'Deep' },
 ]
+
+const BACKGROUND_PRESETS: BackgroundPreset[] = [
+  { label: 'Fog', value: '#cbd5e1', tier: 'light' },
+  { label: 'Sky', value: '#7dd3fc', tier: 'light' },
+  { label: 'Mint', value: '#a7f3d0', tier: 'light' },
+  { label: 'Lilac', value: '#c4b5fd', tier: 'light' },
+  { label: 'Sand', value: '#fde68a', tier: 'light' },
+  { label: 'Peach', value: '#fda4af', tier: 'light' },
+  { label: 'Crimson', value: '#b91c1c', tier: 'vivid' },
+  { label: 'Coral', value: '#e11d48', tier: 'vivid' },
+  { label: 'Flame', value: '#ea580c', tier: 'vivid' },
+  { label: 'Amber', value: '#d97706', tier: 'vivid' },
+  { label: 'Grass', value: '#16a34a', tier: 'vivid' },
+  { label: 'Teal', value: '#0d9488', tier: 'vivid' },
+  { label: 'Ocean', value: '#0284c7', tier: 'vivid' },
+  { label: 'Violet', value: '#7c3aed', tier: 'vivid' },
+  { label: 'Midnight', value: '#020617', tier: 'deep' },
+  { label: 'Charcoal', value: '#171717', tier: 'deep' },
+  { label: 'Ink', value: '#0f172a', tier: 'deep' },
+  { label: 'Espresso', value: '#1c1917', tier: 'deep' },
+  { label: 'Deep Forest', value: '#052e16', tier: 'deep' },
+  { label: 'Deep Plum', value: '#2e1065', tier: 'deep' },
+]
+
+interface SwatchOption {
+  id: string
+  label: string
+  swatch: string
+}
+
+function SwatchGrid({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: SwatchOption[]
+  selected: string
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px' }}>
+      {options.map((option) => (
+        <Button
+          key={option.id}
+          type="button"
+          variant={selected === option.id ? 'primary' : 'ghost'}
+          onClick={() => onSelect(option.id)}
+          style={{ width: '100%', justifyContent: 'flex-start' }}
+        >
+          <div style={{ width: 16, height: 16, borderRadius: 4, background: option.swatch, border: '1px solid var(--border)', flexShrink: 0 }} />
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  )
+}
 
 export function SettingsPage() {
   const { settings, updateSettings, setCustomBackground } = useApp()
@@ -236,18 +285,20 @@ export function SettingsPage() {
         <h2>Appearance</h2>
         
         <Field label="Accent Color">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px' }}>
-            {ACCENT_PRESETS.map((preset) => (
-              <Button
-                key={preset.id}
-                type="button"
-                variant={settings.accentColor === preset.id ? 'primary' : 'ghost'}
-                onClick={() => void updateSettings({ accentColor: preset.id })}
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-              >
-                <div style={{ width: 16, height: 16, borderRadius: 4, background: preset.light.main, border: '1px solid var(--border)', flexShrink: 0 }} />
-                {preset.label}
-              </Button>
+          <div className="stack">
+            {ACCENT_TIERS.map((tier) => (
+              <div className="stack" key={tier.id} style={{ gap: '6px' }}>
+                <p className="muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>{tier.label}</p>
+                <SwatchGrid
+                  options={ACCENT_PRESETS.filter((p) => p.tier === tier.id).map((p) => ({
+                    id: p.id,
+                    label: p.label,
+                    swatch: p.light.main,
+                  }))}
+                  selected={settings.accentColor}
+                  onSelect={(id) => void updateSettings({ accentColor: id })}
+                />
+              </div>
             ))}
           </div>
         </Field>
@@ -276,18 +327,20 @@ export function SettingsPage() {
         </Field>
 
         {settings.backgroundType === 'preset' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px' }}>
-            {BACKGROUND_PRESETS.map((preset) => (
-              <Button
-                key={preset.value}
-                type="button"
-                variant={settings.backgroundPreset === preset.value ? 'primary' : 'ghost'}
-                onClick={() => void updateSettings({ backgroundPreset: preset.value })}
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-              >
-                <div style={{ width: 16, height: 16, borderRadius: 4, background: preset.value, border: '1px solid var(--border)', flexShrink: 0 }} />
-                {preset.label}
-              </Button>
+          <div className="stack">
+            {BACKGROUND_TIERS.map((tier) => (
+              <div className="stack" key={tier.id} style={{ gap: '6px' }}>
+                <p className="muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>{tier.label}</p>
+                <SwatchGrid
+                  options={BACKGROUND_PRESETS.filter((p) => p.tier === tier.id).map((p) => ({
+                    id: p.value,
+                    label: p.label,
+                    swatch: p.value,
+                  }))}
+                  selected={settings.backgroundPreset}
+                  onSelect={(id) => void updateSettings({ backgroundPreset: id })}
+                />
+              </div>
             ))}
           </div>
         )}
