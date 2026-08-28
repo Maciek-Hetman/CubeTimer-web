@@ -18,8 +18,6 @@ import { ListIcon, RefreshIcon } from '../../ui/NavIcons'
 import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
 import { Select } from '../../ui/Select'
-import { ThemeToggle } from '../../ui/ThemeToggle'
-import { useMediaQuery } from '../../ui/useMediaQuery'
 import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
 import { getAccentPalette } from '../../styles/accents'
@@ -110,7 +108,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const autoSavedRef = useRef(false)
   const activeKeyRef = useRef<string | null>(null)
   const activePointerRef = useRef<number | null>(null)
-  const isWide = useMediaQuery('(min-width: 768px)')
   const isSolvingOrPreparing = isTimerBusy(snapshot.phase)
 
   useEffect(() => {
@@ -392,7 +389,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             <RefreshIcon />
           </Button>
         ) : null}
-        {!isWide && variant !== 'desktop' ? <ThemeToggle /> : null}
       </div>
 
       <button

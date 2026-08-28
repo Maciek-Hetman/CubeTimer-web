@@ -507,6 +507,18 @@ select {
   padding: 10px 12px;
   min-height: 44px;
   font-weight: 500;
+  font-size: var(--text-sm);
+  transition:
+    border-color var(--duration) var(--ease),
+    background-color var(--duration) var(--ease);
+}
+
+input[type='text']:hover:not(:disabled),
+input[type='email']:hover:not(:disabled),
+input[type='password']:hover:not(:disabled),
+input[type='number']:hover:not(:disabled),
+select:hover:not(:disabled) {
+  background: var(--surface-muted);
 }
 
 input[type='range'] {

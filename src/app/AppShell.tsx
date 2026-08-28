@@ -8,7 +8,6 @@ import { Button } from '../ui/Button'
 import { Footer } from '../ui/Footer'
 import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerIcon, HistoryIcon } from '../ui/NavIcons'
 import { useMediaQuery } from '../ui/useMediaQuery'
-import { ThemeToggle } from '../ui/ThemeToggle'
 import { useApp } from './AppProviders'
 
 export interface ShellOutletContext {
@@ -106,7 +105,6 @@ export function AppShell() {
                 {widgetEditing ? <CheckIcon /> : <EditWidgetsIcon />}
               </Button>
             ) : null}
-            <ThemeToggle />
             <AccountButton />
           </div>
         </header>

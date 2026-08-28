@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
-import type { AppSettings, SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
+import type { AppSettings, SavedTheme, SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
 import { WIDGET_SCALE_MAX, WIDGET_SCALE_MIN, WIDGET_SCALE_PRESETS, WIDGET_SCALE_STEP } from '../../domain/models'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -9,10 +9,15 @@ import { Select } from '../../ui/Select'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
+import { PencilIcon, TrashIcon } from '../../ui/NavIcons'
 import { SessionManager } from '../sessions/SessionManager'
 import { ACCENT_PRESETS, ACCENT_TIERS } from '../../styles/accents'
+import { activeThemePreset, BUILTIN_PRESETS, type ThemeFields } from '../../styles/themes'
 
 const HOLD_PRESETS = [0, 250, 300, 500, 550, 1000] as const
+
+const DEFAULT_DARK_BG = '#020617'
+const DEFAULT_LIGHT_BG = '#cbd5e1'
 
 interface BackgroundPreset {
   label: string
@@ -86,6 +91,9 @@ export function SettingsPage() {
   const { settings, updateSettings, setCustomBackground } = useApp()
   const [sessionOpen, setSessionOpen] = useState(false)
   const [gapDraft, setGapDraft] = useState(String(settings.inactivityGapMinutes))
+  const [presetNameDraft, setPresetNameDraft] = useState('')
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
 
   useEffect(() => {
     setGapDraft(String(settings.inactivityGapMinutes))
@@ -93,6 +101,85 @@ export function SettingsPage() {
 
   const gapValue = Number(gapDraft)
   const gapInvalid = !Number.isFinite(gapValue) || gapValue < 5 || gapValue > 240
+
+  const systemDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)')?.matches
+  const effectiveTheme: 'light' | 'dark' =
+    settings.theme === 'system' ? (systemDark ? 'dark' : 'light') : settings.theme
+
+  const activeTheme = activeThemePreset(settings, settings.customThemes)
+  const currentBgColor =
+    settings.backgroundType === 'preset' && settings.backgroundPreset
+      ? settings.backgroundPreset
+      : effectiveTheme === 'dark'
+        ? DEFAULT_DARK_BG
+        : DEFAULT_LIGHT_BG
+
+  const applyPreset = (preset: ThemeFields) => {
+    void updateSettings({
+      theme: preset.theme,
+      accentColor: preset.accentColor,
+      backgroundType: 'preset',
+      backgroundPreset: preset.backgroundPreset,
+    })
+  }
+
+  const themeOptions = [
+    ...BUILTIN_PRESETS.map((preset) => ({ value: `preset:${preset.id}`, label: preset.label })),
+    ...settings.customThemes.map((preset) => ({ value: `custom:${preset.id}`, label: preset.name })),
+    { value: 'user', label: 'Custom theme' },
+  ]
+
+  const themeSelectValue =
+    activeTheme.kind === 'builtin'
+      ? `preset:${activeTheme.preset.id}`
+      : activeTheme.kind === 'custom'
+        ? `custom:${activeTheme.preset.id}`
+        : 'user'
+
+  const handleThemeSelect = (value: string) => {
+    if (value === 'user') return
+    const preset = value.startsWith('preset:')
+      ? BUILTIN_PRESETS.find((p) => `preset:${p.id}` === value)
+      : settings.customThemes.find((p) => `custom:${p.id}` === value)
+    if (preset) applyPreset(preset)
+  }
+
+  const savePreset = () => {
+    const name = presetNameDraft.trim()
+    if (!name) return
+    const saved: SavedTheme = {
+      id: `custom-${Date.now()}`,
+      name,
+      theme: effectiveTheme,
+      accentColor: settings.accentColor,
+      backgroundPreset: currentBgColor,
+    }
+    void updateSettings({
+      theme: effectiveTheme,
+      accentColor: settings.accentColor,
+      backgroundType: 'preset',
+      backgroundPreset: currentBgColor,
+      customThemes: [...settings.customThemes, saved],
+    })
+    setPresetNameDraft('')
+  }
+
+  const startRename = (preset: SavedTheme) => {
+    setRenamingId(preset.id)
+    setRenameDraft(preset.name)
+  }
+
+  const commitRename = () => {
+    const id = renamingId
+    setRenamingId(null)
+    const name = renameDraft.trim()
+    if (!id || !name) return
+    void updateSettings({ customThemes: settings.customThemes.map((t) => (t.id === id ? { ...t, name } : t)) })
+  }
+
+  const deletePreset = (id: string) => {
+    void updateSettings({ customThemes: settings.customThemes.filter((t) => t.id !== id) })
+  }
 
   return (
     <div className="stack narrow-page">
@@ -282,8 +369,76 @@ export function SettingsPage() {
       </Panel>
 
       <Panel className="stack">
+        <h2>Themes</h2>
+
+        <Field label="Theme">
+          <Select
+            aria-label="Theme"
+            value={themeSelectValue}
+            onChange={handleThemeSelect}
+            options={themeOptions}
+          />
+        </Field>
+
+        {activeTheme.kind === 'user' ? (
+          <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              value={presetNameDraft}
+              onChange={(e) => setPresetNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') savePreset()
+              }}
+              placeholder="Theme name"
+              style={{ flex: 1, minWidth: 160 }}
+            />
+            <Button type="button" variant="primary" onClick={savePreset} disabled={!presetNameDraft.trim()}>
+              Save as theme
+            </Button>
+          </div>
+        ) : activeTheme.kind === 'custom' ? (
+          renamingId === activeTheme.preset.id ? (
+            <input
+              type="text"
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') setRenamingId(null)
+              }}
+              autoFocus
+              aria-label="Theme name"
+              style={{ flex: 1, minWidth: 160 }}
+            />
+          ) : (
+            <div className="row" style={{ gap: 8 }}>
+              <Button type="button" variant="ghost" onClick={() => startRename(activeTheme.preset)}>
+                <PencilIcon /> Rename
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => deletePreset(activeTheme.preset.id)}>
+                <TrashIcon /> Delete
+              </Button>
+            </div>
+          )
+        ) : null}
+      </Panel>
+
+      <Panel className="stack">
         <h2>Appearance</h2>
-        
+
+        <Field label="Theme mode">
+          <Select
+            value={settings.theme}
+            onChange={(val) => void updateSettings({ theme: val as AppSettings['theme'] })}
+            options={[
+              { value: 'system', label: 'System' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' }
+            ]}
+          />
+        </Field>
+
         <Field label="Accent Color">
           <div className="stack">
             {ACCENT_TIERS.map((tier) => (

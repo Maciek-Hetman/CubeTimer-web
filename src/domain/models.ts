@@ -88,6 +88,14 @@ export interface SolveInput {
   event: CubeEvent
 }
 
+export interface SavedTheme {
+  id: string
+  name: string
+  theme: 'light' | 'dark'
+  accentColor: string
+  backgroundPreset: string
+}
+
 export interface AppSettings {
   ownerId: string
   event: CubeEvent
@@ -109,6 +117,7 @@ export interface AppSettings {
   timerSize: TimerSize
   timerColor: string
   widgetScale: number
+  customThemes: SavedTheme[]
 }
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
@@ -131,6 +140,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   timerSize: 'medium',
   timerColor: '',
   widgetScale: 100,
+  customThemes: [],
 }
 
 export function createId(): string {
