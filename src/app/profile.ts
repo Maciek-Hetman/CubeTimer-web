@@ -18,6 +18,10 @@ export async function getDeviceId(): Promise<string> {
   return id
 }
 
+export async function getStoredDeviceId(): Promise<string | null> {
+  return getMeta<string | null>(DEVICE_ID_KEY, null)
+}
+
 export async function getDeviceName(): Promise<string> {
   const existing = await getMeta<string | null>(DEVICE_NAME_KEY, null)
   if (existing) {
@@ -26,6 +30,10 @@ export async function getDeviceName(): Promise<string> {
   const name = typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 80) : 'CubeTimer Web'
   await setMeta(DEVICE_NAME_KEY, name)
   return name
+}
+
+export async function getStoredDeviceName(): Promise<string | null> {
+  return getMeta<string | null>(DEVICE_NAME_KEY, null)
 }
 
 export async function ensureGuestOwner(): Promise<string> {

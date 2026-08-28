@@ -21,8 +21,16 @@ function cursorKey(ownerId: string): string {
   return `cursor:${ownerId}`
 }
 
+export function lastSyncKey(ownerId: string): string {
+  return `last_sync_at:${ownerId}`
+}
+
 export async function getCursor(ownerId: string): Promise<number> {
   return getMeta(cursorKey(ownerId), 0)
+}
+
+export async function getLastSyncedAt(ownerId: string): Promise<string | null> {
+  return getMeta<string | null>(lastSyncKey(ownerId), null)
 }
 
 export async function runSync(options: SyncEngineOptions): Promise<{
@@ -68,6 +76,7 @@ export async function runSync(options: SyncEngineOptions): Promise<{
       break
     }
   }
+  await db.meta.put({ key: lastSyncKey(options.ownerId), value: nowIso() })
   return { status: conflicts > 0 ? 'conflict' : hasMore ? 'pending' : 'idle', conflicts }
 }
 

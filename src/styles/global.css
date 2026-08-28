@@ -400,6 +400,30 @@ h2 {
   flex-wrap: wrap;
 }
 
+.info-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.info-list > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.info-list dt {
+  color: var(--text-muted);
+}
+
+.info-list dd {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
 .page-header {
   display: flex;
   flex-direction: column;

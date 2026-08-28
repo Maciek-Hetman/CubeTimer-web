@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import type { Table } from 'dexie'
 import * as authApi from '../api/auth'
 import { apiRequest, type AuthenticatedRequest, type RequestOptions } from '../api/client'
 import { ApiError, type AuthSession, type User } from '../api/types'
@@ -38,7 +39,7 @@ import {
   shouldReuseAutomaticSession,
 } from '../domain/sessions/automaticSessions'
 import { adoptGuestData } from '../sync/guestMerge'
-import { runSync, withBackoff, type SyncStatus } from '../sync/syncEngine'
+import { runSync, getLastSyncedAt, lastSyncKey, withBackoff, type SyncStatus } from '../sync/syncEngine'
 import {
   clearAuth,
   createFreshGuestOwner,
@@ -46,6 +47,8 @@ import {
   getCurrentOwnerId,
   getDeviceId,
   getDeviceName,
+  getStoredDeviceId,
+  getStoredDeviceName,
   getStoredRefreshToken,
   getStoredUser,
   isGuestOwner,
@@ -78,11 +81,16 @@ export interface AppContextValue {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  deleteAccount: () => Promise<void>
   applyAuthSession: (session: AuthSession, options?: { mergeGuest?: boolean }) => Promise<void>
   authenticatedRequest: AuthenticatedRequest
   requestSync: () => void
   resolveConflictKeepServer: (conflictId: string) => Promise<void>
   resolveConflictKeepLocal: (conflictId: string) => Promise<void>
+  conflicts: number
+  lastSyncedAt: string | null
+  deviceName: string | null
+  deviceId: string | null
   scramble: string
   scrambleState: 'loading' | 'ready' | 'error'
   loadScramble: () => Promise<void>
@@ -236,6 +244,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const conflictCount =
     useLiveQuery(async () => (ownerId ? db.conflicts.where('ownerId').equals(ownerId).count() : 0), [ownerId]) ?? 0
+
+  const deviceId =
+    useLiveQuery(async () => (ownerId ? getStoredDeviceId() : null), [ownerId]) ?? null
+  const deviceName =
+    useLiveQuery(async () => (ownerId ? getStoredDeviceName() : null), [ownerId]) ?? null
+  const lastSyncedAt =
+    useLiveQuery(async () => (ownerId ? getLastSyncedAt(ownerId) : null), [ownerId]) ?? null
 
   const currentSession = useMemo(() => {
     const id = settings.currentSessionIds[settings.event]
@@ -681,6 +696,24 @@ export function AppProviders({ children }: { children: ReactNode }) {
     await transitionToGuest()
   }, [doSync, enqueueWrites, ownerId, transitionToGuest])
 
+  const deleteAccountFn = useCallback(async () => {
+    await authApi.deleteAccount(authenticatedRequest)
+    await db.transaction(
+      'rw',
+      [db.solves, db.sessions, db.outbox, db.settings, db.conflicts, db.widgetLayouts, db.meta] as Table[],
+      async () => {
+        await db.solves.where('ownerId').equals(ownerId).delete()
+        await db.sessions.where('ownerId').equals(ownerId).delete()
+        await db.outbox.where('ownerId').equals(ownerId).delete()
+        await db.conflicts.where('ownerId').equals(ownerId).delete()
+        await db.settings.delete(ownerId)
+        await db.widgetLayouts.delete(ownerId)
+        await db.meta.bulkDelete([`cursor:${ownerId}`, lastSyncKey(ownerId)])
+      },
+    )
+    await transitionToGuest()
+  }, [authenticatedRequest, ownerId, transitionToGuest])
+
   const resolveConflictKeepServer = useCallback(async (conflictId: string) => {
     await db.conflicts.delete(conflictId)
   }, [])
@@ -735,11 +768,16 @@ export function AppProviders({ children }: { children: ReactNode }) {
       login: loginFn,
       register: registerFn,
       logout: logoutFn,
+      deleteAccount: deleteAccountFn,
       applyAuthSession,
       authenticatedRequest,
       requestSync,
       resolveConflictKeepServer,
       resolveConflictKeepLocal,
+      conflicts: conflictCount,
+      lastSyncedAt,
+      deviceName,
+      deviceId,
       scramble,
       scrambleState,
       loadScramble,
@@ -754,6 +792,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       deleteSolve,
       loginFn,
       logoutFn,
+      deleteAccountFn,
       ownerId,
       pendingMutations,
       ready,
@@ -774,6 +813,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
       updateSettings,
       updateSolvePenalty,
       user,
+      conflictCount,
+      lastSyncedAt,
+      deviceName,
+      deviceId,
       scramble,
       scrambleState,
       loadScramble,

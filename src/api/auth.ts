@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiRequest, type AuthenticatedRequest } from './client'
 import type { AuthSession, User } from './types'
 
 export function register(email: string, password: string) {
@@ -59,4 +59,19 @@ export function resetPassword(token: string, newPassword: string) {
 
 export function getMe(accessToken: string) {
   return apiRequest<User>('/v1/me', { accessToken })
+}
+
+export function changePassword(
+  request: AuthenticatedRequest,
+  currentPassword: string,
+  newPassword: string,
+) {
+  return request<void>('/v1/me/password', {
+    method: 'PUT',
+    body: { current_password: currentPassword, new_password: newPassword },
+  })
+}
+
+export function deleteAccount(request: AuthenticatedRequest) {
+  return request<void>('/v1/me', { method: 'DELETE' })
 }

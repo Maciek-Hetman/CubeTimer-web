@@ -1,22 +1,5 @@
 import { useApp } from '../../app/AppProviders'
-
-const LABELS: Record<string, string> = {
-  idle: 'Synced',
-  pending: 'Waiting to sync',
-  syncing: 'Syncing',
-  offline: 'Offline',
-  error: 'Sync error',
-  conflict: 'Conflict',
-}
-
-const HINTS: Record<string, string> = {
-  idle: 'Everything is up to date. Tap to sync again.',
-  pending: 'Local changes are waiting to upload.',
-  syncing: 'Syncing with the server…',
-  offline: 'You are offline. Changes stay on this device until you reconnect.',
-  error: 'Sync failed. Tap to retry.',
-  conflict: 'A sync conflict needs your attention below.',
-}
+import { SYNC_HINTS, SYNC_LABELS, syncTone } from './syncStatus'
 
 export function SyncIndicator() {
   const { user, syncStatus, pendingMutations, requestSync } = useApp()
@@ -38,9 +21,9 @@ export function SyncIndicator() {
     )
   }
 
-  const tone = syncStatus === 'error' || syncStatus === 'conflict' ? 'bad' : syncStatus === 'offline' || syncStatus === 'pending' ? 'warn' : 'ok'
-  const label = LABELS[syncStatus] ?? syncStatus
-  const hint = HINTS[syncStatus] ?? 'Tap to sync'
+  const tone = syncTone(syncStatus)
+  const label = SYNC_LABELS[syncStatus] ?? syncStatus
+  const hint = SYNC_HINTS[syncStatus] ?? 'Tap to sync'
 
   return (
     <button
