@@ -652,7 +652,7 @@ input[type='range'] {
 .timer-display {
   font-family: var(--mono);
   font-weight: 700;
-  font-size: clamp(3.4rem, 14vw, 7rem);
+  font-size: clamp(4.25rem, 12vw, 7.5rem);
   line-height: 1;
   letter-spacing: -0.04em;
   text-align: center;

@@ -77,16 +77,16 @@ const TIMER_FONT_FAMILIES: Record<TimerFont, string> = {
 
 const TIMER_SIZE_STYLES: Record<'mobile' | 'desktop', Record<TimerSize, string>> = {
   mobile: {
-    small: 'clamp(2.5rem, 12vw, 4rem)',
-    medium: 'clamp(3.4rem, 14vw, 7rem)',
-    large: 'clamp(4.2rem, 18vw, 8rem)',
-    xlarge: 'clamp(5rem, 22vw, 10rem)',
+    small: 'clamp(3rem, 13vw, 4.5rem)',
+    medium: 'clamp(3.75rem, 16vw, 5.75rem)',
+    large: 'clamp(4.75rem, 20vw, 7.25rem)',
+    xlarge: 'clamp(5.75rem, 24vw, 9rem)',
   },
   desktop: {
-    small: 'clamp(3rem, 10vw, 5rem)',
-    medium: 'clamp(3.4rem, 14vw, 7rem)',
-    large: 'clamp(4rem, 18vw, 9rem)',
-    xlarge: 'clamp(5rem, 24vw, 12rem)',
+    small: 'clamp(3.5rem, 10vw, 6rem)',
+    medium: 'clamp(4.25rem, 12vw, 7.5rem)',
+    large: 'clamp(5.25rem, 15vw, 9.5rem)',
+    xlarge: 'clamp(6.25rem, 18vw, 11.5rem)',
   },
 }
 
