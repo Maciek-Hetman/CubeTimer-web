@@ -1,11 +1,30 @@
 import { useApp } from '../../../app/AppProviders'
-import { averageOfN, bestAverageOfN } from '../../../domain/stats/averages'
 import { formatAverage } from '../../../domain/stats/formatTime'
 
-const WINDOWS = [5, 12, 25, 50, 100]
+const WINDOWS = [5, 12, 25, 50, 100] as const
 
 export function AveragesWidget() {
-  const { solves } = useApp()
+  const { solveStats } = useApp()
+  const current = (n: number): number | null =>
+    n === 5
+      ? solveStats.ao5
+      : n === 12
+        ? solveStats.ao12
+        : n === 25
+          ? solveStats.ao25
+          : n === 50
+            ? solveStats.ao50
+            : solveStats.ao100
+  const best = (n: number): number | null =>
+    n === 5
+      ? solveStats.bestAo5
+      : n === 12
+        ? solveStats.bestAo12
+        : n === 25
+          ? solveStats.bestAo25
+          : n === 50
+            ? solveStats.bestAo50
+            : solveStats.bestAo100
   return (
     <table className="data-table">
       <thead>
@@ -19,8 +38,8 @@ export function AveragesWidget() {
         {WINDOWS.map((n) => (
           <tr key={n}>
             <td>Ao{n}</td>
-            <td className="center">{formatAverage(averageOfN(solves, n))}</td>
-            <td className="center best-time">{formatAverage(bestAverageOfN(solves, n))}</td>
+            <td className="center">{formatAverage(current(n))}</td>
+            <td className="center best-time">{formatAverage(best(n))}</td>
           </tr>
         ))}
       </tbody>

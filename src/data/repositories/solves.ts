@@ -1,15 +1,115 @@
+import Dexie from 'dexie'
 import type { CubeEvent, Solve, SolveInput } from '../../domain/models'
 import { createId, nowIso } from '../../domain/models'
 import { db } from '../db'
 import { enqueueMutation } from './outbox'
 
-export async function listSolves(ownerId: string, event?: CubeEvent): Promise<Solve[]> {
-  const solves = event
-    ? await db.solves.where('[ownerId+event]').equals([ownerId, event]).toArray()
-    : await db.solves.where('ownerId').equals(ownerId).toArray()
-  return solves
-    .filter((solve) => !solve.deletedAt && (!event || solve.event === event))
-    .sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+export const RECENT_SOLVES_LIMIT = 25
+
+export interface SolvesQueryOptions {
+  limit?: number
+}
+
+export async function listSolves(
+  ownerId: string,
+  event?: CubeEvent,
+  options: SolvesQueryOptions = {},
+): Promise<Solve[]> {
+  const collection = event
+    ? db.solves.where('[ownerId+event]').equals([ownerId, event])
+    : db.solves.where('ownerId').equals(ownerId)
+  let filtered = collection.filter((solve) => !solve.deletedAt && (!event || solve.event === event))
+  if (options.limit !== undefined) {
+    filtered = filtered.limit(options.limit)
+  }
+  const solves = await filtered.toArray()
+  return solves.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+}
+
+export async function countSolves(ownerId: string, event: CubeEvent): Promise<number> {
+  return db.solves
+    .where('[ownerId+event]')
+    .equals([ownerId, event])
+    .filter((solve) => !solve.deletedAt)
+    .count()
+}
+
+export async function recentSolves(
+  ownerId: string,
+  event: CubeEvent,
+  limit = RECENT_SOLVES_LIMIT,
+): Promise<Solve[]> {
+  return db.solves
+    .where('[ownerId+event+solvedAt]')
+    .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
+    .reverse()
+    .filter((solve) => !solve.deletedAt)
+    .limit(limit)
+    .toArray()
+}
+
+export async function latestSolveInSession(
+  ownerId: string,
+  sessionId: string,
+): Promise<Solve | undefined> {
+  const rows = await db.solves
+    .where('[ownerId+sessionId+solvedAt]')
+    .between([ownerId, sessionId, Dexie.minKey], [ownerId, sessionId, Dexie.maxKey], true, true)
+    .reverse()
+    .filter((solve) => !solve.deletedAt)
+    .limit(1)
+    .toArray()
+  return rows[0]
+}
+
+export async function listSolvesForSession(
+  ownerId: string,
+  sessionId: string,
+  limit = 200,
+): Promise<Solve[]> {
+  return db.solves
+    .where('[ownerId+sessionId+solvedAt]')
+    .between([ownerId, sessionId, Dexie.minKey], [ownerId, sessionId, Dexie.maxKey], true, true)
+    .reverse()
+    .filter((solve) => !solve.deletedAt)
+    .limit(limit)
+    .toArray()
+}
+
+export async function listOrphanSolves(
+  ownerId: string,
+  event: CubeEvent,
+  limit = 200,
+): Promise<Solve[]> {
+  return db.solves
+    .where('[ownerId+event+solvedAt]')
+    .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
+    .reverse()
+    .filter((solve) => !solve.deletedAt && !solve.sessionId)
+    .limit(limit)
+    .toArray()
+}
+
+export async function countSolvesBySession(
+  ownerId: string,
+  event: CubeEvent,
+): Promise<{ counts: Map<string, number>; orphanCount: number }> {
+  const counts = new Map<string, number>()
+  let orphanCount = 0
+  await db.solves
+    .where('[ownerId+event+solvedAt]')
+    .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
+    .each((solve) => {
+      if (solve.deletedAt) {
+        return
+      }
+      if (solve.sessionId) {
+        counts.set(solve.sessionId, (counts.get(solve.sessionId) ?? 0) + 1)
+      } else {
+        orphanCount += 1
+      }
+    })
+  return { counts, orphanCount }
 }
 
 export async function putSolve(

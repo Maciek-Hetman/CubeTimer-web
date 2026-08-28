@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppProviders'
-import { effectiveTimeMs, eventLabel } from '../../domain/models'
-import { averageOfN, bestAverageOfN, bestSingle, meanOfSolves, worstSingle, standardDeviation, totalTime } from '../../domain/stats/averages'
+import { eventLabel } from '../../domain/models'
 import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
+import { collectChartSeries, computeSolveStats } from '../../data/repositories/solveStats'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
@@ -24,12 +25,7 @@ function DeltaBadge({ delta }: { delta: number | null }) {
 }
 
 export function StatsPage() {
-  const { solves, sessions, settings, currentSession } = useApp()
-
-  const sessionSolves = useMemo(
-    () => (currentSession ? solves.filter((solve) => solve.sessionId === currentSession.id) : []),
-    [currentSession, solves],
-  )
+  const { solveStats, sessions, settings, currentSession, ownerId } = useApp()
 
   const previousSession = useMemo(() => {
     if (!currentSession) return null
@@ -40,72 +36,53 @@ export function StatsPage() {
     return null
   }, [sessions, currentSession])
 
-  const previousSessionSolves = useMemo(
-    () => (previousSession ? solves.filter((solve) => solve.sessionId === previousSession.id) : []),
-    [previousSession, solves],
+  const sessionStats = useLiveQuery(
+    async () =>
+      currentSession ? computeSolveStats(ownerId, settings.event, currentSession.id) : null,
+    [ownerId, settings.event, currentSession?.id],
   )
 
-  const summary = useMemo(
-    () => ({
-      count: solves.length,
-      best: bestSingle(solves),
-      worst: worstSingle(solves),
-      mean: meanOfSolves(solves),
-      stdDev: standardDeviation(solves),
-      totalTime: totalTime(solves),
-      ao5: averageOfN(solves, 5),
-      ao12: averageOfN(solves, 12),
-      ao50: averageOfN(solves, 50),
-      ao100: averageOfN(solves, 100),
-      bestAo5: bestAverageOfN(solves, 5),
-      bestAo12: bestAverageOfN(solves, 12),
-      bestAo50: bestAverageOfN(solves, 50),
-      bestAo100: bestAverageOfN(solves, 100),
-    }),
-    [solves],
+  const previousSessionStats = useLiveQuery(
+    async () =>
+      previousSession ? computeSolveStats(ownerId, settings.event, previousSession.id) : null,
+    [ownerId, settings.event, previousSession?.id],
+  )
+
+  const chartData = useLiveQuery(
+    async () => collectChartSeries(ownerId, settings.event),
+    [ownerId, settings.event],
   )
 
   const sessionSummary = useMemo(
     () => ({
-      count: sessionSolves.length,
-      best: bestSingle(sessionSolves),
-      mean: meanOfSolves(sessionSolves),
-      stdDev: standardDeviation(sessionSolves),
-      totalTime: totalTime(sessionSolves),
-      ao5: averageOfN(sessionSolves, 5),
-      ao50: averageOfN(sessionSolves, 50),
-      ao100: averageOfN(sessionSolves, 100),
+      count: sessionStats?.count ?? 0,
+      best: sessionStats?.best ?? null,
+      mean: sessionStats?.mean ?? null,
+      stdDev: sessionStats?.stdDev ?? null,
+      totalTime: sessionStats?.totalTime ?? 0,
+      ao5: sessionStats?.ao5 ?? null,
+      ao50: sessionStats?.ao50 ?? null,
+      ao100: sessionStats?.ao100 ?? null,
     }),
-    [sessionSolves],
+    [sessionStats],
   )
 
   const previousSessionSummary = useMemo(
     () => ({
-      best: bestSingle(previousSessionSolves),
-      mean: meanOfSolves(previousSessionSolves),
-      stdDev: standardDeviation(previousSessionSolves),
-      ao5: averageOfN(previousSessionSolves, 5),
-      ao50: averageOfN(previousSessionSolves, 50),
-      ao100: averageOfN(previousSessionSolves, 100),
+      best: previousSessionStats?.best ?? null,
+      mean: previousSessionStats?.mean ?? null,
+      stdDev: previousSessionStats?.stdDev ?? null,
+      ao5: previousSessionStats?.ao5 ?? null,
+      ao50: previousSessionStats?.ao50 ?? null,
+      ao100: previousSessionStats?.ao100 ?? null,
     }),
-    [previousSessionSolves],
+    [previousSessionStats],
   )
 
   const getDelta = (current: number | null, previous: number | null) => {
     if (current === null || previous === null) return null
     return current - previous
   }
-
-  const chartData = useMemo(() => {
-    const reversed = [...solves].reverse()
-    return reversed.map((solve, i) => {
-      const time = effectiveTimeMs(solve)
-      return {
-        index: i + 1,
-        time: time === null ? null : time / 1000,
-      }
-    })
-  }, [solves])
 
   return (
     <div className="stack">
@@ -114,7 +91,7 @@ export function StatsPage() {
         subtitle={`${eventLabel(settings.event)}${currentSession ? ` · ${currentSession.name}` : ''}`}
       />
 
-      {solves.length === 0 ? (
+      {solveStats.count === 0 ? (
         <EmptyState
           title="No solves yet"
           description="Time a solve on the timer to start building your history."
@@ -130,31 +107,31 @@ export function StatsPage() {
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Time</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
-                {formatAverage(summary.best)}
+                {formatAverage(solveStats.best)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao5</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
-                {formatAverage(summary.bestAo5)}
+                {formatAverage(solveStats.bestAo5)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao12</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
-                {formatAverage(summary.bestAo12)}
+                {formatAverage(solveStats.bestAo12)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao50</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
-                {formatAverage(summary.bestAo50)}
+                {formatAverage(solveStats.bestAo50)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao100</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
-                {formatAverage(summary.bestAo100)}
+                {formatAverage(solveStats.bestAo100)}
               </div>
             </Panel>
           </div>
@@ -163,7 +140,7 @@ export function StatsPage() {
             <h2>Times Graph</h2>
             <div style={{ width: '100%', height: 250 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <LineChart data={chartData ?? []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <Line type="monotone" dataKey="time" stroke="#8884d8" dot={false} isAnimationActive={false} />
                   <XAxis dataKey="index" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} width={40} />
@@ -181,15 +158,15 @@ export function StatsPage() {
               <h2>All-time</h2>
               <StatGrid
                 items={[
-                  ['Solves', String(summary.count)],
-                  ['Total Time', formatTotalTime(summary.totalTime)],
-                  ['Worst', formatAverage(summary.worst)],
-                  ['Mean', formatAverage(summary.mean)],
-                  ['Std Dev', formatAverage(summary.stdDev)],
-                  ['Ao5', formatAverage(summary.ao5)],
-                  ['Ao12', formatAverage(summary.ao12)],
-                  ['Ao50', formatAverage(summary.ao50)],
-                  ['Ao100', formatAverage(summary.ao100)],
+                  ['Solves', String(solveStats.count)],
+                  ['Total Time', formatTotalTime(solveStats.totalTime)],
+                  ['Worst', formatAverage(solveStats.worst)],
+                  ['Mean', formatAverage(solveStats.mean)],
+                  ['Std Dev', formatAverage(solveStats.stdDev)],
+                  ['Ao5', formatAverage(solveStats.ao5)],
+                  ['Ao12', formatAverage(solveStats.ao12)],
+                  ['Ao50', formatAverage(solveStats.ao50)],
+                  ['Ao100', formatAverage(solveStats.ao100)],
                 ]}
               />
             </Panel>
@@ -204,42 +181,42 @@ export function StatsPage() {
                     'Best',
                     <span key="best">
                       {formatAverage(sessionSummary.best)}
-                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
+                      {previousSessionSummary.best !== null && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
                     </span>,
                   ],
                   [
                     'Mean',
                     <span key="mean">
                       {formatAverage(sessionSummary.mean)}
-                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
+                      {previousSessionSummary.mean !== null && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
                     </span>,
                   ],
                   [
                     'Std Dev',
                     <span key="stdDev">
                       {formatAverage(sessionSummary.stdDev)}
-                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
+                      {previousSessionSummary.stdDev !== null && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
                     </span>,
                   ],
                   [
                     'Ao5',
                     <span key="ao5">
                       {formatAverage(sessionSummary.ao5)}
-                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
+                      {previousSessionSummary.ao5 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
                     </span>,
                   ],
                   [
                     'Ao50',
                     <span key="ao50">
                       {formatAverage(sessionSummary.ao50)}
-                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
+                      {previousSessionSummary.ao50 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
                     </span>,
                   ],
                   [
                     'Ao100',
                     <span key="ao100">
                       {formatAverage(sessionSummary.ao100)}
-                      {previousSessionSolves.length > 0 && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
+                      {previousSessionSummary.ao100 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
                     </span>,
                   ],
                 ]}

@@ -1,14 +1,13 @@
 import { useApp } from '../../../app/AppProviders'
-import { bestAverageOfN, bestSingle } from '../../../domain/stats/averages'
 import { formatAverage } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 import { StatGrid } from '../../../ui/StatGrid'
 import { Link } from 'react-router-dom'
 
 export function PersonalBestsWidget() {
-  const { solves } = useApp()
+  const { solveStats } = useApp()
 
-  if (solves.length === 0) {
+  if (solveStats.count === 0) {
     return (
       <EmptyState
         title="No personal bests"
@@ -28,9 +27,9 @@ export function PersonalBestsWidget() {
         size="large"
         columns={2}
         items={[
-          ['Single', formatAverage(bestSingle(solves))],
-          ['Ao5', formatAverage(bestAverageOfN(solves, 5))],
-          ['Ao12', formatAverage(bestAverageOfN(solves, 12))],
+          ['Single', formatAverage(solveStats.best)],
+          ['Ao5', formatAverage(solveStats.bestAo5)],
+          ['Ao12', formatAverage(solveStats.bestAo12)],
         ]}
       />
     </div>

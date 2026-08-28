@@ -49,6 +49,16 @@ export class CubeTimerDB extends Dexie {
       widgetLayouts: 'ownerId',
       conflicts: 'id, ownerId, entityId',
     })
+    this.version(2).stores({
+      solves:
+        'id, ownerId, sessionId, event, solvedAt, [ownerId+event], [ownerId+sessionId], [ownerId+event+solvedAt], [ownerId+sessionId+solvedAt]',
+      sessions: 'id, ownerId, event, kind, startedAt, [ownerId+event]',
+      outbox: 'id, ownerId, entity, entityId, createdAt',
+      settings: 'ownerId',
+      meta: 'key',
+      widgetLayouts: 'ownerId',
+      conflicts: 'id, ownerId, entityId',
+    })
   }
 }
 

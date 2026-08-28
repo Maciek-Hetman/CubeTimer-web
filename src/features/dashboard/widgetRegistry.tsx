@@ -4,7 +4,6 @@ import { RecentSolvesWidget } from './widgets/RecentSolvesWidget'
 import { SessionStatsWidget } from './widgets/SessionStatsWidget'
 import { PersonalBestsWidget } from './widgets/PersonalBestsWidget'
 import { AllTimeStatsWidget } from './widgets/AllTimeStatsWidget'
-import { ScramblePreviewWidget } from './widgets/ScramblePreviewWidget'
 
 const RecentTimesChart = lazy(() =>
   import('./widgets/RecentTimesChart').then((m) => ({ default: m.RecentTimesChart })),
@@ -12,6 +11,10 @@ const RecentTimesChart = lazy(() =>
 
 const RecentAo5Chart = lazy(() =>
   import('./widgets/RecentAo5Chart').then((m) => ({ default: m.RecentAo5Chart })),
+)
+
+const ScramblePreviewWidget = lazy(() =>
+  import('./widgets/ScramblePreviewWidget').then((m) => ({ default: m.ScramblePreviewWidget })),
 )
 
 export const WIDGET_TYPES = [
@@ -76,6 +79,10 @@ export function renderWidget(type: WidgetType) {
     case 'allTimeStats':
       return <AllTimeStatsWidget />
     case 'scramblePreview':
-      return <ScramblePreviewWidget />
+      return (
+        <Suspense fallback={null}>
+          <ScramblePreviewWidget />
+        </Suspense>
+      )
   }
 }

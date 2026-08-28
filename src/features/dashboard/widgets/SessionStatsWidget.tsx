@@ -1,21 +1,37 @@
-import { useMemo } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { useApp } from '../../../app/AppProviders'
-import { averageOfN, bestSingle, meanOfSolves } from '../../../domain/stats/averages'
+import { computeSolveStats } from '../../../data/repositories/solveStats'
 import { formatAverage } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 import { StatGrid } from '../../../ui/StatGrid'
 
 export function SessionStatsWidget() {
-  const { solves, currentSession } = useApp()
-  const sessionSolves = useMemo(
-    () => (currentSession ? solves.filter((solve) => solve.sessionId === currentSession.id) : []),
-    [currentSession, solves],
+  const { ownerId, currentSession, settings } = useApp()
+  const sessionStats = useLiveQuery(
+    async () =>
+      currentSession ? computeSolveStats(ownerId, settings.event, currentSession.id) : null,
+    [ownerId, settings.event, currentSession?.id],
   )
-  if (sessionSolves.length === 0) {
+
+  if (!currentSession) {
     return (
       <EmptyState
-        title={currentSession?.name ?? 'No session'}
+        title="No session"
+        description="No current session."
+        action={
+          <Link className="btn primary" to="/">
+            Open timer
+          </Link>
+        }
+      />
+    )
+  }
+
+  if (!sessionStats || sessionStats.count === 0) {
+    return (
+      <EmptyState
+        title={currentSession.name}
         description="No times in this session yet."
         action={
           <Link className="btn primary" to="/">
@@ -31,10 +47,10 @@ export function SessionStatsWidget() {
         size="large"
         columns={2}
         items={[
-          ['Solves', String(sessionSolves.length)],
-          ['Best', formatAverage(bestSingle(sessionSolves))],
-          ['Mean', formatAverage(meanOfSolves(sessionSolves))],
-          ['Ao5', formatAverage(averageOfN(sessionSolves, 5))],
+          ['Solves', String(sessionStats.count)],
+          ['Best', formatAverage(sessionStats.best)],
+          ['Mean', formatAverage(sessionStats.mean)],
+          ['Ao5', formatAverage(sessionStats.ao5)],
         ]}
       />
     </div>

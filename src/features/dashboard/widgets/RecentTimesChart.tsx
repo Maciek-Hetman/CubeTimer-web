@@ -7,10 +7,10 @@ import { formatDuration } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 
 export function RecentTimesChart() {
-  const { solves } = useApp()
+  const { recentSolves } = useApp()
   const data = useMemo(
     () =>
-      solves
+      recentSolves
         .slice(0, 20)
         .toReversed()
         .map((solve, index) => ({
@@ -19,7 +19,7 @@ export function RecentTimesChart() {
           label: solve.id,
         }))
         .filter((point) => point.ms !== null),
-    [solves],
+    [recentSolves],
   )
 
   if (data.length === 0) {

@@ -81,8 +81,10 @@ export function standardDeviation(solves: Solve[]): number | null {
   return Math.sqrt(variance)
 }
 
-function averageWindow(window: Solve[], n: number): number | null {
-  const values = window.map((solve) => effectiveTimeMs(solve))
+export function averageFromValues(values: Array<number | null>, n: number): number | null {
+  if (n <= 0 || values.length < n) {
+    return null
+  }
   const dnfCount = values.filter((value) => value === null).length
   if (n < 3) {
     const valid = values.filter((value): value is number => value !== null)
@@ -113,4 +115,11 @@ function averageWindow(window: Solve[], n: number): number | null {
   }
   const numbers = trimmed as number[]
   return numbers.reduce((sum, value) => sum + value, 0) / numbers.length
+}
+
+function averageWindow(window: Solve[], n: number): number | null {
+  return averageFromValues(
+    window.map((solve) => effectiveTimeMs(solve)),
+    n,
+  )
 }

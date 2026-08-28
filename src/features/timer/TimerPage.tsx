@@ -3,13 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
 import {
   EVENTS,
+  effectiveTimeMs,
   eventLabel,
   type CubeEvent,
+  type Solve,
   type TimerDisplayMode,
   type TimerFont,
   type TimerSize,
 } from '../../domain/models'
-import { averageOfN, bestAverageOfN, bestSingle } from '../../domain/stats/averages'
+import { averageFromValues } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
 import { ListIcon, RefreshIcon } from '../../ui/NavIcons'
@@ -90,7 +92,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const {
     settings,
     setEvent,
-    solves,
+    recentSolves,
+    solveStats,
     saveSolve,
     scramble,
     scrambleState,
@@ -142,10 +145,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       }
       const durationMs = current.finishedMs
 
-      const prevSingle = bestSingle(solves)
-      const prevAo5 = bestAverageOfN(solves, 5)
-      const prevAo12 = bestAverageOfN(solves, 12)
-      const prevAo25 = bestAverageOfN(solves, 25)
+      const prevSingle = solveStats.best
+      const prevAo5 = solveStats.bestAo5
+      const prevAo12 = solveStats.bestAo12
+      const prevAo25 = solveStats.bestAo25
 
       const savedSolve = await saveSolve({
         durationMs,
@@ -153,11 +156,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         scramble: scramble || '—',
       })
 
-      const newSolves = [savedSolve, ...solves]
-      const newSingle = bestSingle(newSolves)
-      const currentAo5 = averageOfN(newSolves, 5)
-      const currentAo12 = averageOfN(newSolves, 12)
-      const currentAo25 = averageOfN(newSolves, 25)
+      const newSingle = bestWithNew(prevSingle, savedSolve)
+      const currentAo5 = bestWindowWithNew(prevAo5, recentSolves, savedSolve, 5)
+      const currentAo12 = bestWindowWithNew(prevAo12, recentSolves, savedSolve, 12)
+      const currentAo25 = bestWindowWithNew(prevAo25, recentSolves, savedSolve, 25)
 
       const broken: string[] = []
       if (prevSingle !== null && newSingle !== null && newSingle < prevSingle) {
@@ -190,7 +192,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
       await loadScramble()
     },
-    [loadScramble, saveSolve, scramble, solves, settings.accentColor],
+    [loadScramble, recentSolves, saveSolve, scramble, solveStats, settings.accentColor],
   )
 
   useEffect(() => {
@@ -283,9 +285,9 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     }
   }, [variant])
 
-  const ao5 = useMemo(() => averageOfN(solves, 5), [solves])
-  const ao12 = useMemo(() => averageOfN(solves, 12), [solves])
-  const recent = solves.slice(0, 5)
+  const ao5 = useMemo(() => solveStats.ao5, [solveStats])
+  const ao12 = useMemo(() => solveStats.ao12, [solveStats])
+  const recent = recentSolves.slice(0, 5)
   const hideScramble = settings.hideScrambleDuringSolve && isSolvingOrPreparing
 
   useEffect(() => {
@@ -471,6 +473,31 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       {notice ? <Toast>{notice}</Toast> : null}
     </div>
   )
+}
+
+function bestWithNew(prev: number | null, solve: Solve): number | null {
+  const effective = effectiveTimeMs(solve)
+  if (effective === null) {
+    return prev
+  }
+  return prev === null ? effective : Math.min(prev, effective)
+}
+
+function bestWindowWithNew(
+  prevBest: number | null,
+  latest: Solve[],
+  newest: Solve,
+  n: number,
+): number | null {
+  const window = [newest, ...latest.slice(0, n - 1)].map(effectiveTimeMs)
+  const current = averageFromValues(window, n)
+  if (prevBest === null) {
+    return current
+  }
+  if (current === null) {
+    return prevBest
+  }
+  return Math.min(prevBest, current)
 }
 
 function TimeDigits({ ms, mode, isRunning }: { ms: number; mode: TimerDisplayMode; isRunning: boolean }) {

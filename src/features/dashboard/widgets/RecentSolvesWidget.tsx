@@ -8,9 +8,9 @@ import { Dialog } from '../../../ui/Dialog'
 import { EmptyState } from '../../../ui/EmptyState'
 
 export function RecentSolvesWidget() {
-  const { solves, updateSolvePenalty, deleteSolve } = useApp()
+  const { recentSolves, solveStats, updateSolvePenalty, deleteSolve } = useApp()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
-  const recent = solves.slice(0, 10)
+  const recent = recentSolves.slice(0, 10)
 
   const recentTimes = recent.map((solve) => effectiveTimeMs(solve) ?? Infinity)
   const minTime = recent.length > 1 ? Math.min(...recentTimes) : Infinity
@@ -39,7 +39,7 @@ export function RecentSolvesWidget() {
 
           return (
             <li key={solve.id} className="recent-solve-row">
-              <span className="recent-solve-number">#{solves.length - index}</span>
+              <span className="recent-solve-number">#{solveStats.count - index}</span>
               <span className={`recent-solve-time ${isBest ? 'best' : ''} ${isWorst ? 'worst' : ''}`.trim()}>
                 {formatSolveTime(solve)}
               </span>
@@ -49,7 +49,7 @@ export function RecentSolvesWidget() {
                   variant="ghost"
                   className={solve.penalty === 'plus_two' ? 'active' : ''}
                   aria-pressed={solve.penalty === 'plus_two'}
-                  aria-label={`Toggle +2 for solve ${solves.length - index}`}
+                  aria-label={`Toggle +2 for solve ${solveStats.count - index}`}
                   onClick={() =>
                     void updateSolvePenalty(solve.id, solve.penalty === 'plus_two' ? 'none' : 'plus_two')
                   }
@@ -61,7 +61,7 @@ export function RecentSolvesWidget() {
                   variant="ghost"
                   className={solve.penalty === 'dnf' ? 'active' : ''}
                   aria-pressed={solve.penalty === 'dnf'}
-                  aria-label={`Toggle DNF for solve ${solves.length - index}`}
+                  aria-label={`Toggle DNF for solve ${solveStats.count - index}`}
                   onClick={() =>
                     void updateSolvePenalty(solve.id, solve.penalty === 'dnf' ? 'none' : 'dnf')
                   }
@@ -72,7 +72,7 @@ export function RecentSolvesWidget() {
                   type="button"
                   variant="ghost"
                   className="delete"
-                  aria-label={`Delete solve ${solves.length - index}`}
+                  aria-label={`Delete solve ${solveStats.count - index}`}
                   onClick={() => setPendingDelete(solve.id)}
                 >
                   <svg

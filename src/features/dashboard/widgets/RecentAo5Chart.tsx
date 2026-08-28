@@ -7,16 +7,16 @@ import { formatDuration } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 
 export function RecentAo5Chart() {
-  const { solves } = useApp()
+  const { recentSolves } = useApp()
   const data = useMemo(() => {
     const points = []
     for (let i = 0; i < 20; i++) {
-      if (i + 4 >= solves.length) break
-      const ao5 = averageOfN(solves.slice(i, i + 5), 5)
+      if (i + 4 >= recentSolves.length) break
+      const ao5 = averageOfN(recentSolves.slice(i, i + 5), 5)
       if (ao5 !== null) {
         points.push({
           ms: ao5,
-          label: solves[i].id,
+          label: recentSolves[i].id,
         })
       }
     }
@@ -24,7 +24,7 @@ export function RecentAo5Chart() {
       ...point,
       index: index + 1,
     }))
-  }, [solves])
+  }, [recentSolves])
 
   if (data.length === 0) {
     return (

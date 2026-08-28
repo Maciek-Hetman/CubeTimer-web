@@ -75,6 +75,9 @@ export default defineConfig({
   build: {
     modulePreload: false,
     assetsInlineLimit: 0,
+    // cubing/twisty ships a large 3D chunk and WASM binary that are lazily loaded
+    // only by the desktop scramble preview and therefore not on the initial path.
+    chunkSizeWarningLimit: 800,
   },
   server: {
     port: 43210,

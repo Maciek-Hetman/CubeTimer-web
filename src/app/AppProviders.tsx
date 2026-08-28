@@ -19,12 +19,22 @@ import {
   newSession,
   putSession,
 } from '../data/repositories/sessions'
-import { listSolves, newSolve, putSolve } from '../data/repositories/solves'
+import {
+  latestSolveInSession,
+  newSolve,
+  putSolve,
+  recentSolves,
+  RECENT_SOLVES_LIMIT,
+} from '../data/repositories/solves'
+import {
+  computeSolveStats,
+  EMPTY_SOLVE_STATS,
+  type SolveStats,
+} from '../data/repositories/solveStats'
 import { DEFAULT_SETTINGS, nowIso, type AppSettings, type CubeEvent, type CubeSession, type Penalty, type Solve } from '../domain/models'
 import {
   automaticSessionName,
   findOpenAutomaticSession,
-  latestSolveInSession,
   shouldReuseAutomaticSession,
 } from '../domain/sessions/automaticSessions'
 import { adoptGuestData } from '../sync/guestMerge'
@@ -52,7 +62,8 @@ export interface AppContextValue {
   syncStatus: SyncStatus
   pendingMutations: number
   sessions: CubeSession[]
-  solves: Solve[]
+  recentSolves: Solve[]
+  solveStats: SolveStats
   currentSession: CubeSession | null
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
   setEvent: (event: CubeEvent) => Promise<void>
@@ -205,11 +216,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
   )
   const sessions = sessionsQuery ?? EMPTY_SESSIONS
 
-  const solvesQuery = useLiveQuery(
-    async () => (ownerId ? listSolves(ownerId, settings.event) : EMPTY_SOLVES),
+  const recentSolvesListQuery = useLiveQuery(
+    async () =>
+      ownerId
+        ? recentSolves(ownerId, settings.event, RECENT_SOLVES_LIMIT)
+        : EMPTY_SOLVES,
     [ownerId, settings.event],
   )
-  const solves = solvesQuery ?? EMPTY_SOLVES
+  const recentSolvesList = recentSolvesListQuery ?? EMPTY_SOLVES
+
+  const solveStatsQuery = useLiveQuery(
+    async () => (ownerId ? computeSolveStats(ownerId, settings.event) : EMPTY_SOLVE_STATS),
+    [ownerId, settings.event],
+  )
+  const solveStats = solveStatsQuery ?? EMPTY_SOLVE_STATS
 
   const pendingMutations =
     useLiveQuery(async () => (ownerId ? db.outbox.where('ownerId').equals(ownerId).count() : 0), [ownerId]) ?? 0
@@ -448,12 +468,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
       const now = Date.now()
       let sessionId = current.currentSessionIds[current.event] ?? null
       if (current.sessionMode === 'automatic') {
-        const [allSessions, allSolves] = await Promise.all([
-          listSessions(ownerId, current.event),
-          listSolves(ownerId, current.event),
-        ])
+        const allSessions = await listSessions(ownerId, current.event)
         const open = findOpenAutomaticSession(allSessions, current.event)
-        const last = open ? latestSolveInSession(allSolves, open.id) : undefined
+        const last = open ? await latestSolveInSession(ownerId, open.id) : undefined
         const reuse = shouldReuseAutomaticSession({
           session: open,
           lastSolve: last,
@@ -702,7 +719,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       syncStatus: pendingMutations > 0 && syncStatus === 'idle' ? 'pending' : syncStatus,
       pendingMutations,
       sessions,
-      solves,
+      recentSolves: recentSolvesList,
+      solveStats,
       currentSession,
       isAdmin: user?.user_role === 'admin',
       updateSettings,
@@ -749,7 +767,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       sessions,
       setEvent,
       settings,
-      solves,
+      recentSolvesList,
+      solveStats,
       switchSession,
       syncStatus,
       updateSettings,
