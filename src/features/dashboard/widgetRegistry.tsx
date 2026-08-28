@@ -4,6 +4,7 @@ import { RecentSolvesWidget } from './widgets/RecentSolvesWidget'
 import { SessionStatsWidget } from './widgets/SessionStatsWidget'
 import { PersonalBestsWidget } from './widgets/PersonalBestsWidget'
 import { AllTimeStatsWidget } from './widgets/AllTimeStatsWidget'
+import { ScramblePreviewWidget } from './widgets/ScramblePreviewWidget'
 
 const RecentTimesChart = lazy(() =>
   import('./widgets/RecentTimesChart').then((m) => ({ default: m.RecentTimesChart })),
@@ -21,6 +22,7 @@ export const WIDGET_TYPES = [
   'recentSolves',
   'personalBests',
   'allTimeStats',
+  'scramblePreview',
 ] as const
 export type WidgetType = (typeof WIDGET_TYPES)[number]
 
@@ -38,6 +40,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   recentSolves: 'Recent solves',
   personalBests: 'Personal bests',
   allTimeStats: 'All time stats',
+  scramblePreview: 'Scramble preview',
 }
 
 export const DEFAULT_WIDGETS: WidgetInstance[] = [
@@ -45,6 +48,7 @@ export const DEFAULT_WIDGETS: WidgetInstance[] = [
   { i: 'averages', type: 'averages', side: 'left' },
   { i: 'sessionStats', type: 'sessionStats', side: 'right' },
   { i: 'recentSolves', type: 'recentSolves', side: 'right' },
+  { i: 'scramblePreview', type: 'scramblePreview', side: 'left' },
 ]
 
 export function renderWidget(type: WidgetType) {
@@ -71,5 +75,7 @@ export function renderWidget(type: WidgetType) {
       return <PersonalBestsWidget />
     case 'allTimeStats':
       return <AllTimeStatsWidget />
+    case 'scramblePreview':
+      return <ScramblePreviewWidget />
   }
 }
