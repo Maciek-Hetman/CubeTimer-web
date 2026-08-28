@@ -177,10 +177,12 @@ export function SettingsPage() {
             onChange={(val) => void updateSettings({ timerFont: val as TimerFont })}
             options={[
               { value: 'jetbrains', label: 'JetBrains Mono' },
-              { value: 'roboto', label: 'Roboto Mono' },
               { value: 'fira', label: 'Fira Code' },
+              { value: 'digital', label: 'Share Tech Mono' },
+              { value: 'dseg7', label: 'DSEG7 Classic (Digital Clock)' },
               { value: 'inter', label: 'Inter' },
-              { value: 'digital', label: 'Digital (Share Tech Mono)' },
+              { value: 'roboto', label: 'Roboto' },
+              { value: 'open-sans', label: 'Open Sans' },
               { value: 'system', label: 'System Monospace' }
             ]}
           />

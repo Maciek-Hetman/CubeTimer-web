@@ -4,8 +4,10 @@ const EAGER_FONTS: ReadonlySet<TimerFont> = new Set(['jetbrains', 'inter', 'syst
 
 const LOADERS: Partial<Record<TimerFont, () => Promise<unknown>>> = {
   fira: () => import('@fontsource-variable/fira-code/wght.css'),
-  roboto: () => import('@fontsource-variable/roboto-mono/wght.css'),
   digital: () => import('@fontsource/share-tech-mono/400.css'),
+  dseg7: () => import('@fontsource/dseg7-classic/400.css'),
+  roboto: () => import('@fontsource-variable/roboto/wght.css'),
+  'open-sans': () => import('@fontsource-variable/open-sans/wght.css'),
 }
 
 const pending = new Map<string, Promise<unknown>>()

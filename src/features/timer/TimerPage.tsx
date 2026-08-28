@@ -57,7 +57,7 @@ function isSystemKey(event: KeyboardEvent): boolean {
 }
 
 function getFontFamily(font?: TimerFont): string | undefined {
-  return font ? TIMER_FONT_FAMILIES[font] : undefined
+  return font && TIMER_FONT_FAMILIES[font] ? TIMER_FONT_FAMILIES[font] : undefined
 }
 
 function getSizeStyles(size?: TimerSize, isDesktop = false): string | undefined {
@@ -66,10 +66,12 @@ function getSizeStyles(size?: TimerSize, isDesktop = false): string | undefined 
 
 const TIMER_FONT_FAMILIES: Record<TimerFont, string> = {
   jetbrains: "'JetBrains Mono Variable', var(--mono)",
-  roboto: "'Roboto Mono Variable', var(--mono)",
   fira: "'Fira Code Variable', var(--mono)",
-  inter: 'var(--font)',
   digital: "'Share Tech Mono', var(--mono)",
+  dseg7: "'DSEG7 Classic', var(--mono)",
+  inter: 'var(--font)',
+  roboto: "'Roboto Variable', var(--font)",
+  'open-sans': "'Open Sans Variable', var(--font)",
   system: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
 }
 

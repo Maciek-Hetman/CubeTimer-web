@@ -12,7 +12,7 @@ export type SessionMode = SessionKind
 export const TIMER_DISPLAY_MODES = ['show', 'hide_decimals', 'hide'] as const
 export type TimerDisplayMode = (typeof TIMER_DISPLAY_MODES)[number]
 
-export const TIMER_FONTS = ['jetbrains', 'roboto', 'fira', 'inter', 'digital', 'system'] as const
+export const TIMER_FONTS = ['jetbrains', 'fira', 'digital', 'dseg7', 'inter', 'roboto', 'open-sans', 'system'] as const
 export type TimerFont = (typeof TIMER_FONTS)[number]
 
 export const TIMER_SIZES = ['small', 'medium', 'large', 'xlarge'] as const
