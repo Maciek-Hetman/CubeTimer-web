@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../../app/AppProviders'
 import type { AppSettings, SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
+import { WIDGET_SCALE_MAX, WIDGET_SCALE_MIN, WIDGET_SCALE_PRESETS, WIDGET_SCALE_STEP } from '../../domain/models'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
@@ -138,6 +139,32 @@ export function SettingsPage() {
             checked={settings.hideWidgetsDuringSolve}
             onChange={(checked) => void updateSettings({ hideWidgetsDuringSolve: checked })}
           />
+        )}
+        {(settings.enableWidgets ?? true) && (
+          <>
+            <Field label={`Widget scale (${settings.widgetScale}%)`}>
+              <input
+                type="range"
+                min={WIDGET_SCALE_MIN}
+                max={WIDGET_SCALE_MAX}
+                step={WIDGET_SCALE_STEP}
+                value={settings.widgetScale}
+                onChange={(event) => void updateSettings({ widgetScale: Number(event.target.value) })}
+              />
+            </Field>
+            <div className="row wrap">
+              {WIDGET_SCALE_PRESETS.map((preset) => (
+                <Button
+                  key={preset.id}
+                  type="button"
+                  variant={settings.widgetScale === preset.value ? 'primary' : 'ghost'}
+                  onClick={() => void updateSettings({ widgetScale: preset.value })}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </>
         )}
       </Panel>
 

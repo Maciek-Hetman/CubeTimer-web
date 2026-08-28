@@ -18,6 +18,17 @@ export type TimerFont = (typeof TIMER_FONTS)[number]
 export const TIMER_SIZES = ['small', 'medium', 'large', 'xlarge'] as const
 export type TimerSize = (typeof TIMER_SIZES)[number]
 
+export const WIDGET_SCALE_MIN = 80
+export const WIDGET_SCALE_MAX = 120
+export const WIDGET_SCALE_STEP = 5
+
+export const WIDGET_SCALE_PRESETS = [
+  { id: 'compact', label: 'Compact', value: 85 },
+  { id: 'normal', label: 'Normal', value: 100 },
+  { id: 'large', label: 'Large', value: 115 },
+] as const
+export type WidgetScalePreset = (typeof WIDGET_SCALE_PRESETS)[number]['id']
+
 export interface CubeSession {
   id: string
   ownerId: string
@@ -97,6 +108,7 @@ export interface AppSettings {
   timerFont: TimerFont
   timerSize: TimerSize
   timerColor: string
+  widgetScale: number
 }
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
@@ -118,6 +130,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   timerFont: 'jetbrains',
   timerSize: 'medium',
   timerColor: '',
+  widgetScale: 100,
 }
 
 export function createId(): string {

@@ -250,9 +250,11 @@ function WidgetColumn({
 }) {
   const widgets = useMemo(() => store.widgets.filter((widget) => widget.side === side), [side, store.widgets])
   const available = WIDGET_TYPES.filter((type) => !store.widgets.some((widget) => widget.type === type))
+  const { settings } = useApp()
+  const scale = settings.widgetScale / 100
 
   return (
-    <aside className="widget-column" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <aside className="widget-column" style={{ display: 'flex', flexDirection: 'column', gap: '16px', zoom: scale }}>
       {editing ? (
         <Field label="Add widget">
           <Select
