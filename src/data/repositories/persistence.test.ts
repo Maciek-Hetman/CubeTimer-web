@@ -174,7 +174,7 @@ describe('sync outcomes', () => {
       [],
       1,
     )
-    expect(conflicts).toBe(1)
+    expect(conflicts).toEqual({ conflicts: 1, rejected: 0 })
     expect((await db.sessions.get(session.id))?.name).toBe('Server name')
     expect((await db.conflicts.toArray())[0]?.local).toBeTruthy()
   })
@@ -210,20 +210,60 @@ describe('sync outcomes', () => {
     expect(pending[0]?.baseVersion).toBe(1)
   })
 
-  it('keeps rejected mutations pending instead of marking them synced', async () => {
+  it('records rejected mutations and removes them from the outbox', async () => {
     const session = newSession({ ownerId: 'account-1', name: 'Local', event: '3x3', kind: 'manual' })
     await putSession(session, { enqueue: true, baseVersion: 0 })
     const mutation = (await listOutbox('account-1'))[0]
     expect(mutation).toBeTruthy()
 
-    await applySyncResponse(
+    const result = await applySyncResponse(
       'account-1',
       [mutation!],
-      [{ mutation_id: mutation!.id, status: 'rejected', message: 'Invalid session' }],
+      [{ mutation_id: mutation!.id, status: 'rejected', code: 'invalid_session', message: 'Invalid session' }],
       [],
       0,
     )
 
-    expect(await db.outbox.get(mutation!.id)).toBeTruthy()
+    expect(result.rejected).toBe(1)
+    expect(await db.outbox.get(mutation!.id)).toBeUndefined()
+    const rejection = await db.rejections.get(mutation!.id)
+    expect(rejection).toMatchObject({
+      ownerId: 'account-1',
+      entity: 'session',
+      entityId: session.id,
+      code: 'invalid_session',
+      message: 'Invalid session',
+    })
+  })
+
+  it('keeps the local edit pending when an in-flight mutation is rejected', async () => {
+    const session = newSession({ ownerId: 'account-1', name: 'Local', event: '3x3', kind: 'manual' })
+    await putSession(session, { enqueue: false, baseVersion: 0 })
+    const sent: MutationRecord = {
+      id: '44444444-4444-4444-4444-444444444444',
+      ownerId: 'account-1',
+      entity: 'session',
+      entityId: session.id,
+      operation: 'upsert',
+      baseVersion: 0,
+      data: toSessionInput(session),
+      createdAt: new Date().toISOString(),
+    }
+    await db.outbox.put(sent)
+
+    await putSession({ ...session, name: 'Edited while syncing' }, { enqueue: true, baseVersion: 0 })
+    const result = await applySyncResponse(
+      'account-1',
+      [sent],
+      [{ mutation_id: sent.id, status: 'rejected', message: 'Invalid session' }],
+      [],
+      0,
+    )
+
+    expect(result.rejected).toBe(0)
+    expect(await db.rejections.get(sent.id)).toBeUndefined()
+    const pending = await listOutbox('account-1')
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.id).not.toBe(sent.id)
   })
 })

@@ -36,13 +36,15 @@ export async function getLastSyncedAt(ownerId: string): Promise<string | null> {
 export async function runSync(options: SyncEngineOptions): Promise<{
   status: SyncStatus
   conflicts: number
+  rejected: number
 }> {
   if (!navigator.onLine) {
-    return { status: 'offline', conflicts: 0 }
+    return { status: 'offline', conflicts: 0, rejected: 0 }
   }
   let accessToken = options.accessToken
   let hasMore = true
   let conflicts = 0
+  let rejected = 0
   let loops = 0
   let refreshedForRequest = false
   while (hasMore && loops < 50) {
@@ -66,18 +68,16 @@ export async function runSync(options: SyncEngineOptions): Promise<{
       throw error
     }
     refreshedForRequest = false
-    conflicts += await applySyncResponse(options.ownerId, mutations, response.outcomes, response.changes, response.next_cursor)
-    const rejected = response.outcomes.find((outcome) => outcome.status === 'rejected')
-    if (rejected) {
-      throw new ApiError(400, rejected.code ?? 'mutation_rejected', rejected.message ?? 'A local change was rejected')
-    }
+    const applied = await applySyncResponse(options.ownerId, mutations, response.outcomes, response.changes, response.next_cursor)
+    conflicts += applied.conflicts
+    rejected += applied.rejected
     hasMore = response.has_more || (await listOutbox(options.ownerId)).length > 0
     if (!response.has_more && mutations.length === 0) {
       break
     }
   }
   await db.meta.put({ key: lastSyncKey(options.ownerId), value: nowIso() })
-  return { status: conflicts > 0 ? 'conflict' : hasMore ? 'pending' : 'idle', conflicts }
+  return { status: conflicts > 0 ? 'conflict' : hasMore ? 'pending' : 'idle', conflicts, rejected }
 }
 
 export async function applySyncResponse(
@@ -86,7 +86,7 @@ export async function applySyncResponse(
   outcomes: MutationOutcome[],
   changes: Change[],
   nextCursor: number,
-): Promise<number> {
+): Promise<{ conflicts: number; rejected: number }> {
   const sentById = new Map(sent.map((record) => [record.id, record]))
   const latestSentByEntity = new Map<string, MutationRecord>()
   for (const record of sent) {
@@ -97,8 +97,12 @@ export async function applySyncResponse(
     }
   }
   let conflicts = 0
-  await db.transaction('rw', db.sessions, db.solves, db.outbox, db.conflicts, db.meta, async () => {
-    const acceptedIds: string[] = []
+  let rejected = 0
+  await db.transaction(
+    'rw',
+    [db.sessions, db.solves, db.outbox, db.conflicts, db.rejections, db.meta],
+    async () => {
+    const removedIds: string[] = []
     for (const outcome of outcomes) {
       const local = sentById.get(outcome.mutation_id)
       if (!local) {
@@ -107,7 +111,7 @@ export async function applySyncResponse(
       const pending = await db.outbox.get(local.id)
       const changedWhileSending = pending !== undefined && !sameMutation(pending, local)
       if (outcome.status === 'accepted') {
-        acceptedIds.push(outcome.mutation_id)
+        removedIds.push(outcome.mutation_id)
         if (changedWhileSending && pending) {
           await rebasePendingMutation(pending, outcome.version)
           continue
@@ -138,9 +142,23 @@ export async function applySyncResponse(
       } else if (outcome.status === 'rejected') {
         if (changedWhileSending && pending) {
           await rebasePendingMutation(pending, outcome.version)
+        } else {
+          removedIds.push(outcome.mutation_id)
+          rejected += 1
+          await db.rejections.put({
+            id: outcome.mutation_id,
+            ownerId,
+            entity: local.entity,
+            entityId: local.entityId,
+            operation: local.operation,
+            code: outcome.code,
+            message: outcome.message,
+            data: local.data,
+            createdAt: nowIso(),
+          })
         }
       } else if (outcome.status === 'conflict' && outcome.current) {
-        acceptedIds.push(outcome.mutation_id)
+        removedIds.push(outcome.mutation_id)
         conflicts += 1
         const current = mapChangeData(ownerId, local.entity, outcome.current)
         const previous =
@@ -164,15 +182,15 @@ export async function applySyncResponse(
         })
       }
     }
-    if (acceptedIds.length > 0) {
-      await removeOutbox(acceptedIds)
+    if (removedIds.length > 0) {
+      await removeOutbox(removedIds)
     }
     for (const change of changes) {
       await applyChange(ownerId, change)
     }
     await db.meta.put({ key: cursorKey(ownerId), value: nextCursor })
   })
-  return conflicts
+  return { conflicts, rejected }
 }
 
 export function toApiMutation(record: MutationRecord): Mutation {

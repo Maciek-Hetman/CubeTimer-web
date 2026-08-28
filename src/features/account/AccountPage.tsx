@@ -38,6 +38,8 @@ export function AccountPage() {
     syncStatus,
     pendingMutations,
     conflicts,
+    rejectedCount,
+    dismissAllRejected,
     lastSyncedAt,
     deviceName,
     deviceId,
@@ -225,6 +227,10 @@ export function AccountPage() {
                 <dd>{conflicts}</dd>
               </div>
               <div>
+                <dt>Rejected changes</dt>
+                <dd>{rejectedCount}</dd>
+              </div>
+              <div>
                 <dt>Last synced</dt>
                 <dd>{lastSyncedAt ? timeAgo(lastSyncedAt, now) : 'Never'}</dd>
               </div>
@@ -241,6 +247,24 @@ export function AccountPage() {
                 <dd>{getApiBaseUrl()}</dd>
               </div>
             </dl>
+            {rejectedCount > 0 ? (
+              <div className="stack">
+                <Alert tone="error">
+                  <strong>
+                    {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} could not be synced
+                  </strong>
+                  <p className="muted" style={{ margin: '6px 0 10px' }}>
+                    The server refused these changes, so they were kept locally and removed from the sync
+                    queue. Dismiss them to clear this notice.
+                  </p>
+                  <div className="row wrap">
+                    <Button type="button" variant="ghost" onClick={() => void dismissAllRejected()}>
+                      Dismiss all
+                    </Button>
+                  </div>
+                </Alert>
+              </div>
+            ) : null}
             <div className="row wrap">
               <Button type="button" variant="ghost" loading={serverStatus === 'checking'} onClick={() => void checkServer()}>
                 Check server

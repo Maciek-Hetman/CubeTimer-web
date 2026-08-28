@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   syncStatus: 'idle' as string,
   authenticatedRequest: vi.fn(),
   deleteAccount: vi.fn(),
+  rejectedCount: 0 as number,
+  dismissAllRejected: vi.fn(),
 }))
 
 vi.mock('../../app/AppProviders', () => ({
@@ -22,6 +24,8 @@ vi.mock('../../app/AppProviders', () => ({
     syncStatus: mocks.syncStatus,
     pendingMutations: 3,
     conflicts: 1,
+    rejectedCount: mocks.rejectedCount,
+    dismissAllRejected: mocks.dismissAllRejected,
     lastSyncedAt: null,
     deviceName: 'Test Device',
     deviceId: 'dev-1',
@@ -48,12 +52,14 @@ describe('AccountPage', () => {
   beforeEach(() => {
     mocks.user = signedIn
     mocks.syncStatus = 'idle'
+    mocks.rejectedCount = 0
   })
 
   afterEach(() => {
     cleanup()
     mocks.authenticatedRequest.mockReset()
     mocks.deleteAccount.mockReset()
+    mocks.dismissAllRejected.mockReset()
     vi.unstubAllGlobals()
   })
 
@@ -131,6 +137,18 @@ describe('AccountPage', () => {
 
     expect(await screen.findByText('Server reachable')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43781/health/live')
+  })
+
+  it('shows rejected changes and dismisses them', async () => {
+    const user = userEvent.setup()
+    mocks.rejectedCount = 2
+    renderPage()
+
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText(/2 rejected changes could not be synced/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss all' }))
+    expect(mocks.dismissAllRejected).toHaveBeenCalled()
   })
 
   it('hides account management panels for guests', () => {

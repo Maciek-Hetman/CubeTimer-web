@@ -88,6 +88,8 @@ export interface AppContextValue {
   resolveConflictKeepServer: (conflictId: string) => Promise<void>
   resolveConflictKeepLocal: (conflictId: string) => Promise<void>
   conflicts: number
+  rejectedCount: number
+  dismissAllRejected: () => Promise<void>
   lastSyncedAt: string | null
   deviceName: string | null
   deviceId: string | null
@@ -244,6 +246,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const conflictCount =
     useLiveQuery(async () => (ownerId ? db.conflicts.where('ownerId').equals(ownerId).count() : 0), [ownerId]) ?? 0
+
+  const rejectedCount =
+    useLiveQuery(async () => (ownerId ? db.rejections.where('ownerId').equals(ownerId).count() : 0), [ownerId]) ?? 0
 
   const deviceId =
     useLiveQuery(async () => (ownerId ? getStoredDeviceId() : null), [ownerId]) ?? null
@@ -700,12 +705,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
     await authApi.deleteAccount(authenticatedRequest)
     await db.transaction(
       'rw',
-      [db.solves, db.sessions, db.outbox, db.settings, db.conflicts, db.widgetLayouts, db.meta] as Table[],
+      [db.solves, db.sessions, db.outbox, db.settings, db.conflicts, db.rejections, db.widgetLayouts, db.meta] as Table[],
       async () => {
         await db.solves.where('ownerId').equals(ownerId).delete()
         await db.sessions.where('ownerId').equals(ownerId).delete()
         await db.outbox.where('ownerId').equals(ownerId).delete()
         await db.conflicts.where('ownerId').equals(ownerId).delete()
+        await db.rejections.where('ownerId').equals(ownerId).delete()
         await db.settings.delete(ownerId)
         await db.widgetLayouts.delete(ownerId)
         await db.meta.bulkDelete([`cursor:${ownerId}`, lastSyncKey(ownerId)])
@@ -743,13 +749,22 @@ export function AppProviders({ children }: { children: ReactNode }) {
     [requestSync],
   )
 
+  const dismissAllRejected = useCallback(async () => {
+    await db.rejections.where('ownerId').equals(ownerId).delete()
+  }, [ownerId])
+
   const value = useMemo<AppContextValue>(
     () => ({
       ready,
       ownerId,
       user,
       settings,
-      syncStatus: pendingMutations > 0 && syncStatus === 'idle' ? 'pending' : syncStatus,
+      syncStatus:
+        pendingMutations > 0 && syncStatus === 'idle'
+          ? 'pending'
+          : conflictCount === 0 && syncStatus === 'conflict'
+            ? 'idle'
+            : syncStatus,
       pendingMutations,
       sessions,
       recentSolves: recentSolvesList,
@@ -775,6 +790,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       resolveConflictKeepServer,
       resolveConflictKeepLocal,
       conflicts: conflictCount,
+      rejectedCount,
+      dismissAllRejected,
       lastSyncedAt,
       deviceName,
       deviceId,
@@ -814,6 +831,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       updateSolvePenalty,
       user,
       conflictCount,
+      rejectedCount,
+      dismissAllRejected,
       lastSyncedAt,
       deviceName,
       deviceId,

@@ -29,6 +29,18 @@ export interface ConflictRecord {
   createdAt: string
 }
 
+export interface RejectedRecord {
+  id: string
+  ownerId: string
+  entity: 'session' | 'solve'
+  entityId: string
+  operation: 'upsert' | 'delete'
+  code?: string
+  message?: string
+  data?: unknown
+  createdAt: string
+}
+
 export class CubeTimerDB extends Dexie {
   solves!: Table<Solve, string>
   sessions!: Table<CubeSession, string>
@@ -37,6 +49,7 @@ export class CubeTimerDB extends Dexie {
   meta!: Table<MetaRecord, string>
   widgetLayouts!: Table<WidgetLayoutRecord, string>
   conflicts!: Table<ConflictRecord, string>
+  rejections!: Table<RejectedRecord, string>
 
   constructor() {
     super('cubetimer')
@@ -58,6 +71,17 @@ export class CubeTimerDB extends Dexie {
       meta: 'key',
       widgetLayouts: 'ownerId',
       conflicts: 'id, ownerId, entityId',
+    })
+    this.version(3).stores({
+      solves:
+        'id, ownerId, sessionId, event, solvedAt, [ownerId+event], [ownerId+sessionId], [ownerId+event+solvedAt], [ownerId+sessionId+solvedAt]',
+      sessions: 'id, ownerId, event, kind, startedAt, [ownerId+event]',
+      outbox: 'id, ownerId, entity, entityId, createdAt',
+      settings: 'ownerId',
+      meta: 'key',
+      widgetLayouts: 'ownerId',
+      conflicts: 'id, ownerId, entityId',
+      rejections: 'id, ownerId, entityId, createdAt',
     })
   }
 }
