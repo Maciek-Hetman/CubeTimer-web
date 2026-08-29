@@ -18,7 +18,6 @@ export function SessionStatsWidget() {
     return (
       <EmptyState
         title="No session"
-        description="No current session."
         action={
           <Link className="btn primary" to="/">
             Open timer
@@ -32,7 +31,6 @@ export function SessionStatsWidget() {
     return (
       <EmptyState
         title={currentSession.name}
-        description="No times in this session yet."
         action={
           <Link className="btn primary" to="/">
             Open timer

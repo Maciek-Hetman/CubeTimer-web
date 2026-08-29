@@ -11,7 +11,6 @@ export function PersonalBestsWidget() {
     return (
       <EmptyState
         title="No personal bests"
-        description="Save some solves to see your records."
         action={
           <Link className="btn primary" to="/">
             Open timer

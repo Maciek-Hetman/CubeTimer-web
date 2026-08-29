@@ -11,7 +11,6 @@ export function CurrentAveragesWidget() {
     return (
       <EmptyState
         title="No stats yet"
-        description="Start solving to build your stats."
         action={
           <Link className="btn primary" to="/">
             Open timer

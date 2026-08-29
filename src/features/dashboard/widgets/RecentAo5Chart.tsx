@@ -30,7 +30,6 @@ export function RecentAo5Chart() {
     return (
       <EmptyState
         title="No Ao5s yet"
-        description="Complete 5 solves to see your Ao5 trend."
         action={
           <Link className="btn primary" to="/">
             Open timer

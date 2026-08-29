@@ -129,7 +129,7 @@ export function AccountPage() {
 
   return (
     <div className="stack narrow-page">
-      <PageHeader title="Account" subtitle="Manage your account details and authentication" />
+      <PageHeader title="Account" />
 
       <Panel className="stack">
         <h2>Profile</h2>
@@ -155,11 +155,7 @@ export function AccountPage() {
             </Button>
           </>
         ) : (
-          <>
-            <p className="muted" style={{ margin: 0 }}>
-              Times are stored on this device until you sign in.
-            </p>
-            <div className="row wrap">
+          <div className="row wrap">
               <Link className="btn primary" to="/login">
                 Sign in
               </Link>
@@ -167,7 +163,6 @@ export function AccountPage() {
                 Create account
               </Link>
             </div>
-          </>
         )}
       </Panel>
 
@@ -175,9 +170,6 @@ export function AccountPage() {
         <>
           <Panel className="stack">
             <h2>Password</h2>
-            <p className="muted" style={{ margin: 0 }}>
-              Update the password used to sign in to this account.
-            </p>
             <form className="stack" onSubmit={(event) => void submitPassword(event)}>
               {passwordError ? <Alert tone="error">{passwordError}</Alert> : null}
               {passwordMessage ? <Alert tone="success" role="status">{passwordMessage}</Alert> : null}
@@ -254,8 +246,7 @@ export function AccountPage() {
                     {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} could not be synced
                   </strong>
                   <p className="muted" style={{ margin: '6px 0 10px' }}>
-                    The server refused these changes, so they were kept locally and removed from the sync
-                    queue. Dismiss them to clear this notice.
+                    Dismiss to clear.
                   </p>
                   <div className="row wrap">
                     <Button type="button" variant="ghost" onClick={() => void dismissAllRejected()}>

@@ -105,7 +105,6 @@ export function StatsPage() {
       {solveStats.count === 0 ? (
         <EmptyState
           title="No solves yet"
-          description="Time a solve on the timer to start building your history."
           action={
             <Link className="btn primary" to="/">
               Open timer

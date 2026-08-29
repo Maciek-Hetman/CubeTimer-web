@@ -20,7 +20,6 @@ export function RecentSolvesWidget() {
     return (
       <EmptyState
         title="No solves yet"
-        description="Finish a solve on the timer to fill this list."
         action={
           <Link className="btn primary" to="/">
             Open timer

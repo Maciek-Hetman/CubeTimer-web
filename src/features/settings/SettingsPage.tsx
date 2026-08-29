@@ -186,7 +186,7 @@ export function SettingsPage() {
 
   return (
     <div className="stack narrow-page">
-      <PageHeader title="Settings" subtitle="Sessions, timer behavior, and appearance" />
+      <PageHeader title="Settings" />
 
       <Panel className="stack">
         <h2>Sessions</h2>
@@ -217,9 +217,6 @@ export function SettingsPage() {
           />
         </Field>
         {gapInvalid ? <Alert tone="error">Enter a value between 5 and 240 minutes.</Alert> : null}
-        <p className="muted" style={{ margin: 0 }}>
-          Automatic sessions group nearby solves and start a new one after this gap or after logout.
-        </p>
         {settings.sessionMode === 'manual' ? (
           <Button type="button" onClick={() => setSessionOpen(true)}>
             Manage sessions
@@ -367,8 +364,7 @@ export function SettingsPage() {
             )}
           </div>
           <p className="muted" style={{ margin: '4px 0 0' }}>
-            {settings.timerColor ? 'Custom color is set. ' : 'Currently using app accent color. '}
-            Only applies to Idle and Running states.
+            Applies to idle, running, and finished states.
           </p>
         </Field>
       </Panel>

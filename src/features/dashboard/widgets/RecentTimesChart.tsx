@@ -26,7 +26,6 @@ export function RecentTimesChart() {
     return (
       <EmptyState
         title="No times yet"
-        description="Save a solve to see your trend."
         action={
           <Link className="btn primary" to="/">
             Open timer
