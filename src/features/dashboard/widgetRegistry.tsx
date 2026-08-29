@@ -4,6 +4,7 @@ import { RecentSolvesWidget } from './widgets/RecentSolvesWidget'
 import { SessionStatsWidget } from './widgets/SessionStatsWidget'
 import { PersonalBestsWidget } from './widgets/PersonalBestsWidget'
 import { AllTimeStatsWidget } from './widgets/AllTimeStatsWidget'
+import { CurrentAveragesWidget } from './widgets/CurrentAveragesWidget'
 
 const RecentTimesChart = lazy(() =>
   import('./widgets/RecentTimesChart').then((m) => ({ default: m.RecentTimesChart })),
@@ -21,6 +22,7 @@ export const WIDGET_TYPES = [
   'recentTimes',
   'recentAo5',
   'averages',
+  'currentAverages',
   'sessionStats',
   'recentSolves',
   'personalBests',
@@ -39,6 +41,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   recentTimes: 'Recent times',
   recentAo5: 'Recent Ao5s',
   averages: 'Averages',
+  currentAverages: 'Current Ao5/Ao12',
   sessionStats: 'Session stats',
   recentSolves: 'Recent solves',
   personalBests: 'Personal bests',
@@ -70,6 +73,8 @@ export function renderWidget(type: WidgetType) {
       )
     case 'averages':
       return <AveragesWidget />
+    case 'currentAverages':
+      return <CurrentAveragesWidget />
     case 'sessionStats':
       return <SessionStatsWidget />
     case 'recentSolves':
