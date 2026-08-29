@@ -80,15 +80,6 @@ h2 {
   flex-direction: column;
 }
 
-.app-background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100dvh;
-  z-index: -1;
-  pointer-events: none;
-}
 
 .app-header {
   position: sticky;
@@ -512,13 +503,11 @@ h2 {
 }
 
 .field input,
-.field select,
 .field textarea,
 input[type='text'],
 input[type='email'],
 input[type='password'],
-input[type='number'],
-select {
+input[type='number'] {
   border: 0;
   background: var(--surface);
   border-radius: var(--radius-sm);
@@ -535,8 +524,7 @@ select {
 input[type='text']:hover:not(:disabled),
 input[type='email']:hover:not(:disabled),
 input[type='password']:hover:not(:disabled),
-input[type='number']:hover:not(:disabled),
-select:hover:not(:disabled) {
+input[type='number']:hover:not(:disabled) {
   background: var(--surface-muted);
   box-shadow: var(--shadow-md);
 }
@@ -1225,26 +1213,4 @@ input[type='range']::-moz-range-thumb {
   width: 100%;
 }
 
-/* Transparent UI Glassmorphism */
-html[data-transparent-ui="true"] .panel,
-html[data-transparent-ui="true"] .widget-grid-item,
-html[data-transparent-ui="true"] .session-group,
-html[data-transparent-ui="true"] .custom-select-trigger,
-html[data-transparent-ui="true"] .scramble,
-html[data-transparent-ui="true"] .chip,
-html[data-transparent-ui="true"] .timer-toolbar .btn {
-  background: color-mix(in srgb, var(--surface) var(--ui-opacity), transparent) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08) !important;
-}
 
-html[data-transparent-ui="true"] .panel-muted {
-  background: color-mix(in srgb, var(--surface-muted) var(--ui-opacity), transparent);
-}
-
-html[data-transparent-ui="true"] .bottom-nav,
-html[data-transparent-ui="true"] .app-header {
-  background: color-mix(in srgb, var(--surface) var(--ui-opacity), transparent) !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
-}

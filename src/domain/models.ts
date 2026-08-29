@@ -88,14 +88,6 @@ export interface SolveInput {
   event: CubeEvent
 }
 
-export interface SavedTheme {
-  id: string
-  name: string
-  theme: 'light' | 'dark'
-  accentColor: string
-  backgroundPreset: string
-}
-
 export interface AppSettings {
   ownerId: string
   event: CubeEvent
@@ -108,16 +100,11 @@ export interface AppSettings {
   enableWidgets: boolean
   theme: 'system' | 'light' | 'dark'
   accentColor: string
-  uiTransparency: number
-  backgroundType: 'theme' | 'preset' | 'custom'
-  backgroundPreset: string
-  backgroundImageSizing: 'fill' | 'stretch'
+  coloredBackground: boolean
   currentSessionIds: Partial<Record<CubeEvent, string>>
   timerFont: TimerFont
   timerSize: TimerSize
-  timerColor: string
   widgetScale: number
-  customThemes: SavedTheme[]
 }
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
@@ -131,16 +118,11 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   enableWidgets: true,
   theme: 'system',
   accentColor: 'blue',
-  uiTransparency: 100,
-  backgroundType: 'theme',
-  backgroundPreset: '',
-  backgroundImageSizing: 'fill',
+  coloredBackground: false,
   currentSessionIds: {},
   timerFont: 'jetbrains',
   timerSize: 'medium',
-  timerColor: '',
   widgetScale: 100,
-  customThemes: [],
 }
 
 export function createId(): string {

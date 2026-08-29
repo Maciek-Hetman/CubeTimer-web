@@ -13,7 +13,7 @@ import type { Table } from 'dexie'
 import * as authApi from '../api/auth'
 import { apiRequest, type AuthenticatedRequest, type RequestOptions } from '../api/client'
 import { ApiError, type AuthSession, type User } from '../api/types'
-import { db, getOrCreateSettings, getMeta, setMeta } from '../data/db'
+import { db, getOrCreateSettings } from '../data/db'
 import {
   deleteSessionCascade,
   listSessions,
@@ -57,7 +57,7 @@ import {
   saveAuth,
   setCurrentOwnerId,
 } from './profile'
-import { getAccentPalette } from '../styles/accents'
+import { getAccentColor } from '../styles/accents'
 
 export interface AppContextValue {
   ready: boolean
@@ -98,8 +98,6 @@ export interface AppContextValue {
   scramble: string
   scrambleState: 'loading' | 'ready' | 'error'
   loadScramble: () => Promise<void>
-  customBackground: string | null
-  setCustomBackground: (bg: string | null) => Promise<void>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -224,15 +222,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     [ownerId, settingsQuery],
   )
 
-  const customBackground = useLiveQuery(
-    async () => (ownerId ? getMeta<string | null>(`custom_bg_${ownerId}`, null) : null),
-    [ownerId]
-  ) ?? null
-
-  const setCustomBackground = useCallback(async (bg: string | null) => {
-    if (!ownerId) return
-    await setMeta(`custom_bg_${ownerId}`, bg)
-  }, [ownerId])
 
   const sessionsQuery = useLiveQuery(
     async () => (ownerId ? listSessions(ownerId, settings.event) : EMPTY_SESSIONS),
@@ -463,35 +452,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
       root.setAttribute('data-theme', settings.theme)
     }
 
-    const applyThemeColor = () => {
+    const palette = getAccentColor(settings.accentColor || 'blue')
+    root.style.setProperty('--accent-light', palette.light)
+    root.style.setProperty('--accent-dark', palette.dark)
+
+    if (settings.coloredBackground) {
+      root.setAttribute('data-colored-bg', 'true')
+    } else {
+      root.removeAttribute('data-colored-bg')
+    }
+
+    const updateThemeColorMeta = () => {
       const bg = getComputedStyle(root).getPropertyValue('--bg').trim() || '#1d4ed8'
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg)
-      
-      const isDark =
-        settings.theme === 'dark' ||
-        (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-      
-      const palette = getAccentPalette(settings.accentColor || 'blue')
-      const colors = isDark ? palette.dark : palette.light
-      
-      root.style.setProperty('--accent', colors.main)
-      root.style.setProperty('--accent-soft', colors.soft)
-      
-      const opacity = settings.uiTransparency ?? 100
-      root.style.setProperty('--ui-opacity', `${opacity}%`)
-      
-      if (opacity < 100) {
-        root.setAttribute('data-transparent-ui', 'true')
-      } else {
-        root.removeAttribute('data-transparent-ui')
-      }
     }
-    
-    applyThemeColor()
+
+    updateThemeColorMeta()
     const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null
-    media?.addEventListener('change', applyThemeColor)
-    return () => media?.removeEventListener('change', applyThemeColor)
-  }, [settings.theme, settings.accentColor, settings.uiTransparency])
+    media?.addEventListener('change', updateThemeColorMeta)
+    return () => media?.removeEventListener('change', updateThemeColorMeta)
+  }, [settings.theme, settings.accentColor, settings.coloredBackground])
 
   const updateSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
@@ -851,8 +831,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
       scramble,
       scrambleState,
       loadScramble,
-      customBackground,
-      setCustomBackground,
     }),
     [
       applyAuthSession,
@@ -892,8 +870,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
       scramble,
       scrambleState,
       loadScramble,
-      customBackground,
-      setCustomBackground,
     ],
   )
 

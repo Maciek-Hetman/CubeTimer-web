@@ -20,7 +20,7 @@ import { Toast } from '../../ui/StatGrid'
 import { Select } from '../../ui/Select'
 import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
-import { getAccentPalette } from '../../styles/accents'
+import { getAccentColor } from '../../styles/accents'
 import { loadTimerFont } from '../../styles/timerFonts'
 
 function isFormTarget(target: EventTarget | null): boolean {
@@ -186,8 +186,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       }
 
       if (broken.length > 0) {
-        const palette = getAccentPalette(settings.accentColor || 'blue')
-        const colors = [palette.light.main, palette.dark.main, palette.light.soft, palette.dark.soft]
+        const palette = getAccentColor(settings.accentColor || 'blue')
+        const colors = [palette.light, palette.dark]
 
         confetti({
           particleCount: 120,
@@ -419,11 +419,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           fontFamily: getFontFamily(settings.timerFont),
           fontSize: getSizeStyles(settings.timerSize, variant === 'desktop'),
           ...getFontStyles(settings.timerFont),
-          color:
-            (snapshot.phase === 'idle' || snapshot.phase === 'running' || snapshot.phase === 'finished') &&
-            settings.timerColor
-              ? settings.timerColor
-              : undefined,
         }}
         onPointerDown={(event) => {
           if (event.button !== 0 || activePointerRef.current !== null) {
