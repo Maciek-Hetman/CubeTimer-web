@@ -755,6 +755,20 @@ input[type='range']::-moz-range-thumb {
   opacity: 0.78;
 }
 
+.timer-display .decimals.dseg7 {
+  font-size: 1em;
+  opacity: 1;
+}
+
+.timer-display .dot {
+  display: inline-block;
+  width: 0.1em;
+  height: 0.1em;
+  margin: 0 -0.02em;
+  border-radius: 0.015em;
+  background: currentColor;
+}
+
 .timer-hint {
   text-align: center;
   color: var(--text-muted);

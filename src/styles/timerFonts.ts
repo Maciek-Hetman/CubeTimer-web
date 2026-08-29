@@ -5,7 +5,13 @@ const EAGER_FONTS: ReadonlySet<TimerFont> = new Set(['jetbrains', 'inter', 'syst
 const LOADERS: Partial<Record<TimerFont, () => Promise<unknown>>> = {
   fira: () => import('@fontsource-variable/fira-code/wght.css'),
   digital: () => import('@fontsource/share-tech-mono/400.css'),
-  dseg7: () => import('@fontsource/dseg7-classic/400.css'),
+  dseg7: () =>
+    Promise.all([
+      import('@fontsource/dseg7-classic/400.css'),
+      import('@fontsource/dseg7-classic/700.css'),
+      import('@fontsource/dseg7-classic/400-italic.css'),
+      import('@fontsource/dseg7-classic/700-italic.css'),
+    ]),
   roboto: () => import('@fontsource-variable/roboto/wght.css'),
   'open-sans': () => import('@fontsource-variable/open-sans/wght.css'),
 }

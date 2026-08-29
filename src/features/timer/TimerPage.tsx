@@ -58,6 +58,17 @@ function getFontFamily(font?: TimerFont): string | undefined {
   return font && TIMER_FONT_FAMILIES[font] ? TIMER_FONT_FAMILIES[font] : undefined
 }
 
+function getFontStyles(font?: TimerFont): Record<string, string> | undefined {
+  if (font !== 'dseg7') {
+    return undefined
+  }
+  return {
+    fontStyle: 'italic',
+    letterSpacing: '0',
+    fontSynthesis: 'none',
+  }
+}
+
 function getSizeStyles(size?: TimerSize, isDesktop = false): string | undefined {
   return size ? TIMER_SIZE_STYLES[isDesktop ? 'desktop' : 'mobile'][size] : undefined
 }
@@ -409,6 +420,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           paddingBottom: '8vh',
           fontFamily: getFontFamily(settings.timerFont),
           fontSize: getSizeStyles(settings.timerSize, variant === 'desktop'),
+          ...getFontStyles(settings.timerFont),
           color:
             (snapshot.phase === 'idle' || snapshot.phase === 'running' || snapshot.phase === 'finished') &&
             settings.timerColor
@@ -439,6 +451,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           ms={timeMs}
           mode={settings.timerDisplayMode ?? 'show'}
           isRunning={snapshot.phase === 'running'}
+          font={settings.timerFont}
         />
         <div id={`timer-hint-${variant}`} className="timer-hint">
           {hint}
@@ -498,15 +511,36 @@ function bestWindowWithNew(
   return Math.min(prevBest, current)
 }
 
-function TimeDigits({ ms, mode, isRunning }: { ms: number; mode: TimerDisplayMode; isRunning: boolean }) {
+function TimeDigits({
+  ms,
+  mode,
+  isRunning,
+  font,
+}: {
+  ms: number
+  mode: TimerDisplayMode
+  isRunning: boolean
+  font?: TimerFont
+}) {
   const formatted = formatDuration(ms)
   const [main, decimals] = formatted.includes('.') ? formatted.split('.') : [formatted, '00']
+  const sevenSeg = font === 'dseg7'
+
+  const renderDecimals = () =>
+    sevenSeg ? (
+      <>
+        <span className="dot" aria-hidden="true" />
+        {decimals}
+      </>
+    ) : (
+      <>.{decimals}</>
+    )
 
   if (isRunning && mode === 'hide') {
     return (
       <span style={{ visibility: 'hidden' }}>
         {main}
-        <span className="decimals">.{decimals}</span>
+        <span className="decimals">{renderDecimals()}</span>
       </span>
     )
   }
@@ -522,7 +556,7 @@ function TimeDigits({ ms, mode, isRunning }: { ms: number; mode: TimerDisplayMod
   return (
     <span>
       {main}
-      <span className="decimals">.{decimals}</span>
+      <span className={`decimals${sevenSeg ? ' dseg7' : ''}`}>{renderDecimals()}</span>
     </span>
   )
 }
