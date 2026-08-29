@@ -106,6 +106,7 @@ export interface AppSettings {
   inactivityGapMinutes: number
   timerStartDelayMs: number
   timerDisplayMode: TimerDisplayMode
+  showTimerHints: boolean
   hideScrambleDuringSolve: boolean
   hideWidgetsDuringSolve: boolean
   enableWidgets: boolean
@@ -125,6 +126,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   inactivityGapMinutes: 60,
   timerStartDelayMs: 500,
   timerDisplayMode: 'show',
+  showTimerHints: true,
   hideScrambleDuringSolve: false,
   hideWidgetsDuringSolve: false,
   enableWidgets: true,

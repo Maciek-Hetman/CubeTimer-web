@@ -163,4 +163,17 @@ describe('TimerPage', () => {
     })
     expect(screen.queryByRole('button', { name: 'Save time' })).not.toBeInTheDocument()
   })
+
+  it('hides timer hints when showTimerHints is false', async () => {
+    renderTimer()
+    await waitFor(() => {
+      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+    })
+    const settings = (await db.settings.toArray())[0]!
+    await db.settings.put({ ...settings, showTimerHints: false })
+
+    await waitFor(() => {
+      expect(timerHint()).toBeNull()
+    })
+  })
 })

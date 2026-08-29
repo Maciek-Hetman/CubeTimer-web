@@ -224,6 +224,11 @@ export function SettingsPage() {
               />
             </Field>
             <Switch
+              label="Show timer hints"
+              checked={settings.showTimerHints ?? true}
+              onChange={(checked) => void updateSettings({ showTimerHints: checked })}
+            />
+            <Switch
               label="Hide scramble during solve"
               checked={settings.hideScrambleDuringSolve}
               onChange={(checked) => void updateSettings({ hideScrambleDuringSolve: checked })}

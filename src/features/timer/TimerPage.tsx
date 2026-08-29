@@ -298,6 +298,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const ao5 = useMemo(() => solveStats.ao5, [solveStats])
   const ao12 = useMemo(() => solveStats.ao12, [solveStats])
   const recent = recentSolves.slice(0, 5)
+  const showHints = settings.showTimerHints ?? true
   const hideScramble = settings.hideScrambleDuringSolve && isSolvingOrPreparing
 
   useEffect(() => {
@@ -406,7 +407,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         type="button"
         className={`timer-display ${colorClass}`}
         aria-label="Timer"
-        aria-describedby={`timer-hint-${variant}`}
+        aria-describedby={showHints ? `timer-hint-${variant}` : undefined}
         style={{
           flex: 1,
           width: '100%',
@@ -448,9 +449,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           isRunning={snapshot.phase === 'running'}
           font={settings.timerFont}
         />
-        <div id={`timer-hint-${variant}`} className="timer-hint">
-          {hint}
-        </div>
+        {showHints ? (
+          <div id={`timer-hint-${variant}`} className="timer-hint">
+            {hint}
+          </div>
+        ) : null}
         {snapshot.phase === 'holding' ? (
           <div className="progress" aria-hidden="true">
             <span style={{ animation: `fill-progress ${settings.timerStartDelayMs}ms linear forwards` }} />

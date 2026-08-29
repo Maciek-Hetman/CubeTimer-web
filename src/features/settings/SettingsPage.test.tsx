@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     inactivityGapMinutes: 60,
     timerStartDelayMs: 500,
     timerDisplayMode: 'show',
+    showTimerHints: true,
     hideScrambleDuringSolve: false,
     hideWidgetsDuringSolve: false,
     enableWidgets: true,
@@ -126,5 +127,10 @@ describe('SettingsPage', () => {
     await user.click(holdButton)
 
     expect(mocks.updateSettings).toHaveBeenCalledWith({ timerStartDelayMs: 300 })
+
+    const showHintsSwitch = screen.getByRole('checkbox', { name: 'Show timer hints' })
+    expect(showHintsSwitch).toBeChecked()
+    await user.click(showHintsSwitch)
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showTimerHints: false })
   })
 })
