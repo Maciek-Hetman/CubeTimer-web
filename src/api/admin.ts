@@ -3,6 +3,7 @@ import type {
   AdminErrorLogResponse,
   AdminOverviewStats,
   AdminRequestStats,
+  AdminRequestTypeStats,
   AdminStatsQuery,
   StatsInterval,
 } from './types'
@@ -38,6 +39,10 @@ export function getOverviewStats(request: AuthenticatedRequest) {
 
 export function getRequestStats(request: AuthenticatedRequest, query: AdminStatsQuery = {}) {
   return request<AdminRequestStats>(`/v1/admin/stats/requests${buildAdminStatsSearch(query)}`)
+}
+
+export function getRequestTypeStats(request: AuthenticatedRequest, query: AdminStatsQuery = {}) {
+  return request<AdminRequestTypeStats>(`/v1/admin/stats/request-types${buildAdminStatsSearch(query)}`)
 }
 
 export interface AdminErrorLogsQuery {

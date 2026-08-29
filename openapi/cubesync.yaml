@@ -355,6 +355,29 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /v1/admin/stats/request-types:
+    get:
+      operationId: getAdminRequestTypeStats
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StatsFrom"
+        - $ref: "#/components/parameters/StatsTo"
+        - $ref: "#/components/parameters/StatsInterval"
+      responses:
+        "200":
+          description: Request counts grouped by request type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminRequestTypeStats"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /v1/admin/stats/errors:
     get:
       operationId: getAdminErrorStats
@@ -378,6 +401,94 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /v1/snapshot:
+    post:
+      summary: Snapshot bootstrap sync
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SnapshotRequest"
+      responses:
+        '200':
+          description: Snapshot response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SnapshotResponse"
+  /v1/stats:
+    get:
+      summary: Get user statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: event
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Statistics response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+  /v1/sessions:
+    get:
+      summary: List sessions paginated
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated sessions response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSessionsResponse"
+  "/v1/sessions/{id}/solves":
+    get:
+      summary: List solves for session paginated
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated solves response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSolvesResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -443,6 +554,17 @@ components:
               type: string
             message:
               type: string
+    ChangePasswordRequest:
+      type: object
+      required: [new_password]
+      properties:
+        current_password:
+          type: string
+          description: Required if the user already has a password set.
+        new_password:
+          type: string
+          minLength: 8
+
     PasswordCredentials:
       type: object
       required: [email, password]
@@ -454,16 +576,6 @@ components:
           type: string
           minLength: 10
           maxLength: 128
-    ChangePasswordRequest:
-      type: object
-      required: [new_password]
-      properties:
-        current_password:
-          type: string
-          description: Required if the user already has a password set.
-        new_password:
-          type: string
-          minLength: 8
     RefreshToken:
       type: object
       required: [refresh_token]
@@ -588,6 +700,33 @@ components:
           type: number
           format: double
         max_duration_ms:
+          type: integer
+          format: int64
+    AdminRequestTypeStats:
+      type: object
+      required: [from, to, interval, types]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        interval:
+          type: string
+          enum: [hour, day]
+        types:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminRequestTypeCount"
+    AdminRequestTypeCount:
+      type: object
+      required: [type, request_count]
+      properties:
+        type:
+          type: string
+          enum: [auth, account, sync, snapshot, sessions, stats, other]
+        request_count:
           type: integer
           format: int64
     AdminErrorStats:
@@ -838,6 +977,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Session"
             - $ref: "#/components/schemas/Solve"
+            - $ref: "#/components/schemas/ConflictStub"
     Change:
       type: object
       required: [cursor, entity, entity_id, operation, version, data, changed_at]
@@ -861,6 +1001,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Session"
             - $ref: "#/components/schemas/Solve"
+            - $ref: "#/components/schemas/DeleteStub"
         changed_at:
           type: string
           format: date-time
@@ -898,5 +1039,158 @@ components:
         next_cursor:
           type: integer
           format: int64
+        has_more:
+          type: boolean
+    SnapshotRequest:
+      type: object
+      required: [device]
+      properties:
+        device:
+          $ref: "#/components/schemas/Device"
+        cursor:
+          type: integer
+          format: int64
+          description: Change-log watermark. 0 on the first page; echo the response cursor on subsequent pages.
+        after_id:
+          type: string
+          format: uuid
+          description: Keyset position for the current entity. Zero UUID for the first page of each entity.
+        entity:
+          type: string
+          enum: [session, solve]
+        page_size:
+          type: integer
+    SnapshotResponse:
+      type: object
+      required: [cursor, has_more]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+        solves:
+          type: array
+          items:
+            $ref: "#/components/schemas/Solve"
+        cursor:
+          type: integer
+          format: int64
+          description: Stable change-log watermark to use as the initial sync cursor once bootstrap completes.
+        has_more:
+          type: boolean
+        next_entity:
+          type: string
+          enum: [session, solve]
+        next_after_id:
+          type: string
+          format: uuid
+    StatsResponse:
+      type: object
+      required: [total_count, counted_count, dnf_count, min_ms, max_ms, mean_ms, stddev_ms, total_ms]
+      properties:
+        total_count:
+          type: integer
+          format: int64
+        counted_count:
+          type: integer
+          format: int64
+        dnf_count:
+          type: integer
+          format: int64
+        min_ms:
+          type: integer
+          format: int64
+        max_ms:
+          type: integer
+          format: int64
+        mean_ms:
+          type: number
+          format: double
+        stddev_ms:
+          type: number
+          format: double
+        total_ms:
+          type: integer
+          format: int64
+        ao5:
+          type: integer
+          format: int64
+        ao12:
+          type: integer
+          format: int64
+        ao50:
+          type: integer
+          format: int64
+        ao100:
+          type: integer
+          format: int64
+    DeleteStub:
+      type: object
+      required: [id, version, deleted_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+        deleted_at:
+          type: [string, "null"]
+          format: date-time
+    ConflictStub:
+      type: object
+      required: [id, version, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+    SessionSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        event:
+          type: string
+        kind:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        archived:
+          type: boolean
+        solve_count:
+          type: integer
+    PaginatedSessionsResponse:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionSummary"
+        next_cursor:
+          type: string
+        has_more:
+          type: boolean
+    PaginatedSolvesResponse:
+      type: object
+      properties:
+        solves:
+          type: array
+          items:
+            $ref: "#/components/schemas/Solve"
+        next_cursor:
+          type: string
         has_more:
           type: boolean

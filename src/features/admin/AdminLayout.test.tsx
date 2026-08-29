@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, type AdminErrorLogResponse, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
+import { ApiError, type AdminErrorLogResponse, type AdminOverviewStats, type AdminRequestStats, type AdminRequestTypeStats } from '../../api/types'
 import { AdminLayout } from './AdminLayout'
 import { AdminOverviewPage } from './AdminOverviewPage'
 import { AdminTrafficPage } from './AdminTrafficPage'
@@ -48,6 +48,18 @@ const requests: AdminRequestStats = {
   ],
 }
 
+const requestTypes: AdminRequestTypeStats = {
+  from: '2026-08-18T00:00:00.000Z',
+  to: '2026-08-25T00:00:00.000Z',
+  interval: 'day',
+  types: [
+    { type: 'sync', request_count: 40 },
+    { type: 'auth', request_count: 30 },
+    { type: 'sessions', request_count: 20 },
+    { type: 'other', request_count: 10 },
+  ],
+}
+
 const errors: AdminErrorLogResponse = {
   errors: [
     {
@@ -78,6 +90,9 @@ function mockStats() {
     }
     if (path.startsWith('/v1/admin/stats/requests')) {
       return requests
+    }
+    if (path.startsWith('/v1/admin/stats/request-types')) {
+      return requestTypes
     }
     if (path.startsWith('/v1/admin/stats/errors')) {
       return errors
@@ -137,6 +152,21 @@ describe('AdminLayout & Pages', () => {
         .filter((path) => path.startsWith('/v1/admin/stats/requests'))
       expect(requestPaths.some((path) => path.includes('interval=hour'))).toBe(true)
     })
+  })
+
+  it('shows request counts per type on the traffic tab', async () => {
+    mockStats()
+    renderAdminApp('/admin/traffic')
+
+    expect(await screen.findByText('Request types')).toBeInTheDocument()
+    expect(screen.getByText('Sync')).toBeInTheDocument()
+    expect(screen.getByText('Auth')).toBeInTheDocument()
+    expect(screen.getByText('Sessions')).toBeInTheDocument()
+    expect(screen.getByText('Other')).toBeInTheDocument()
+    expect(screen.getAllByText('40')[0]).toBeInTheDocument()
+    expect(screen.getAllByText('30')[0]).toBeInTheDocument()
+    expect(screen.getByText('40.0%')).toBeInTheDocument()
+    expect(screen.getByText('30.0%')).toBeInTheDocument()
   })
 
   it('shows an error and retries', async () => {

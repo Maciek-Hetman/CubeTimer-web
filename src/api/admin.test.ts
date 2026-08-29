@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAdminStatsSearch, getErrorLogs, getOverviewStats, getRequestStats } from './admin'
+import { buildAdminStatsSearch, getErrorLogs, getOverviewStats, getRequestStats, getRequestTypeStats } from './admin'
 import type { AuthenticatedRequest } from './client'
 
 describe('buildAdminStatsSearch', () => {
@@ -44,10 +44,12 @@ describe('admin stats clients', () => {
     }
     await getOverviewStats(request)
     await getRequestStats(request, { from: '2026-08-24T00:00:00.000Z', to: '2026-08-25T00:00:00.000Z', interval: 'hour' })
+    await getRequestTypeStats(request, { from: '2026-08-24T00:00:00.000Z', to: '2026-08-25T00:00:00.000Z', interval: 'hour' })
     await getErrorLogs(request)
     expect(paths).toEqual([
       '/v1/admin/stats/overview',
       '/v1/admin/stats/requests?from=2026-08-24T00%3A00%3A00.000Z&to=2026-08-25T00%3A00%3A00.000Z&interval=hour',
+      '/v1/admin/stats/request-types?from=2026-08-24T00%3A00%3A00.000Z&to=2026-08-25T00%3A00%3A00.000Z&interval=hour',
       '/v1/admin/stats/errors',
     ])
   })

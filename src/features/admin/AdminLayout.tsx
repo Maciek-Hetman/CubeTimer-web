@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { getOverviewStats, getRequestStats } from '../../api/admin'
-import { ApiError, type AdminOverviewStats, type AdminRequestStats } from '../../api/types'
+import { getOverviewStats, getRequestStats, getRequestTypeStats } from '../../api/admin'
+import {
+  ApiError,
+  type AdminOverviewStats,
+  type AdminRequestStats,
+  type AdminRequestTypeStats,
+} from '../../api/types'
 import { useApp } from '../../app/AppProviders'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -11,6 +16,7 @@ import { ADMIN_RANGE_LABELS, ADMIN_RANGES, adminStatsQueryForRange, type AdminRa
 export interface AdminContextType {
   overview: AdminOverviewStats | null
   requests: AdminRequestStats | null
+  requestTypes: AdminRequestTypeStats | null
   loading: boolean
   error: string
   load: () => Promise<void>
@@ -24,6 +30,7 @@ export function AdminLayout() {
   const [error, setError] = useState('')
   const [overview, setOverview] = useState<AdminOverviewStats | null>(null)
   const [requests, setRequests] = useState<AdminRequestStats | null>(null)
+  const [requestTypes, setRequestTypes] = useState<AdminRequestTypeStats | null>(null)
   const loadIdRef = useRef(0)
 
   const load = useCallback(async () => {
@@ -32,21 +39,24 @@ export function AdminLayout() {
     setError('')
     const query = adminStatsQueryForRange(range)
     try {
-      const [nextOverview, nextRequests] = await Promise.all([
+      const [nextOverview, nextRequests, nextRequestTypes] = await Promise.all([
         getOverviewStats(authenticatedRequest),
         getRequestStats(authenticatedRequest, query),
+        getRequestTypeStats(authenticatedRequest, query),
       ])
       if (loadId !== loadIdRef.current) {
         return
       }
       setOverview(nextOverview)
       setRequests(nextRequests)
+      setRequestTypes(nextRequestTypes)
     } catch (err) {
       if (loadId !== loadIdRef.current) {
         return
       }
       setOverview(null)
       setRequests(null)
+      setRequestTypes(null)
       if (err instanceof ApiError && err.status === 403) {
         setError('You do not have permission to view admin metrics.')
       } else if (err instanceof ApiError && err.status === 401) {
@@ -107,7 +117,7 @@ export function AdminLayout() {
 
       {error ? <Alert tone="error">{error}</Alert> : null}
 
-      <Outlet context={{ overview, requests, loading, error, load } satisfies AdminContextType} />
+      <Outlet context={{ overview, requests, requestTypes, loading, error, load } satisfies AdminContextType} />
     </div>
   )
 }

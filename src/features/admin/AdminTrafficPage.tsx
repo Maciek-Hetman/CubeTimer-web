@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
   Line,
   LineChart,
@@ -22,8 +23,28 @@ const chartTooltipStyle = {
   borderRadius: 8,
 }
 
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  auth: 'Auth',
+  account: 'Account',
+  sync: 'Sync',
+  snapshot: 'Snapshot',
+  sessions: 'Sessions',
+  stats: 'Stats',
+  other: 'Other',
+}
+
+const REQUEST_TYPE_COLORS: Record<string, string> = {
+  auth: 'var(--accent)',
+  account: 'var(--success)',
+  sync: 'var(--warning)',
+  snapshot: 'var(--danger)',
+  sessions: 'var(--accent-soft)',
+  stats: 'var(--warning-soft)',
+  other: 'var(--text-muted)',
+}
+
 export function AdminTrafficPage() {
-  const { requests, loading } = useOutletContext<AdminContextType>()
+  const { requests, requestTypes, loading } = useOutletContext<AdminContextType>()
 
   const chartData = useMemo(() => {
     if (!requests || !requests.points) return []
@@ -42,6 +63,21 @@ export function AdminTrafficPage() {
       }
     })
   }, [requests])
+
+  const typeData = useMemo(() => {
+    if (!requestTypes || !requestTypes.types) return []
+    return [...requestTypes.types]
+      .sort((a, b) => b.request_count - a.request_count)
+      .map(entry => ({
+        ...entry,
+        label: REQUEST_TYPE_LABELS[entry.type] ?? entry.type,
+      }))
+  }, [requestTypes])
+
+  const typeTotal = useMemo(
+    () => typeData.reduce((sum, entry) => sum + entry.request_count, 0),
+    [typeData],
+  )
 
   if (loading && (!requests || chartData.length === 0)) {
     return (
@@ -62,6 +98,59 @@ export function AdminTrafficPage() {
         <EmptyState title="No request data" description="There are no requests in this range." />
       ) : (
         <div className="admin-charts">
+          <div className="admin-chart">
+            <h3>Request types</h3>
+            {typeData.length === 0 ? (
+              <EmptyState title="No request type data" description="There are no requests in this range." />
+            ) : (
+              <>
+                <div className="admin-chart-canvas">
+                  <ResponsiveContainer>
+                    <BarChart data={typeData} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis type="number" stroke="var(--text-muted)" allowDecimals={false} />
+                      <YAxis type="category" dataKey="label" width={84} stroke="var(--text-muted)" />
+                      <Tooltip
+                        contentStyle={chartTooltipStyle}
+                        formatter={(value) => [`${Number(value).toLocaleString()} requests`, undefined]}
+                      />
+                      <Bar dataKey="request_count" name="Requests" radius={[0, 4, 4, 0]}>
+                        {typeData.map(entry => (
+                          <Cell key={entry.type} fill={REQUEST_TYPE_COLORS[entry.type] ?? 'var(--text-muted)'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="admin-table-wrap">
+                  <table className="data-table admin-table">
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th className="num">Requests</th>
+                        <th className="num">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {typeData.map(entry => (
+                        <tr key={entry.type}>
+                          <td>{entry.label}</td>
+                          <td className="num">{entry.request_count.toLocaleString()}</td>
+                          <td className="num">
+                            {typeTotal > 0 ? `${((entry.request_count / typeTotal) * 100).toFixed(1)}%` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="muted" style={{ marginTop: 'var(--space-2)', marginBottom: 0, fontSize: 'var(--text-sm)' }}>
+                    "Other" covers unmatched and unknown routes, such as 404s, as well as the API version endpoint
+                    ({'/v1'}). Health checks and admin stats requests are not recorded at all.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
           <div className="admin-chart">
             <h3>Volume and status</h3>
             <div className="admin-chart-canvas">

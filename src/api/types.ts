@@ -108,6 +108,18 @@ export interface AdminRequestStats {
   points: AdminRequestStatsPoint[]
 }
 
+export interface AdminRequestTypeCount {
+  type: 'auth' | 'account' | 'sync' | 'snapshot' | 'sessions' | 'stats' | 'other'
+  request_count: number
+}
+
+export interface AdminRequestTypeStats {
+  from: string
+  to: string
+  interval: StatsInterval
+  types: AdminRequestTypeCount[]
+}
+
 export interface AdminErrorLog {
   id: number
   created_at: string
