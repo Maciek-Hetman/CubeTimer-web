@@ -40,6 +40,7 @@ import {
 } from '../domain/sessions/automaticSessions'
 import { adoptGuestData } from '../sync/guestMerge'
 import { runSync, getLastSyncedAt, lastSyncKey, withBackoff, type SyncStatus } from '../sync/syncEngine'
+import { isTokenExpired, shouldSkipSync } from '../sync/syncPolicy'
 import {
   clearAuth,
   createFreshGuestOwner,
@@ -105,6 +106,7 @@ const AppContext = createContext<AppContextValue | null>(null)
 let mountRefreshPromise: Promise<AuthSession> | null = null
 const EMPTY_SESSIONS: CubeSession[] = []
 const EMPTY_SOLVES: Solve[] = []
+const SYNC_MIN_INTERVAL_MS = 30_000
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
@@ -113,6 +115,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
   const accessTokenRef = useRef<string | null>(null)
+  const accessTokenExpiresAtRef = useRef<number>(0)
+  const userRef = useRef<User | null>(null)
   const refreshTokenRef = useRef<string | null>(null)
   const syncTimer = useRef<number | null>(null)
   const syncingRef = useRef(false)
@@ -121,12 +125,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
     accessTokenRef.current = accessToken
   }, [accessToken])
 
+  useEffect(() => {
+    userRef.current = user
+  }, [user])
+
   const persistSession = useCallback(async (session: AuthSession, mergeGuest: boolean) => {
     refreshTokenRef.current = session.refresh_token
     await saveAuth(session.refresh_token, session.user)
     setAccessToken(session.access_token)
     setUser(session.user)
     accessTokenRef.current = session.access_token
+    accessTokenExpiresAtRef.current = Date.now() + session.expires_in * 1000
+    userRef.current = session.user
     if (mergeGuest) {
       const guest = await ensureGuestOwner()
       if (guest !== session.user.id) {
@@ -147,6 +157,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null
     setAccessToken(null)
     setUser(null)
+    accessTokenRef.current = null
+    accessTokenExpiresAtRef.current = 0
+    userRef.current = null
     let guest = await getCurrentOwnerId()
     if (!isGuestOwner(guest)) {
       guest = await createFreshGuestOwner()
@@ -313,6 +326,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         setAccessToken(session.access_token)
         setUser(session.user)
         accessTokenRef.current = session.access_token
+        accessTokenExpiresAtRef.current = Date.now() + session.expires_in * 1000
+        userRef.current = session.user
         return session.access_token
       } catch (error) {
         if (error instanceof ApiError && (error.status === 401 || error.status === 409)) {
@@ -331,7 +346,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     async <T,>(path: string, options: Omit<RequestOptions, 'accessToken'> = {}): Promise<T> => {
       const run = (token: string) => apiRequest<T>(path, { ...options, accessToken: token })
       let token = accessTokenRef.current
-      if (!token) {
+      if (!token || isTokenExpired(accessTokenExpiresAtRef.current)) {
         token = await refreshAccessToken()
       }
       try {
@@ -348,11 +363,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
   )
 
   const doSync = useCallback(async () => {
-    if (!user?.email_verified || !ownerId || isGuestOwner(ownerId) || syncingRef.current) {
+    const currentUser = userRef.current
+    if (!currentUser?.email_verified || !ownerId || isGuestOwner(ownerId) || syncingRef.current) {
+      return
+    }
+    const [pendingCount, lastSyncedAt] = await Promise.all([
+      db.outbox.where('ownerId').equals(ownerId).count(),
+      getLastSyncedAt(ownerId),
+    ])
+    if (
+      shouldSkipSync({
+        pendingMutations: pendingCount,
+        lastSyncedAt,
+        nowMs: Date.now(),
+        minIntervalMs: SYNC_MIN_INTERVAL_MS,
+      })
+    ) {
       return
     }
     let token = accessTokenRef.current
-    if (!token) {
+    if (!token || isTokenExpired(accessTokenExpiresAtRef.current)) {
       try {
         token = await refreshAccessToken()
       } catch {
@@ -381,7 +411,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     } finally {
       syncingRef.current = false
     }
-  }, [conflictCount, ownerId, refreshAccessToken, user])
+  }, [conflictCount, ownerId, refreshAccessToken])
 
   const requestSync = useCallback(() => {
     if (syncTimer.current) {
@@ -400,15 +430,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
     requestSync()
     const onOnline = () => requestSync()
     const onFocus = () => requestSync()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        requestSync()
+      }
+    }
     window.addEventListener('online', onOnline)
     window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onFocus)
-    const interval = window.setInterval(() => requestSync(), 60_000)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onFocus)
-      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [ownerId, ready, requestSync, user])
 
