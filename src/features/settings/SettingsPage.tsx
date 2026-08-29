@@ -82,7 +82,7 @@ function SwatchGrid({
           onClick={() => onSelect(option.id)}
           style={{ width: '100%', justifyContent: 'flex-start' }}
         >
-          <div style={{ width: 16, height: 16, borderRadius: 4, background: option.swatch, border: '1px solid var(--border)', flexShrink: 0 }} />
+          <div style={{ width: 16, height: 16, borderRadius: 4, background: option.swatch, boxShadow: 'var(--shadow-sm)', flexShrink: 0 }} />
           {option.label}
         </Button>
       ))}
@@ -352,7 +352,7 @@ export function SettingsPage() {
                 width: 44,
                 height: 44,
                 padding: 0,
-                border: '1px solid var(--border)',
+                boxShadow: 'var(--shadow-sm)',
                 borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer'
               }}

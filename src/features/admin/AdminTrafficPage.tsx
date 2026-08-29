@@ -18,9 +18,9 @@ import { Panel } from '../../ui/Panel'
 import type { AdminContextType } from './AdminLayout'
 
 const chartTooltipStyle = {
-  background: 'var(--surface-elevated)',
-  border: '1px solid var(--border)',
+  background: 'var(--surface)',
   borderRadius: 8,
+  boxShadow: 'var(--shadow-md)',
 }
 
 const REQUEST_TYPE_LABELS: Record<string, string> = {

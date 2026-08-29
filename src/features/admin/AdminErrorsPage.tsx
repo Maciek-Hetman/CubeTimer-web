@@ -100,7 +100,7 @@ export function AdminErrorsPage() {
                   {expandedTraceId === log.id && (
                     <tr>
                       <td colSpan={7} style={{ padding: '16px', background: 'var(--surface-muted)', borderTop: '1px solid var(--border)' }}>
-                        <pre style={{ margin: 0, padding: '12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                        <pre style={{ margin: 0, padding: '12px', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)', borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                           <code>{JSON.stringify(log, null, 2)}</code>
                         </pre>
                       </td>

@@ -10,7 +10,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface);
   border-radius: var(--radius-sm);
   padding: 10px 36px 10px 12px;
@@ -21,11 +21,13 @@
   color: inherit;
   cursor: pointer;
   text-align: left;
-  transition: border-color var(--duration) var(--ease), background-color var(--duration) var(--ease);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--duration) var(--ease), background-color var(--duration) var(--ease);
 }
 
 .custom-select-trigger:hover:not(:disabled) {
   background: var(--surface-muted);
+  box-shadow: var(--shadow-md);
 }
 
 .custom-select-trigger:disabled {
@@ -43,7 +45,6 @@
 
 .custom-select-container.ghost .custom-select-trigger {
   background: transparent;
-  border-color: transparent;
   box-shadow: none;
 }
 

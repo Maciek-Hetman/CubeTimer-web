@@ -377,7 +377,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {settings.sessionMode === 'manual' ? (
           <Button
             type="button"
-            variant="ghost"
             className="icon"
             disabled={isSolvingOrPreparing}
             aria-label="Sessions"
@@ -390,7 +389,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {!hideScramble ? (
           <Button
             type="button"
-            variant="ghost"
             className="icon"
             disabled={isSolvingOrPreparing}
             aria-label={scrambleState === 'error' ? 'Retry' : 'New scramble'}
