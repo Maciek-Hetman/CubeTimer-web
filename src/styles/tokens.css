@@ -5,6 +5,14 @@
   --accent: light-dark(var(--accent-light), var(--accent-dark));
   --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
 
+  --chart-ao5-light: #16a34a;
+  --chart-ao5-dark: #4ade80;
+  --chart-ao5: light-dark(var(--chart-ao5-light), var(--chart-ao5-dark));
+
+  --chart-ao12-light: #d97706;
+  --chart-ao12-dark: #fbbf24;
+  --chart-ao12: light-dark(var(--chart-ao12-light), var(--chart-ao12-dark));
+
   --bg: light-dark(#f3f5f8, #0e1117);
   --surface: light-dark(#ffffff, #161b24);
   --surface-muted: light-dark(#eef1f6, #1e2532);

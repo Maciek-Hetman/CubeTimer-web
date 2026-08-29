@@ -727,9 +727,14 @@ input[type='range']::-moz-range-thumb {
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   border-radius: var(--radius-lg);
+  color: var(--text);
   transition:
     color var(--duration) var(--ease),
     background-color var(--duration) var(--ease);
+}
+
+.timer-idle {
+  color: var(--text);
 }
 
 .timer-display .decimals {

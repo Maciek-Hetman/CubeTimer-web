@@ -56,9 +56,13 @@ export function RecentTimesChart() {
           <Tooltip
             contentStyle={{
               background: 'var(--surface)',
-              borderRadius: 8,
+              borderColor: 'var(--border)',
+              borderRadius: 'var(--radius-sm)',
               boxShadow: 'var(--shadow-md)',
+              color: 'var(--text)',
             }}
+            itemStyle={{ color: 'var(--text)' }}
+            labelStyle={{ color: 'var(--text-muted)' }}
             formatter={(value) => formatDuration(Number(value))}
           />
           <Area

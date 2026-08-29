@@ -25,9 +25,9 @@ export function PersonalBestsWidget() {
       size="large"
       columns={3}
       items={[
-        ['Single', formatAverage(solveStats.best)],
-        ['Ao5', formatAverage(solveStats.bestAo5)],
-        ['Ao12', formatAverage(solveStats.bestAo12)],
+        ['Single', <span key="single" style={{ color: 'var(--accent)' }}>{formatAverage(solveStats.best)}</span>],
+        ['Ao5', <span key="ao5" style={{ color: 'var(--accent)' }}>{formatAverage(solveStats.bestAo5)}</span>],
+        ['Ao12', <span key="ao12" style={{ color: 'var(--accent)' }}>{formatAverage(solveStats.bestAo12)}</span>],
       ]}
     />
   )

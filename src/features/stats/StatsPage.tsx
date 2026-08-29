@@ -13,19 +13,19 @@ import { Panel } from '../../ui/Panel'
 import { StatGrid } from '../../ui/StatGrid'
 
 const CHART_SERIES = [
-  { key: 'time', label: 'Time', color: '#8884d8' },
-  { key: 'ao5', label: 'Ao5', color: '#22c55e' },
-  { key: 'ao12', label: 'Ao12', color: '#f59e0b' },
+  { key: 'time', label: 'Time', color: 'var(--accent)', strokeWidth: 1 },
+  { key: 'ao5', label: 'Ao5', color: 'var(--chart-ao5)', strokeWidth: 2 },
+  { key: 'ao12', label: 'Ao12', color: 'var(--chart-ao12)', strokeWidth: 2 },
 ] as const
 
 function DeltaBadge({ delta }: { delta: number | null }) {
   if (delta === null || isNaN(delta)) return null
   const isImprovement = delta < 0
-  const color = isImprovement ? '#22c55e' : '#ef4444' // fallback to raw colors
+  const color = isImprovement ? 'var(--ready)' : 'var(--danger)'
   const sign = isImprovement ? '-' : '+'
   const absDelta = Math.abs(delta)
   return (
-    <span style={{ color, fontSize: '0.85em', marginLeft: 8 }}>
+    <span style={{ color, fontSize: '0.85em', marginLeft: 8, fontWeight: 600 }}>
       {sign}{formatAverage(absDelta)}
     </span>
   )
@@ -118,31 +118,31 @@ export function StatsPage() {
           <div className="row wrap" style={{ gap: '16px' }}>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Time</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.best)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao5</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo5)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao12</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo12)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao50</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo50)}
               </div>
             </Panel>
             <Panel style={{ flex: 1, minWidth: '150px' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao100</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--color-primary, #3b82f6)' }}>
+              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo100)}
               </div>
             </Panel>
@@ -178,18 +178,36 @@ export function StatsPage() {
                           dataKey={series.key}
                           name={series.label}
                           stroke={series.color}
+                          strokeWidth={series.strokeWidth}
                           dot={false}
                           isAnimationActive={false}
                         />
                       ),
                   )}
-                  <XAxis dataKey="index" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} width={40} />
+                  <XAxis
+                    dataKey="index"
+                    stroke="var(--border)"
+                    tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                  />
+                  <YAxis
+                    stroke="var(--border)"
+                    tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                    width={40}
+                  />
                   <Tooltip
+                    contentStyle={{
+                      background: 'var(--surface)',
+                      borderColor: 'var(--border)',
+                      borderRadius: 'var(--radius-sm)',
+                      boxShadow: 'var(--shadow-md)',
+                      color: 'var(--text)',
+                    }}
+                    itemStyle={{ color: 'var(--text)' }}
+                    labelStyle={{ color: 'var(--text-muted)', fontWeight: 600 }}
                     labelFormatter={(label) => `Solve ${label}`}
                     formatter={(value, name) => [`${Number(value).toFixed(2)}s`, String(name)]}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ color: 'var(--text-muted)' }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

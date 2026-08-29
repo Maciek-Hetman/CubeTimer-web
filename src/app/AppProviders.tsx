@@ -455,6 +455,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const palette = getAccentColor(settings.accentColor || 'blue')
     root.style.setProperty('--accent-light', palette.light)
     root.style.setProperty('--accent-dark', palette.dark)
+    root.style.setProperty('--chart-ao5-light', palette.ao5.light)
+    root.style.setProperty('--chart-ao5-dark', palette.ao5.dark)
+    root.style.setProperty('--chart-ao12-light', palette.ao12.light)
+    root.style.setProperty('--chart-ao12-dark', palette.ao12.dark)
 
     if (settings.coloredBackground) {
       root.setAttribute('data-colored-bg', 'true')

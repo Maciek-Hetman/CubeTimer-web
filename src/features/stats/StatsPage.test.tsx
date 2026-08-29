@@ -163,4 +163,42 @@ describe('StatsPage', () => {
     expect(last250Btn).toHaveAttribute('aria-pressed', 'true')
     expect(allBtn).toHaveAttribute('aria-pressed', 'false')
   })
+
+  it('renders personal bests cards with theme accent color', () => {
+    renderPage()
+
+    const pbTime = screen.getByText('PB Time')
+    expect(pbTime).toBeInTheDocument()
+    const pbTimeValue = pbTime.nextElementSibling
+    expect(pbTimeValue).toHaveStyle({ color: 'var(--accent)' })
+
+    const pbAo5 = screen.getByText('PB Ao5')
+    expect(pbAo5.nextElementSibling).toHaveStyle({ color: 'var(--accent)' })
+
+    const pbAo12 = screen.getByText('PB Ao12')
+    expect(pbAo12.nextElementSibling).toHaveStyle({ color: 'var(--accent)' })
+  })
+
+  it('renders times graph series with theme-based colors', () => {
+    renderPage()
+
+    const seriesGroup = screen.getByRole('group', { name: 'Chart series visibility' })
+    expect(seriesGroup).toBeInTheDocument()
+
+    const timeButton = screen.getByRole('button', { name: /Time/i })
+    const ao5Button = screen.getByRole('button', { name: /Ao5/i })
+    const ao12Button = screen.getByRole('button', { name: /Ao12/i })
+
+    expect(timeButton).toBeInTheDocument()
+    expect(ao5Button).toBeInTheDocument()
+    expect(ao12Button).toBeInTheDocument()
+
+    const timeSwatch = timeButton.querySelector('span[aria-hidden="true"]')
+    const ao5Swatch = ao5Button.querySelector('span[aria-hidden="true"]')
+    const ao12Swatch = ao12Button.querySelector('span[aria-hidden="true"]')
+
+    expect(timeSwatch).toHaveStyle({ backgroundColor: 'var(--accent)' })
+    expect(ao5Swatch).toHaveStyle({ backgroundColor: 'var(--chart-ao5)' })
+    expect(ao12Swatch).toHaveStyle({ backgroundColor: 'var(--chart-ao12)' })
+  })
 })

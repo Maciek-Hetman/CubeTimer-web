@@ -320,9 +320,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       ? 'timer-holding'
       : snapshot.phase === 'ready'
         ? 'timer-ready'
-        : snapshot.phase === 'running' || snapshot.phase === 'finished'
+        : snapshot.phase === 'running'
           ? 'timer-running'
-          : ''
+          : snapshot.phase === 'finished'
+            ? 'timer-finished'
+            : 'timer-idle'
 
   const hint =
     snapshot.phase === 'idle'
