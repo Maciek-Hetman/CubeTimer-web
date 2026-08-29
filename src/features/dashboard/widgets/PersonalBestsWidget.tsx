@@ -23,7 +23,7 @@ export function PersonalBestsWidget() {
 
   return (
     <StatGrid
-      className="stat-grid-compact"
+      size="large"
       columns={3}
       items={[
         ['Single', formatAverage(solveStats.best)],
