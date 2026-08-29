@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useApp } from '../../app/AppProviders'
 import type { AppSettings, SavedTheme, SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
 import { WIDGET_SCALE_MAX, WIDGET_SCALE_MIN, WIDGET_SCALE_PRESETS, WIDGET_SCALE_STEP } from '../../domain/models'
@@ -14,7 +14,10 @@ import { SessionManager } from '../sessions/SessionManager'
 import { ACCENT_PRESETS, ACCENT_TIERS } from '../../styles/accents'
 import { activeThemePreset, BUILTIN_PRESETS, type ThemeFields } from '../../styles/themes'
 
-const HOLD_PRESETS = [0, 250, 300, 500, 550, 1000] as const
+const HOLD_PRESETS = [100, 200, 300, 500, 750, 1000] as const
+
+const rangeFill = (value: number, min: number, max: number): CSSProperties =>
+  ({ '--fill': `${((value - min) / (max - min)) * 100}%` }) as CSSProperties
 
 const DEFAULT_DARK_BG = '#020617'
 const DEFAULT_LIGHT_BG = '#cbd5e1'
@@ -233,6 +236,7 @@ export function SettingsPage() {
             max={1000}
             step={50}
             value={settings.timerStartDelayMs}
+            style={rangeFill(settings.timerStartDelayMs, 0, 1000)}
             onChange={(event) => void updateSettings({ timerStartDelayMs: Number(event.target.value) })}
           />
         </Field>
@@ -285,6 +289,7 @@ export function SettingsPage() {
                 max={WIDGET_SCALE_MAX}
                 step={WIDGET_SCALE_STEP}
                 value={settings.widgetScale}
+                style={rangeFill(settings.widgetScale, WIDGET_SCALE_MIN, WIDGET_SCALE_MAX)}
                 onChange={(event) => void updateSettings({ widgetScale: Number(event.target.value) })}
               />
             </Field>
@@ -465,6 +470,7 @@ export function SettingsPage() {
             max={100}
             step={5}
             value={settings.uiTransparency ?? 100}
+            style={rangeFill(settings.uiTransparency ?? 100, 10, 100)}
             onChange={(event) => void updateSettings({ uiTransparency: Number(event.target.value) })}
           />
         </Field>
