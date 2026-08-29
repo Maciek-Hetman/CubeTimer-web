@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppProviders'
-import { eventLabel } from '../../domain/models'
+import { eventLabel, STATS_CHART_SCALES, STATS_CHART_SCALE_LABELS, type StatsChartScale } from '../../domain/models'
 import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
 import { collectChartSeries, computeSolveStats } from '../../data/repositories/solveStats'
 import { Button } from '../../ui/Button'
@@ -32,8 +32,10 @@ function DeltaBadge({ delta }: { delta: number | null }) {
 }
 
 export function StatsPage() {
-  const { solveStats, sessions, settings, currentSession, ownerId } = useApp()
+  const { solveStats, sessions, settings, updateSettings, currentSession, ownerId } = useApp()
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({})
+
+  const chartScale: StatsChartScale = settings.statsChartScale ?? 'all'
 
   const toggleSeries = (key: string) =>
     setHiddenSeries((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -60,8 +62,8 @@ export function StatsPage() {
   )
 
   const chartData = useLiveQuery(
-    async () => collectChartSeries(ownerId, settings.event),
-    [ownerId, settings.event],
+    async () => collectChartSeries(ownerId, settings.event, chartScale),
+    [ownerId, settings.event, chartScale],
   )
 
   const sessionSummary = useMemo(
@@ -147,7 +149,23 @@ export function StatsPage() {
           </div>
 
           <Panel className="stack">
-            <h2>Times Graph</h2>
+            <div className="row wrap" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <h2 style={{ margin: 0 }}>Times Graph</h2>
+              <div className="segmented" role="group" aria-label="Graph scale">
+                {STATS_CHART_SCALES.map((scale) => (
+                  <Button
+                    key={scale}
+                    type="button"
+                    className="compact"
+                    variant={chartScale === scale ? 'primary' : 'default'}
+                    aria-pressed={chartScale === scale}
+                    onClick={() => void updateSettings({ statsChartScale: scale })}
+                  >
+                    {STATS_CHART_SCALE_LABELS[scale]}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div style={{ width: '100%', height: 250 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData ?? []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>

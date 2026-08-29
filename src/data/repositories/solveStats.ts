@@ -1,5 +1,5 @@
 import Dexie from 'dexie'
-import type { CubeEvent, Solve } from '../../domain/models'
+import type { CubeEvent, Solve, StatsChartScale } from '../../domain/models'
 import { effectiveTimeMs } from '../../domain/models'
 import { averageFromValues } from '../../domain/stats/averages'
 import { db } from '../db'
@@ -140,13 +140,13 @@ export async function computeSolveStats(
 }
 
 /**
- * Streams the full solve history into a bounded number of chart points using
- * min/max downsampling, so the times graph stays representative without
- * retaining one point per solve.
+ * Streams the solve history into chart points with continuous rolling averages.
+ * Supports scaling to recent solves ('100', '250', '500', '1000') or 'all' with downsampling.
  */
 export async function collectChartSeries(
   ownerId: string,
   event: CubeEvent,
+  scale: StatsChartScale = 'all',
   maxPoints = DEFAULT_CHART_POINTS,
 ): Promise<ChartPoint[]> {
   type RawPoint = { pos: number; time: number | null; ao5: number | null; ao12: number | null }
@@ -156,6 +156,7 @@ export async function collectChartSeries(
     { n: 12, deque: [] },
   ]
   let pos = 0
+  const limit = scale === 'all' ? null : Number(scale)
 
   const feed = (solve: Solve) => {
     pos += 1
@@ -177,7 +178,11 @@ export async function collectChartSeries(
       }
     }
     pts.push(point)
-    if (pts.length > maxPoints) {
+    if (limit !== null) {
+      if (pts.length > limit) {
+        pts.shift()
+      }
+    } else if (pts.length > maxPoints) {
       const tail = pts.slice(-4)
       const rest = pts.slice(0, -4)
       if (tail.length === 4) {

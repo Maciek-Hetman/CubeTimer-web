@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
     timerFont: 'jetbrains',
     timerSize: 'medium',
     widgetScale: 100,
+    statsChartScale: 'all',
   } as AppSettings,
   updateSettings: vi.fn(),
 }))

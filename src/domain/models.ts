@@ -29,6 +29,17 @@ export const WIDGET_SCALE_PRESETS = [
 ] as const
 export type WidgetScalePreset = (typeof WIDGET_SCALE_PRESETS)[number]['id']
 
+export const STATS_CHART_SCALES = ['all', '1000', '500', '250', '100'] as const
+export type StatsChartScale = (typeof STATS_CHART_SCALES)[number]
+
+export const STATS_CHART_SCALE_LABELS: Record<StatsChartScale, string> = {
+  all: 'All',
+  '1000': 'Last 1000',
+  '500': 'Last 500',
+  '250': 'Last 250',
+  '100': 'Last 100',
+}
+
 export interface CubeSession {
   id: string
   ownerId: string
@@ -105,6 +116,7 @@ export interface AppSettings {
   timerFont: TimerFont
   timerSize: TimerSize
   widgetScale: number
+  statsChartScale: StatsChartScale
 }
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
@@ -123,6 +135,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   timerFont: 'jetbrains',
   timerSize: 'medium',
   widgetScale: 100,
+  statsChartScale: 'all',
 }
 
 export function createId(): string {

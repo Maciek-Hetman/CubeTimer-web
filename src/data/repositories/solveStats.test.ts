@@ -192,16 +192,16 @@ describe('collectChartSeries', () => {
   it('keeps every point when the history is smaller than the cap', async () => {
     const owner = 'user-1'
     seedDataset(owner, 'session-1', 30)
-    const series = await collectChartSeries(owner, '3x3', 100)
+    const series = await collectChartSeries(owner, '3x3', 'all', 100)
     expect(series).toHaveLength(30)
     expect(series[0].index).toBe(1)
     expect(series[series.length - 1].index).toBe(30)
   })
 
-  it('downsamples large histories to a bounded point count', async () => {
+  it('downsamples large histories to a bounded point count when scale is all', async () => {
     const owner = 'user-1'
     seedDataset(owner, 'session-1', 600)
-    const series = await collectChartSeries(owner, '3x3', DEFAULT_CHART_POINTS)
+    const series = await collectChartSeries(owner, '3x3', 'all', DEFAULT_CHART_POINTS)
     expect(series.length).toBeLessThanOrEqual(DEFAULT_CHART_POINTS)
     expect(series[0].index).toBe(1)
     expect(series[series.length - 1].index).toBe(600)
@@ -211,7 +211,7 @@ describe('collectChartSeries', () => {
     const owner = 'user-1'
     seedDataset(owner, 'session-1', 30)
     const solves = await listSolves(owner, '3x3')
-    const series = await collectChartSeries(owner, '3x3', 100)
+    const series = await collectChartSeries(owner, '3x3', 'all', 100)
     const seconds = (value: number | null) => (value === null ? null : value / 1000)
 
     for (const point of series) {
@@ -228,7 +228,7 @@ describe('collectChartSeries', () => {
     const owner = 'user-1'
     seedDataset(owner, 'session-1', 600)
     const solves = await listSolves(owner, '3x3')
-    const series = await collectChartSeries(owner, '3x3', DEFAULT_CHART_POINTS)
+    const series = await collectChartSeries(owner, '3x3', 'all', DEFAULT_CHART_POINTS)
     const seconds = (value: number | null) => (value === null ? null : value / 1000)
 
     for (const point of series) {
@@ -240,4 +240,45 @@ describe('collectChartSeries', () => {
     expect(latest.ao5).not.toBeNull()
     expect(latest.ao12).not.toBeNull()
   }, 15_000)
+
+  it('slices to the last N points and retains absolute solve index for scaling options', async () => {
+    const owner = 'user-1'
+    seedDataset(owner, 'session-1', 250)
+    const solves = await listSolves(owner, '3x3')
+    const seconds = (value: number | null) => (value === null ? null : value / 1000)
+
+    // Last 100
+    const series100 = await collectChartSeries(owner, '3x3', '100')
+    expect(series100).toHaveLength(100)
+    expect(series100[0].index).toBe(151)
+    expect(series100[series100.length - 1].index).toBe(250)
+
+    // Verify rolling averages on the boundary of the slice
+    for (const point of series100) {
+      const from = solves.length - point.index
+      expect(point.ao5).toBe(seconds(averageOfN(solves.slice(from, from + 5), 5)))
+      expect(point.ao12).toBe(seconds(averageOfN(solves.slice(from, from + 12), 12)))
+    }
+
+    // Last 250
+    const series250 = await collectChartSeries(owner, '3x3', '250')
+    expect(series250).toHaveLength(250)
+    expect(series250[0].index).toBe(1)
+    expect(series250[series250.length - 1].index).toBe(250)
+  })
+
+  it('returns all points if total solves are fewer than the selected scale', async () => {
+    const owner = 'user-1'
+    seedDataset(owner, 'session-1', 40)
+
+    const series500 = await collectChartSeries(owner, '3x3', '500')
+    expect(series500).toHaveLength(40)
+    expect(series500[0].index).toBe(1)
+    expect(series500[series500.length - 1].index).toBe(40)
+
+    const series1000 = await collectChartSeries(owner, '3x3', '1000')
+    expect(series1000).toHaveLength(40)
+    expect(series1000[0].index).toBe(1)
+    expect(series1000[series1000.length - 1].index).toBe(40)
+  })
 })
