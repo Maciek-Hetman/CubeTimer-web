@@ -8,8 +8,7 @@ import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
-import { Panel } from '../../ui/Panel'
-import { EyeIcon, ChevronDownIcon } from '../../ui/NavIcons'
+import { EyeIcon, ChevronDownIcon, TrashIcon } from '../../ui/NavIcons'
 import {
   countSolvesBySession,
   listOrphanSolves,
@@ -29,9 +28,10 @@ const PAGE_SIZE = 20
 const SOLVES_PER_GROUP = 200
 
 export function HistoryPage() {
-  const { solveStats, sessions, settings, currentSession, ownerId, updateSolvePenalty, deleteSolve } =
+  const { solveStats, sessions, settings, currentSession, ownerId, updateSolvePenalty, deleteSolve, removeSession } =
     useApp()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [pendingSessionDelete, setPendingSessionDelete] = useState<CubeSession | null>(null)
   const [previewSolve, setPreviewSolve] = useState<Solve | null>(null)
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set())
@@ -73,6 +73,7 @@ export function HistoryPage() {
         solveCount: counts?.counts.get(session.id) ?? 0,
         session,
       }))
+      .filter((item) => counts === undefined || item.solveCount > 0)
     if ((counts?.orphanCount ?? 0) > 0) {
       items.push({
         id: 'orphan',
@@ -111,7 +112,7 @@ export function HistoryPage() {
         />
       ) : (
         <>
-          <Panel className="stack">
+          <div className="stack session-list">
             {currentItems.map((item) => {
               const isExpanded = expandedSessions.has(item.id)
               return (
@@ -127,6 +128,7 @@ export function HistoryPage() {
                   onToggle={() => toggleSession(item.id)}
                   onPreview={openPreview}
                   onDelete={setPendingDelete}
+                  onDeleteSession={setPendingSessionDelete}
                   updateSolvePenalty={updateSolvePenalty}
                 />
               )
@@ -151,7 +153,7 @@ export function HistoryPage() {
                 </Button>
               </div>
             )}
-          </Panel>
+          </div>
           <p className="muted">{listItems.length} sessions stored</p>
         </>
       )}
@@ -179,6 +181,35 @@ export function HistoryPage() {
           }
         >
           <p>Delete this solve? This cannot be undone.</p>
+        </Dialog>
+      ) : null}
+
+      {pendingSessionDelete ? (
+        <Dialog
+          title="Delete session"
+          onClose={() => setPendingSessionDelete(null)}
+          footer={
+            <div className="row wrap">
+              <Button type="button" onClick={() => setPendingSessionDelete(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  void removeSession(pendingSessionDelete.id)
+                  setPendingSessionDelete(null)
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          }
+        >
+          <p>
+            Delete <strong>{pendingSessionDelete.name || 'Unnamed Session'}</strong> and all of its
+            solves? This cannot be undone.
+          </p>
         </Dialog>
       ) : null}
 
@@ -238,6 +269,7 @@ function SessionGroup({
   onToggle,
   onPreview,
   onDelete,
+  onDeleteSession,
   updateSolvePenalty,
 }: {
   ownerId: string
@@ -250,6 +282,7 @@ function SessionGroup({
   onToggle: () => void
   onPreview: (solve: Solve) => void
   onDelete: (solveId: string) => void
+  onDeleteSession: (session: CubeSession) => void
   updateSolvePenalty: (solveId: string, penalty: Solve['penalty']) => Promise<void>
 }) {
   const solves = useLiveQuery(
@@ -259,22 +292,36 @@ function SessionGroup({
   )
 
   return (
-    <div className="session-group" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px' }}>
-      <div
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px 0' }}
-        onClick={onToggle}
-      >
-        <div>
+    <div className={`session-group${expanded ? ' expanded' : ''}`}>
+      <div className="session-group-header" onClick={onToggle}>
+        <div className="session-group-title">
           <h3 style={{ margin: 0, fontSize: '1.1em' }}>{title}</h3>
           <div className="muted" style={{ fontSize: '0.9em' }}>{subtitle} · {solveCount} solves</div>
         </div>
-        <Button type="button" variant="ghost" className="icon">
-          <ChevronDownIcon style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
-        </Button>
+        <div className="row" style={{ gap: '4px' }}>
+          {session ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="icon danger"
+              aria-label={`Delete session ${title}`}
+              title="Delete session"
+              onClick={(event) => {
+                event.stopPropagation()
+                onDeleteSession(session)
+              }}
+            >
+              <TrashIcon />
+            </Button>
+          ) : null}
+          <Button type="button" variant="ghost" className="icon" aria-label="Expand session">
+            <ChevronDownIcon style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
+          </Button>
+        </div>
       </div>
 
       {expanded && (
-        <div className="stack" style={{ marginTop: '16px', paddingLeft: '16px', borderLeft: '2px solid var(--border)' }}>
+        <div className="session-group-solves">
           {solves?.length === 0 && <p className="muted">No solves in this session.</p>}
           {solves?.map((solve) => (
             <SolveRow

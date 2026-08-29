@@ -1104,6 +1104,50 @@ input[type='range']::-moz-range-thumb {
   font-size: var(--text-sm);
 }
 
+.session-list {
+  gap: var(--space-2);
+}
+
+.session-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color 0.15s ease;
+}
+
+.session-group.expanded {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.session-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.session-group-title {
+  min-width: 0;
+}
+
+.session-group-header .btn.icon.danger {
+  color: var(--danger);
+}
+
+.session-group-header .btn.icon.danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.session-group-solves {
+  margin-top: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+}
+
 .auth-layout {
   width: min(420px, 100%);
   margin: 48px auto;
@@ -1197,6 +1241,7 @@ input[type='range']::-moz-range-thumb {
 /* Transparent UI Glassmorphism */
 html[data-transparent-ui="true"] .panel,
 html[data-transparent-ui="true"] .widget-grid-item,
+html[data-transparent-ui="true"] .session-group,
 html[data-transparent-ui="true"] .custom-select-trigger {
   background: color-mix(in srgb, var(--surface) var(--ui-opacity), transparent) !important;
   backdrop-filter: blur(16px) !important;

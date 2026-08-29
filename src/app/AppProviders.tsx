@@ -22,6 +22,7 @@ import {
 } from '../data/repositories/sessions'
 import {
   latestSolveInSession,
+  listSolvesForSession,
   newSolve,
   putSolve,
   recentSolves,
@@ -597,6 +598,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
     [enqueueWrites, ownerId, requestSync],
   )
 
+  const removeSessionInternal = useCallback(
+    async (session: CubeSession) => {
+      const count = await deleteSessionCascade(session.id, { enqueue: enqueueWrites })
+      if (!ownerId) {
+        return count
+      }
+      const current = await getOrCreateSettings(ownerId)
+      if (current.currentSessionIds[current.event] === session.id) {
+        const next = { ...current.currentSessionIds }
+        delete next[current.event]
+        await updateSettings({ currentSessionIds: next })
+      }
+      if (enqueueWrites) {
+        requestSync()
+      }
+      return count
+    },
+    [enqueueWrites, ownerId, requestSync, updateSettings],
+  )
+
   const deleteSolve = useCallback(
     async (solveId: string) => {
       const solve = await db.solves.get(solveId)
@@ -607,8 +628,17 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (enqueueWrites) {
         requestSync()
       }
+      if (solve.sessionId) {
+        const remaining = await listSolvesForSession(ownerId, solve.sessionId, 1)
+        if (remaining.length === 0) {
+          const session = await db.sessions.get(solve.sessionId)
+          if (session && !session.deletedAt) {
+            await removeSessionInternal(session)
+          }
+        }
+      }
     },
-    [enqueueWrites, ownerId, requestSync],
+    [enqueueWrites, ownerId, requestSync, removeSessionInternal],
   )
 
   const createSession = useCallback(
@@ -667,22 +697,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (!session || session.ownerId !== ownerId) {
         return 0
       }
-      const count = await deleteSessionCascade(sessionId, { enqueue: enqueueWrites })
-      if (!ownerId) {
-        return count
-      }
-      const current = await getOrCreateSettings(ownerId)
-      if (current.currentSessionIds[current.event] === sessionId) {
-        const next = { ...current.currentSessionIds }
-        delete next[current.event]
-        await updateSettings({ currentSessionIds: next })
-      }
-      if (enqueueWrites) {
-        requestSync()
-      }
-      return count
+      return removeSessionInternal(session)
     },
-    [enqueueWrites, ownerId, requestSync, updateSettings],
+    [ownerId, removeSessionInternal],
   )
 
   const applyAuthSession = useCallback(
