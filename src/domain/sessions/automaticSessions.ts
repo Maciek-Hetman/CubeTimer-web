@@ -17,8 +17,27 @@ export function dayPartFromDate(date: Date): DayPart {
 }
 
 export function automaticSessionName(date: Date): string {
-  const weekday = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date)
-  return `${weekday} ${dayPartFromDate(date)}`
+  const day = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+    .format(date)
+    .toLowerCase()
+  return `${day} ${dayPartFromDate(date)}`
+}
+
+export function uniqueAutomaticSessionName(date: Date, existingNames: Iterable<string>): string {
+  const base = automaticSessionName(date)
+  const taken = new Set(existingNames)
+  if (!taken.has(base)) {
+    return base
+  }
+  let n = 2
+  while (taken.has(`${base} ${n}`)) {
+    n += 1
+  }
+  return `${base} ${n}`
 }
 
 export function latestSolveInSession(solves: Solve[], sessionId: string): Solve | undefined {

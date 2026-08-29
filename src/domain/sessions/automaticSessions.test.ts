@@ -3,6 +3,7 @@ import {
   automaticSessionName,
   dayPartFromDate,
   shouldReuseAutomaticSession,
+  uniqueAutomaticSessionName,
 } from './automaticSessions'
 import type { CubeSession, Solve } from '../models'
 
@@ -40,10 +41,23 @@ function solve(solvedAt: string): Solve {
 }
 
 describe('automatic sessions', () => {
-  it('names sessions from weekday and day part', () => {
+  it('names sessions from date and day part', () => {
     const date = new Date(2026, 7, 22, 19, 30, 0)
     expect(dayPartFromDate(date)).toBe('evening')
-    expect(automaticSessionName(date).toLowerCase()).toContain('evening')
+    expect(automaticSessionName(date)).toBe('22 aug 2026 evening')
+  })
+
+  it('appends a number when the name is already taken', () => {
+    const date = new Date(2026, 7, 22, 19, 30, 0)
+    expect(uniqueAutomaticSessionName(date, [])).toBe('22 aug 2026 evening')
+    expect(uniqueAutomaticSessionName(date, ['22 aug 2026 evening'])).toBe('22 aug 2026 evening 2')
+    expect(
+      uniqueAutomaticSessionName(date, [
+        '22 aug 2026 evening',
+        '22 aug 2026 evening 2',
+        '22 aug 2026 evening 3',
+      ]),
+    ).toBe('22 aug 2026 evening 4')
   })
 
   it('reuses a session within the inactivity gap', () => {

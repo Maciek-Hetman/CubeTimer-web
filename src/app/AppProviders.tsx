@@ -35,9 +35,9 @@ import {
 } from '../data/repositories/solveStats'
 import { DEFAULT_SETTINGS, nowIso, type AppSettings, type CubeEvent, type CubeSession, type Penalty, type Solve } from '../domain/models'
 import {
-  automaticSessionName,
   findOpenAutomaticSession,
   shouldReuseAutomaticSession,
+  uniqueAutomaticSessionName,
 } from '../domain/sessions/automaticSessions'
 import { adoptGuestData } from '../sync/guestMerge'
 import { runSync, getLastSyncedAt, lastSyncKey, withBackoff, type SyncStatus } from '../sync/syncEngine'
@@ -543,7 +543,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
           }
           const created = newSession({
             ownerId,
-            name: automaticSessionName(new Date(now)),
+            name: uniqueAutomaticSessionName(
+              new Date(now),
+              allSessions.map((session) => session.name),
+            ),
             event: current.event,
             kind: 'automatic',
             startedAt: nowIso(new Date(now)),
