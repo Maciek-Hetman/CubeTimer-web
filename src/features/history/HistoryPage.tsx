@@ -8,7 +8,7 @@ import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
-import { EyeIcon, ChevronDownIcon, TrashIcon } from '../../ui/NavIcons'
+import { EyeIcon, ChevronDownIcon, TrashIcon, PencilIcon } from '../../ui/NavIcons'
 import {
   countSolvesBySession,
   listOrphanSolves,
@@ -28,10 +28,21 @@ const PAGE_SIZE = 20
 const SOLVES_PER_GROUP = 200
 
 export function HistoryPage() {
-  const { solveStats, sessions, settings, currentSession, ownerId, updateSolvePenalty, deleteSolve, removeSession } =
-    useApp()
+  const {
+    solveStats,
+    sessions,
+    settings,
+    currentSession,
+    ownerId,
+    updateSolvePenalty,
+    deleteSolve,
+    removeSession,
+    renameSession,
+  } = useApp()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [pendingSessionDelete, setPendingSessionDelete] = useState<CubeSession | null>(null)
+  const [pendingSessionRename, setPendingSessionRename] = useState<CubeSession | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
   const [previewSolve, setPreviewSolve] = useState<Solve | null>(null)
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set())
@@ -96,6 +107,11 @@ export function HistoryPage() {
     void import('cubing/twisty').then(() => setPreviewSolve(solve))
   }
 
+  const openRenameSession = (session: CubeSession) => {
+    setPendingSessionRename(session)
+    setRenameDraft(session.name)
+  }
+
   return (
     <div className="stack narrow-page">
       <PageHeader
@@ -132,6 +148,7 @@ export function HistoryPage() {
                   onPreview={openPreview}
                   onDelete={setPendingDelete}
                   onDeleteSession={setPendingSessionDelete}
+                  onRenameSession={openRenameSession}
                   updateSolvePenalty={updateSolvePenalty}
                 />
               )
@@ -184,6 +201,55 @@ export function HistoryPage() {
           }
         >
           <p>Delete this solve? This cannot be undone.</p>
+        </Dialog>
+      ) : null}
+
+      {pendingSessionRename ? (
+        <Dialog
+          title="Rename session"
+          onClose={() => setPendingSessionRename(null)}
+          footer={
+            <div className="row wrap">
+              <Button type="button" onClick={() => setPendingSessionRename(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  const next = renameDraft.trim()
+                  if (next && next !== pendingSessionRename.name) {
+                    void renameSession(pendingSessionRename.id, next)
+                  }
+                  setPendingSessionRename(null)
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          }
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              const next = renameDraft.trim()
+              if (next && next !== pendingSessionRename.name) {
+                void renameSession(pendingSessionRename.id, next)
+              }
+              setPendingSessionRename(null)
+            }}
+          >
+            <label className="field">
+              Session name
+              <input
+                autoFocus
+                value={renameDraft}
+                onChange={(event) => setRenameDraft(event.target.value)}
+                aria-label="Session name"
+                placeholder="Session name"
+              />
+            </label>
+          </form>
         </Dialog>
       ) : null}
 
@@ -274,6 +340,7 @@ function SessionGroup({
   onPreview,
   onDelete,
   onDeleteSession,
+  onRenameSession,
   updateSolvePenalty,
 }: {
   ownerId: string
@@ -288,6 +355,7 @@ function SessionGroup({
   onPreview: (solve: Solve) => void
   onDelete: (solveId: string) => void
   onDeleteSession: (session: CubeSession) => void
+  onRenameSession: (session: CubeSession) => void
   updateSolvePenalty: (solveId: string, penalty: Solve['penalty']) => Promise<void>
 }) {
   const solves = useLiveQuery(
@@ -307,19 +375,34 @@ function SessionGroup({
         </div>
         <div className="row" style={{ gap: '4px' }}>
           {session ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="icon danger"
-              aria-label={`Delete session ${title}`}
-              title="Delete session"
-              onClick={(event) => {
-                event.stopPropagation()
-                onDeleteSession(session)
-              }}
-            >
-              <TrashIcon />
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                className="icon"
+                aria-label={`Rename session ${title}`}
+                title="Rename session"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onRenameSession(session)
+                }}
+              >
+                <PencilIcon />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="icon danger"
+                aria-label={`Delete session ${title}`}
+                title="Delete session"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDeleteSession(session)
+                }}
+              >
+                <TrashIcon />
+              </Button>
+            </>
           ) : null}
           <Button type="button" variant="ghost" className="icon" aria-label="Expand session">
             <ChevronDownIcon style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
