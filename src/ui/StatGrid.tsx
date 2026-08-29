@@ -4,14 +4,16 @@ export function StatGrid({
   items,
   columns,
   size = 'normal',
+  className,
 }: {
   items: Array<[string, ReactNode]>
   columns?: number
   size?: 'normal' | 'large'
+  className?: string
 }) {
   return (
     <div
-      className={`stat-grid ${size === 'large' ? 'stat-grid-large' : ''}`}
+      className={`stat-grid ${size === 'large' ? 'stat-grid-large' : ''} ${className ?? ''}`}
       style={columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}
     >
       {items.map(([label, value]) => (

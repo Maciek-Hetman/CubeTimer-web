@@ -22,16 +22,14 @@ export function PersonalBestsWidget() {
   }
 
   return (
-    <div className="stack">
-      <StatGrid
-        size="large"
-        columns={2}
-        items={[
-          ['Single', formatAverage(solveStats.best)],
-          ['Ao5', formatAverage(solveStats.bestAo5)],
-          ['Ao12', formatAverage(solveStats.bestAo12)],
-        ]}
-      />
-    </div>
+    <StatGrid
+      className="stat-grid-compact"
+      columns={3}
+      items={[
+        ['Single', formatAverage(solveStats.best)],
+        ['Ao5', formatAverage(solveStats.bestAo5)],
+        ['Ao12', formatAverage(solveStats.bestAo12)],
+      ]}
+    />
   )
 }
