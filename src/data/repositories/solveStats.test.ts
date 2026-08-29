@@ -165,4 +165,38 @@ describe('collectChartSeries', () => {
     expect(series[0].index).toBe(1)
     expect(series[series.length - 1].index).toBe(600)
   }, 15_000)
+
+  it('overlays running ao5 and ao12 averages on every point', async () => {
+    const owner = 'user-1'
+    seedDataset(owner, 'session-1', 30)
+    const solves = await listSolves(owner, '3x3')
+    const series = await collectChartSeries(owner, '3x3', 100)
+    const seconds = (value: number | null) => (value === null ? null : value / 1000)
+
+    for (const point of series) {
+      const from = solves.length - point.index
+      expect(point.ao5).toBe(seconds(averageOfN(solves.slice(from, from + 5), 5)))
+      expect(point.ao12).toBe(seconds(averageOfN(solves.slice(from, from + 12), 12)))
+    }
+    const latest = series[series.length - 1]
+    expect(latest.ao5).not.toBeNull()
+    expect(latest.ao12).not.toBeNull()
+  })
+
+  it('carries ao5 and ao12 through downsampling', async () => {
+    const owner = 'user-1'
+    seedDataset(owner, 'session-1', 600)
+    const solves = await listSolves(owner, '3x3')
+    const series = await collectChartSeries(owner, '3x3', DEFAULT_CHART_POINTS)
+    const seconds = (value: number | null) => (value === null ? null : value / 1000)
+
+    for (const point of series) {
+      const from = solves.length - point.index
+      expect(point.ao5).toBe(seconds(averageOfN(solves.slice(from, from + 5), 5)))
+      expect(point.ao12).toBe(seconds(averageOfN(solves.slice(from, from + 12), 12)))
+    }
+    const latest = series[series.length - 1]
+    expect(latest.ao5).not.toBeNull()
+    expect(latest.ao12).not.toBeNull()
+  }, 15_000)
 })

@@ -1,15 +1,22 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppProviders'
 import { eventLabel } from '../../domain/models'
 import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
 import { collectChartSeries, computeSolveStats } from '../../data/repositories/solveStats'
+import { Button } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { StatGrid } from '../../ui/StatGrid'
+
+const CHART_SERIES = [
+  { key: 'time', label: 'Time', color: '#8884d8' },
+  { key: 'ao5', label: 'Ao5', color: '#22c55e' },
+  { key: 'ao12', label: 'Ao12', color: '#f59e0b' },
+] as const
 
 function DeltaBadge({ delta }: { delta: number | null }) {
   if (delta === null || isNaN(delta)) return null
@@ -26,6 +33,10 @@ function DeltaBadge({ delta }: { delta: number | null }) {
 
 export function StatsPage() {
   const { solveStats, sessions, settings, currentSession, ownerId } = useApp()
+  const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({})
+
+  const toggleSeries = (key: string) =>
+    setHiddenSeries((prev) => ({ ...prev, [key]: !prev[key] }))
 
   const previousSession = useMemo(() => {
     if (!currentSession) return null
@@ -141,15 +152,57 @@ export function StatsPage() {
             <div style={{ width: '100%', height: 250 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData ?? []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <Line type="monotone" dataKey="time" stroke="#8884d8" dot={false} isAnimationActive={false} />
+                  {CHART_SERIES.map(
+                    (series) =>
+                      !hiddenSeries[series.key] && (
+                        <Line
+                          key={series.key}
+                          type="monotone"
+                          dataKey={series.key}
+                          name={series.label}
+                          stroke={series.color}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      ),
+                  )}
                   <XAxis dataKey="index" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} width={40} />
                   <Tooltip
                     labelFormatter={(label) => `Solve ${label}`}
-                    formatter={(value) => [`${Number(value).toFixed(2)}s`, 'Time']}
+                    formatter={(value, name) => [`${Number(value).toFixed(2)}s`, String(name)]}
                   />
+                  <Legend />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+            <div className="segmented" role="group" aria-label="Chart series visibility">
+              {CHART_SERIES.map((series) => {
+                const hidden = Boolean(hiddenSeries[series.key])
+                return (
+                  <Button
+                    key={series.key}
+                    type="button"
+                    variant={hidden ? 'default' : 'primary'}
+                    aria-pressed={!hidden}
+                    onClick={() => toggleSeries(series.key)}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: 'inline-block',
+                        width: 10,
+                        height: 10,
+                        marginRight: 6,
+                        borderRadius: '50%',
+                        backgroundColor: series.color,
+                        opacity: hidden ? 0.35 : 1,
+                      }}
+                    />
+                    {series.label}
+                  </Button>
+                )
+              })}
             </div>
           </Panel>
 

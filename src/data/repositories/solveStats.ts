@@ -54,18 +54,19 @@ export const DEFAULT_CHART_POINTS = 500
 export interface ChartPoint {
   index: number
   time: number | null
+  ao5: number | null
+  ao12: number | null
 }
 
-function solvesByTime(ownerId: string, event: CubeEvent, sessionId?: string) {
-  return sessionId
+function solvesByTime(ownerId: string, event: CubeEvent, sessionId?: string, descending = true) {
+  const query = sessionId
     ? db.solves
         .where('[ownerId+sessionId+solvedAt]')
         .between([ownerId, sessionId, Dexie.minKey], [ownerId, sessionId, Dexie.maxKey], true, true)
-        .reverse()
     : db.solves
         .where('[ownerId+event+solvedAt]')
         .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
-        .reverse()
+  return descending ? query.reverse() : query
 }
 
 /**
@@ -148,41 +149,58 @@ export async function collectChartSeries(
   event: CubeEvent,
   maxPoints = DEFAULT_CHART_POINTS,
 ): Promise<ChartPoint[]> {
-  type RawPoint = { pos: number; time: number | null }
+  type RawPoint = { pos: number; time: number | null; ao5: number | null; ao12: number | null }
   const pts: RawPoint[] = []
+  const aoWindows: Array<{ n: number; deque: Array<number | null> }> = [
+    { n: 5, deque: [] },
+    { n: 12, deque: [] },
+  ]
   let pos = 0
 
   const feed = (solve: Solve) => {
     pos += 1
-    const time = effectiveTimeMs(solve)
-    pts.push({ pos, time: time === null ? null : time / 1000 })
-    if (pts.length > maxPoints) {
-      const merged: RawPoint[] = []
-      for (let i = 0; i < pts.length; i += 4) {
-        const bucket = pts.slice(i, i + 4)
-        if (bucket.length < 4) {
-          merged.push(...bucket)
-          continue
+    const effective = effectiveTimeMs(solve)
+    const time = effective === null ? null : effective / 1000
+    const point: RawPoint = { pos, time, ao5: null, ao12: null }
+    for (const window of aoWindows) {
+      window.deque.push(effective)
+      if (window.deque.length > window.n) {
+        window.deque.shift()
+      }
+      if (window.deque.length === window.n) {
+        const value = averageFromValues(window.deque, window.n)
+        if (window.n === 5) {
+          point.ao5 = value === null ? null : value / 1000
+        } else {
+          point.ao12 = value === null ? null : value / 1000
         }
-        const min = bucket.reduce((a, b) =>
+      }
+    }
+    pts.push(point)
+    if (pts.length > maxPoints) {
+      const tail = pts.slice(-4)
+      const rest = pts.slice(0, -4)
+      if (tail.length === 4) {
+        const min = tail.reduce((a, b) =>
           b.time !== null && (a.time === null || b.time < a.time) ? b : a,
         )
-        const max = bucket.reduce((a, b) =>
+        const max = tail.reduce((a, b) =>
           b.time !== null && (a.time === null || b.time > a.time) ? b : a,
         )
-        merged.push(min, max)
+        pts.length = 0
+        pts.push(...rest, min, max)
       }
-      pts.length = 0
-      pts.push(...merged)
     }
   }
 
-  await solvesByTime(ownerId, event)
+  await solvesByTime(ownerId, event, undefined, false)
     .filter((solve) => !solve.deletedAt)
     .each(feed)
 
-  const count = pos
-  return pts
-    .sort((a, b) => b.pos - a.pos)
-    .map((point) => ({ index: count - point.pos + 1, time: point.time }))
+  return pts.map((point) => ({
+    index: point.pos,
+    time: point.time,
+    ao5: point.ao5,
+    ao12: point.ao12,
+  }))
 }
