@@ -1213,4 +1213,119 @@ input[type='range']::-moz-range-thumb {
   width: 100%;
 }
 
+.narrow-page {
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.settings-page {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .settings-page {
+    max-width: 860px;
+  }
+}
+
+.settings-mobile-header {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.settings-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.settings-sidebar {
+  display: none;
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-section {
+  scroll-margin-top: calc(var(--header-height) + var(--space-4));
+}
+
+@media (min-width: 768px) {
+  .settings-mobile-header {
+    display: none;
+  }
+
+  .settings-layout {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-5);
+  }
+
+  .settings-sidebar {
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: calc(var(--header-height) + var(--space-4));
+  }
+
+  .settings-sidebar-header {
+    margin-bottom: var(--space-3);
+  }
+
+  .settings-sidebar-title {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-left: 2px solid var(--border);
+    padding-left: 0;
+    margin: 0;
+  }
+
+  .settings-nav-link {
+    display: block;
+    padding: 8px 12px;
+    margin-left: -2px;
+    border-left: 2px solid transparent;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    transition:
+      color var(--duration) var(--ease),
+      border-color var(--duration) var(--ease),
+      background-color var(--duration) var(--ease);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+
+  .settings-nav-link:hover {
+    color: var(--text);
+    background: var(--surface-muted);
+  }
+
+  .settings-nav-link.active {
+    color: var(--accent);
+    font-weight: 600;
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+
 
