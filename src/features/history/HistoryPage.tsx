@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppProviders'
 import { eventLabel, type CubeEvent, type CubeSession, type Solve } from '../../domain/models'
-import { formatSolveTime } from '../../domain/stats/formatTime'
+import { formatAverage, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
 import { EmptyState } from '../../ui/EmptyState'
@@ -49,11 +49,11 @@ export function HistoryPage() {
     })
   }
 
-  const counts = useLiveQuery(
+  const sessionSummary = useLiveQuery(
     async () =>
       ownerId
         ? countSolvesBySession(ownerId, settings.event)
-        : { counts: new Map<string, number>(), orphanCount: 0 },
+        : { counts: new Map<string, number>(), averages: new Map<string, number | null>(), orphanCount: 0, orphanAvgTime: null },
     [ownerId, settings.event],
   )
 
@@ -63,6 +63,7 @@ export function HistoryPage() {
       title: string
       subtitle: string
       solveCount: number
+      avgTime: number | null
       session: CubeSession | null
     }> = [...sessions]
       .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
@@ -70,21 +71,23 @@ export function HistoryPage() {
         id: session.id,
         title: session.name || 'Unnamed Session',
         subtitle: `${eventLabel(session.event)} · ${new Date(session.startedAt).toLocaleDateString()}`,
-        solveCount: counts?.counts.get(session.id) ?? 0,
+        solveCount: sessionSummary?.counts.get(session.id) ?? 0,
+        avgTime: sessionSummary?.averages.get(session.id) ?? null,
         session,
       }))
-      .filter((item) => counts === undefined || item.solveCount > 0)
-    if ((counts?.orphanCount ?? 0) > 0) {
+      .filter((item) => sessionSummary === undefined || item.solveCount > 0)
+    if ((sessionSummary?.orphanCount ?? 0) > 0) {
       items.push({
         id: 'orphan',
         title: 'Uncategorized Solves',
         subtitle: 'No session',
-        solveCount: counts?.orphanCount ?? 0,
+        solveCount: sessionSummary?.orphanCount ?? 0,
+        avgTime: sessionSummary?.orphanAvgTime ?? null,
         session: null,
       })
     }
     return items
-  }, [sessions, counts])
+  }, [sessions, sessionSummary])
 
   const totalPages = Math.max(1, Math.ceil(listItems.length / PAGE_SIZE))
   const currentItems = listItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -123,6 +126,7 @@ export function HistoryPage() {
                   title={item.title}
                   subtitle={item.subtitle}
                   solveCount={item.solveCount}
+                  avgTime={item.avgTime}
                   expanded={isExpanded}
                   onToggle={() => toggleSession(item.id)}
                   onPreview={openPreview}
@@ -264,6 +268,7 @@ function SessionGroup({
   title,
   subtitle,
   solveCount,
+  avgTime,
   expanded,
   onToggle,
   onPreview,
@@ -277,6 +282,7 @@ function SessionGroup({
   title: string
   subtitle: string
   solveCount: number
+  avgTime: number | null
   expanded: boolean
   onToggle: () => void
   onPreview: (solve: Solve) => void
@@ -295,7 +301,9 @@ function SessionGroup({
       <div className="session-group-header" onClick={onToggle}>
         <div className="session-group-title">
           <h3 style={{ margin: 0, fontSize: '1.1em' }}>{title}</h3>
-          <div className="muted" style={{ fontSize: '0.9em' }}>{subtitle} · {solveCount} solves</div>
+          <div className="muted" style={{ fontSize: '0.9em' }}>
+            {subtitle} · {solveCount} {solveCount === 1 ? 'solve' : 'solves'}{solveCount > 0 ? ` · Avg: ${formatAverage(avgTime)}` : ''}
+          </div>
         </div>
         <div className="row" style={{ gap: '4px' }}>
           {session ? (

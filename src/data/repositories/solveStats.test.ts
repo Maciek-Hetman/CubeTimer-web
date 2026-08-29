@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../db'
 import {
+  countSolvesBySession,
   listSolves,
   listSolvesForSession,
   newSolve,
@@ -142,6 +143,46 @@ describe('bounded solve queries', () => {
     for (const row of rows) {
       expect(row.sessionId).toBe('session-1')
     }
+  })
+
+  it('aggregates solve count and average solve time per session', async () => {
+    const owner = 'user-1'
+    const now = '2026-01-01T12:00:00.000Z'
+    // Session 1: 3 valid solves (10s, 20s, 30s) -> avg = 20s (20000ms)
+    await putSolve(makeSolve(owner, 'session-1', 10000, 'none', now), { enqueue: false })
+    await putSolve(makeSolve(owner, 'session-1', 20000, 'none', now), { enqueue: false })
+    await putSolve(makeSolve(owner, 'session-1', 30000, 'none', now), { enqueue: false })
+
+    // Session 2: 1 normal (10s), 1 with +2 penalty (10s + 2s = 12s), 1 DNF -> avg = (10s + 12s)/2 = 11s (11000ms), count = 3
+    await putSolve(makeSolve(owner, 'session-2', 10000, 'none', now), { enqueue: false })
+    await putSolve(makeSolve(owner, 'session-2', 10000, 'plus_two', now), { enqueue: false })
+    await putSolve(makeSolve(owner, 'session-2', 15000, 'dnf', now), { enqueue: false })
+
+    // Session 3: only DNF -> avg = null, count = 2
+    await putSolve(makeSolve(owner, 'session-3', 10000, 'dnf', now), { enqueue: false })
+    await putSolve(makeSolve(owner, 'session-3', 12000, 'dnf', now), { enqueue: false })
+
+    // Orphan solves: 2 solves (15s, 25s) -> avg = 20s (20000ms), count = 2
+    await putSolve(makeSolve(owner, null, 15000, 'none', now), { enqueue: false })
+    await putSolve(makeSolve(owner, null, 25000, 'none', now), { enqueue: false })
+
+    // Deleted solve in session 1 (should be ignored)
+    const deletedSolve = makeSolve(owner, 'session-1', 999999, 'none', now)
+    await putSolve({ ...deletedSolve, deletedAt: now }, { enqueue: false })
+
+    const summary = await countSolvesBySession(owner, '3x3')
+
+    expect(summary.counts.get('session-1')).toBe(3)
+    expect(summary.averages.get('session-1')).toBe(20000)
+
+    expect(summary.counts.get('session-2')).toBe(3)
+    expect(summary.averages.get('session-2')).toBe(11000)
+
+    expect(summary.counts.get('session-3')).toBe(2)
+    expect(summary.averages.get('session-3')).toBeNull()
+
+    expect(summary.orphanCount).toBe(2)
+    expect(summary.orphanAvgTime).toBe(20000)
   })
 })
 

@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
 import type { CubeEvent, Solve, SolveInput } from '../../domain/models'
-import { createId, nowIso } from '../../domain/models'
+import { createId, effectiveTimeMs, nowIso } from '../../domain/models'
 import { db } from '../db'
 import { enqueueMutation } from './outbox'
 
@@ -8,6 +8,13 @@ export const RECENT_SOLVES_LIMIT = 25
 
 export interface SolvesQueryOptions {
   limit?: number
+}
+
+export interface SolvesBySessionSummary {
+  counts: Map<string, number>
+  averages: Map<string, number | null>
+  orphanCount: number
+  orphanAvgTime: number | null
 }
 
 export async function listSolves(
@@ -93,9 +100,12 @@ export async function listOrphanSolves(
 export async function countSolvesBySession(
   ownerId: string,
   event: CubeEvent,
-): Promise<{ counts: Map<string, number>; orphanCount: number }> {
-  const counts = new Map<string, number>()
+): Promise<SolvesBySessionSummary> {
+  const sessionAcc = new Map<string, { count: number; validCount: number; totalMs: number }>()
   let orphanCount = 0
+  let orphanValidCount = 0
+  let orphanTotalMs = 0
+
   await db.solves
     .where('[ownerId+event+solvedAt]')
     .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
@@ -103,13 +113,37 @@ export async function countSolvesBySession(
       if (solve.deletedAt) {
         return
       }
+      const effective = effectiveTimeMs(solve)
       if (solve.sessionId) {
-        counts.set(solve.sessionId, (counts.get(solve.sessionId) ?? 0) + 1)
+        let acc = sessionAcc.get(solve.sessionId)
+        if (!acc) {
+          acc = { count: 0, validCount: 0, totalMs: 0 }
+          sessionAcc.set(solve.sessionId, acc)
+        }
+        acc.count += 1
+        if (effective !== null) {
+          acc.validCount += 1
+          acc.totalMs += effective
+        }
       } else {
         orphanCount += 1
+        if (effective !== null) {
+          orphanValidCount += 1
+          orphanTotalMs += effective
+        }
       }
     })
-  return { counts, orphanCount }
+
+  const counts = new Map<string, number>()
+  const averages = new Map<string, number | null>()
+  for (const [sessionId, acc] of sessionAcc.entries()) {
+    counts.set(sessionId, acc.count)
+    averages.set(sessionId, acc.validCount > 0 ? acc.totalMs / acc.validCount : null)
+  }
+
+  const orphanAvgTime = orphanValidCount > 0 ? orphanTotalMs / orphanValidCount : null
+
+  return { counts, averages, orphanCount, orphanAvgTime }
 }
 
 export async function putSolve(
