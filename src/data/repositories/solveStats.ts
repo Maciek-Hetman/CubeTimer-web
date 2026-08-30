@@ -1,4 +1,3 @@
-import Dexie from 'dexie'
 import type { CubeEvent, Solve, StatsChartScale } from '../../domain/models'
 import { effectiveTimeMs } from '../../domain/models'
 import { averageFromValues } from '../../domain/stats/averages'
@@ -51,22 +50,29 @@ const CURRENT_WINDOW_CAP = 100
 
 export const DEFAULT_CHART_POINTS = 500
 
-export interface ChartPoint {
+interface ChartPoint {
   index: number
   time: number | null
   ao5: number | null
   ao12: number | null
 }
 
-function solvesByTime(ownerId: string, event: CubeEvent, sessionId?: string, descending = true) {
-  const query = sessionId
-    ? db.solves
-        .where('[ownerId+sessionId+solvedAt]')
-        .between([ownerId, sessionId, Dexie.minKey], [ownerId, sessionId, Dexie.maxKey], true, true)
-    : db.solves
-        .where('[ownerId+event+solvedAt]')
-        .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
-  return descending ? query.reverse() : query
+async function loadSolvesByTime(
+  ownerId: string,
+  event: CubeEvent,
+  sessionId?: string,
+  descending = true,
+): Promise<Solve[]> {
+  const collection = sessionId
+    ? db.solves.where('[ownerId+sessionId]').equals([ownerId, sessionId])
+    : db.solves.where('[ownerId+event]').equals([ownerId, event])
+  const rows = await collection.filter((solve) => !solve.deletedAt).toArray()
+  if (descending) {
+    rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+  } else {
+    rows.sort((a, b) => a.solvedAt.localeCompare(b.solvedAt))
+  }
+  return rows
 }
 
 /**
@@ -124,9 +130,10 @@ export async function computeSolveStats(
     }
   }
 
-  await solvesByTime(ownerId, event, sessionId)
-    .filter((solve) => !solve.deletedAt)
-    .each(feed)
+  const solves = await loadSolvesByTime(ownerId, event, sessionId, true)
+  for (const solve of solves) {
+    feed(solve)
+  }
 
   stats.mean = counted > 0 ? mean : null
   stats.stdDev = counted > 0 ? Math.sqrt(m2 / counted) : null
@@ -158,7 +165,8 @@ export async function collectChartSeries(
   let pos = 0
   const limit = scale === 'all' ? null : Number(scale)
 
-  const feed = (solve: Solve) => {
+  const solves = await loadSolvesByTime(ownerId, event, undefined, false)
+  for (const solve of solves) {
     pos += 1
     const effective = effectiveTimeMs(solve)
     const time = effective === null ? null : effective / 1000
@@ -178,31 +186,26 @@ export async function collectChartSeries(
       }
     }
     pts.push(point)
-    if (limit !== null) {
-      if (pts.length > limit) {
-        pts.shift()
-      }
-    } else if (pts.length > maxPoints) {
-      const tail = pts.slice(-4)
-      const rest = pts.slice(0, -4)
-      if (tail.length === 4) {
-        const min = tail.reduce((a, b) =>
-          b.time !== null && (a.time === null || b.time < a.time) ? b : a,
-        )
-        const max = tail.reduce((a, b) =>
-          b.time !== null && (a.time === null || b.time > a.time) ? b : a,
-        )
-        pts.length = 0
-        pts.push(...rest, min, max)
-      }
+    if (limit === null && pts.length > maxPoints) {
+      const len = pts.length
+      const p1 = pts[len - 4]
+      const p2 = pts[len - 3]
+      const p3 = pts[len - 2]
+      const p4 = pts[len - 1]
+      const tail = [p1, p2, p3, p4]
+      const min = tail.reduce((a, b) =>
+        b.time !== null && (a.time === null || b.time < a.time) ? b : a,
+      )
+      const max = tail.reduce((a, b) =>
+        b.time !== null && (a.time === null || b.time > a.time) ? b : a,
+      )
+      pts.splice(len - 4, 4, min, max)
     }
   }
 
-  await solvesByTime(ownerId, event, undefined, false)
-    .filter((solve) => !solve.deletedAt)
-    .each(feed)
+  const finalPts = limit !== null && pts.length > limit ? pts.slice(-limit) : pts
 
-  return pts.map((point) => ({
+  return finalPts.map((point) => ({
     index: point.pos,
     time: point.time,
     ao5: point.ao5,

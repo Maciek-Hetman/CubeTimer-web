@@ -5,6 +5,7 @@ export interface RequestOptions {
   method?: string
   body?: unknown
   accessToken?: string | null
+  headers?: Record<string, string>
 }
 
 export type AuthenticatedRequest = <T>(path: string, options?: Omit<RequestOptions, 'accessToken'>) => Promise<T>
@@ -12,6 +13,7 @@ export type AuthenticatedRequest = <T>(path: string, options?: Omit<RequestOptio
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    ...(options.headers ?? {}),
   }
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json'

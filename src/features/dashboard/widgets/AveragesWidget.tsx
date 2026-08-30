@@ -1,10 +1,10 @@
-import { useApp } from '../../../app/AppProviders'
+import { useSolves } from '../../../contexts/SolvesContext'
 import { formatAverage } from '../../../domain/stats/formatTime'
 
 const WINDOWS = [5, 12, 25, 50, 100] as const
 
 export function AveragesWidget() {
-  const { solveStats } = useApp()
+  const { solveStats } = useSolves()
   const current = (n: number): number | null =>
     n === 5
       ? solveStats.ao5

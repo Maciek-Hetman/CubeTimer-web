@@ -1,9 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useApp } from '../../app/AppProviders'
+import { useAuth } from '../../contexts/AuthContext'
+import { useSync } from '../../contexts/SyncContext'
 import { UserIcon } from '../../ui/NavIcons'
 
 export function AccountButton() {
-  const { user, syncStatus } = useApp()
+  const { user } = useAuth()
+  const { syncStatus } = useSync()
   const navigate = useNavigate()
 
   if (!user) {
@@ -32,7 +34,8 @@ export function AccountButton() {
 }
 
 export function AccountTabIcon() {
-  const { user, syncStatus } = useApp()
+  const { user } = useAuth()
+  const { syncStatus } = useSync()
   
   if (!user) {
     return <UserIcon />
@@ -47,4 +50,3 @@ export function AccountTabIcon() {
     </div>
   )
 }
-

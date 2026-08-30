@@ -1,4 +1,3 @@
-import Dexie from 'dexie'
 import type { CubeEvent, Solve, SolveInput } from '../../domain/models'
 import { createId, effectiveTimeMs, nowIso } from '../../domain/models'
 import { db } from '../db'
@@ -6,11 +5,11 @@ import { enqueueMutation } from './outbox'
 
 export const RECENT_SOLVES_LIMIT = 25
 
-export interface SolvesQueryOptions {
+interface SolvesQueryOptions {
   limit?: number
 }
 
-export interface SolvesBySessionSummary {
+interface SolvesBySessionSummary {
   counts: Map<string, number>
   averages: Map<string, number | null>
   orphanCount: number
@@ -22,15 +21,29 @@ export async function listSolves(
   event?: CubeEvent,
   options: SolvesQueryOptions = {},
 ): Promise<Solve[]> {
-  const collection = event
-    ? db.solves.where('[ownerId+event]').equals([ownerId, event])
-    : db.solves.where('ownerId').equals(ownerId)
-  let filtered = collection.filter((solve) => !solve.deletedAt && (!event || solve.event === event))
-  if (options.limit !== undefined) {
-    filtered = filtered.limit(options.limit)
+  if (event) {
+    const rows = await db.solves
+      .where('[ownerId+event]')
+      .equals([ownerId, event])
+      .filter((solve) => !solve.deletedAt)
+      .toArray()
+    rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+    if (options.limit !== undefined) {
+      return rows.slice(0, options.limit)
+    }
+    return rows
   }
-  const solves = await filtered.toArray()
-  return solves.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+
+  const collection = db.solves
+    .where('ownerId')
+    .equals(ownerId)
+    .filter((solve) => !solve.deletedAt)
+  const solves = await collection.toArray()
+  solves.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+  if (options.limit !== undefined) {
+    return solves.slice(0, options.limit)
+  }
+  return solves
 }
 
 export async function countSolves(ownerId: string, event: CubeEvent): Promise<number> {
@@ -46,13 +59,13 @@ export async function recentSolves(
   event: CubeEvent,
   limit = RECENT_SOLVES_LIMIT,
 ): Promise<Solve[]> {
-  return db.solves
-    .where('[ownerId+event+solvedAt]')
-    .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
-    .reverse()
+  const rows = await db.solves
+    .where('[ownerId+event]')
+    .equals([ownerId, event])
     .filter((solve) => !solve.deletedAt)
-    .limit(limit)
     .toArray()
+  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+  return rows.slice(0, limit)
 }
 
 export async function latestSolveInSession(
@@ -60,12 +73,11 @@ export async function latestSolveInSession(
   sessionId: string,
 ): Promise<Solve | undefined> {
   const rows = await db.solves
-    .where('[ownerId+sessionId+solvedAt]')
-    .between([ownerId, sessionId, Dexie.minKey], [ownerId, sessionId, Dexie.maxKey], true, true)
-    .reverse()
+    .where('[ownerId+sessionId]')
+    .equals([ownerId, sessionId])
     .filter((solve) => !solve.deletedAt)
-    .limit(1)
     .toArray()
+  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
   return rows[0]
 }
 
@@ -74,13 +86,13 @@ export async function listSolvesForSession(
   sessionId: string,
   limit = 200,
 ): Promise<Solve[]> {
-  return db.solves
-    .where('[ownerId+sessionId+solvedAt]')
-    .between([ownerId, sessionId, Dexie.minKey], [ownerId, sessionId, Dexie.maxKey], true, true)
-    .reverse()
+  const rows = await db.solves
+    .where('[ownerId+sessionId]')
+    .equals([ownerId, sessionId])
     .filter((solve) => !solve.deletedAt)
-    .limit(limit)
     .toArray()
+  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+  return rows.slice(0, limit)
 }
 
 export async function listOrphanSolves(
@@ -88,13 +100,13 @@ export async function listOrphanSolves(
   event: CubeEvent,
   limit = 200,
 ): Promise<Solve[]> {
-  return db.solves
-    .where('[ownerId+event+solvedAt]')
-    .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
-    .reverse()
+  const rows = await db.solves
+    .where('[ownerId+event]')
+    .equals([ownerId, event])
     .filter((solve) => !solve.deletedAt && !solve.sessionId)
-    .limit(limit)
     .toArray()
+  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+  return rows.slice(0, limit)
 }
 
 export async function countSolvesBySession(
@@ -107,8 +119,8 @@ export async function countSolvesBySession(
   let orphanTotalMs = 0
 
   await db.solves
-    .where('[ownerId+event+solvedAt]')
-    .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey], true, true)
+    .where('[ownerId+event]')
+    .equals([ownerId, event])
     .each((solve) => {
       if (solve.deletedAt) {
         return

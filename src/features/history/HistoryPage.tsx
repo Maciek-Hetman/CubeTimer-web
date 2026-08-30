@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useApp } from '../../app/AppProviders'
+import { useApp } from '../../app/AppContext'
 import { eventLabel, type CubeEvent, type CubeSession, type Solve } from '../../domain/models'
 import { formatAverage, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'

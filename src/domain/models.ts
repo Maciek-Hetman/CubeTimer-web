@@ -1,21 +1,21 @@
 export const EVENTS = ['2x2', '3x3', '4x4', '5x5', 'megaminx', 'pyraminx'] as const
 export type CubeEvent = (typeof EVENTS)[number]
 
-export const PENALTIES = ['none', 'plus_two', 'dnf'] as const
+const PENALTIES = ['none', 'plus_two', 'dnf'] as const
 export type Penalty = (typeof PENALTIES)[number]
 
-export const SESSION_KINDS = ['manual', 'automatic'] as const
-export type SessionKind = (typeof SESSION_KINDS)[number]
+const SESSION_KINDS = ['manual', 'automatic'] as const
+type SessionKind = (typeof SESSION_KINDS)[number]
 
 export type SessionMode = SessionKind
 
-export const TIMER_DISPLAY_MODES = ['show', 'hide_decimals', 'hide'] as const
+const TIMER_DISPLAY_MODES = ['show', 'hide_decimals', 'hide'] as const
 export type TimerDisplayMode = (typeof TIMER_DISPLAY_MODES)[number]
 
-export const TIMER_FONTS = ['jetbrains', 'fira', 'digital', 'dseg7', 'inter', 'roboto', 'open-sans', 'system'] as const
+const TIMER_FONTS = ['jetbrains', 'fira', 'digital', 'dseg7', 'inter', 'roboto', 'open-sans', 'system'] as const
 export type TimerFont = (typeof TIMER_FONTS)[number]
 
-export const TIMER_SIZES = ['small', 'medium', 'large', 'xlarge'] as const
+const TIMER_SIZES = ['small', 'medium', 'large', 'xlarge'] as const
 export type TimerSize = (typeof TIMER_SIZES)[number]
 
 export const WIDGET_SCALE_MIN = 80
@@ -27,7 +27,6 @@ export const WIDGET_SCALE_PRESETS = [
   { id: 'normal', label: 'Normal', value: 100 },
   { id: 'large', label: 'Large', value: 115 },
 ] as const
-export type WidgetScalePreset = (typeof WIDGET_SCALE_PRESETS)[number]['id']
 
 export const STATS_CHART_SCALES = ['all', '1000', '500', '250', '100'] as const
 export type StatsChartScale = (typeof STATS_CHART_SCALES)[number]
@@ -165,3 +164,8 @@ export function eventLabel(event: CubeEvent): string {
       return event
   }
 }
+
+export type { AuthSession } from '../api/types'
+export type { SolveStats } from '../data/repositories/solveStats'
+export type { SyncStatus } from '../sync/syncEngine'
+

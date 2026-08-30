@@ -1,4 +1,5 @@
-import { useApp } from '../../../app/AppProviders'
+import { useScramble } from '../../../contexts/ScrambleContext'
+import { useSettings } from '../../../contexts/SettingsContext'
 import type { CubeEvent } from '../../../domain/models'
 import 'cubing/twisty'
 
@@ -12,7 +13,8 @@ const PUZZLE_IDS: Record<CubeEvent, string> = {
 }
 
 export function ScramblePreviewWidget() {
-  const { scramble, settings } = useApp()
+  const { scramble } = useScramble()
+  const { settings } = useSettings()
 
   if (!scramble) {
     return <div className="muted" style={{ textAlign: 'center', padding: '16px' }}>Generating scramble…</div>

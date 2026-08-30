@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
-import { useApp } from '../../../app/AppProviders'
+import { useSolves } from '../../../contexts/SolvesContext'
 import { effectiveTimeMs } from '../../../domain/models'
 import { formatDuration } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 
 export function RecentTimesChart() {
-  const { recentSolves } = useApp()
+  const { recentSolves } = useSolves()
   const data = useMemo(
     () =>
       recentSolves

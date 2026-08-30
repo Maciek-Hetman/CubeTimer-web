@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   dismissAllRejected: vi.fn(),
 }))
 
-vi.mock('../../app/AppProviders', () => ({
+vi.mock('../../app/AppContext', () => ({
   useApp: () => ({
     user: mocks.user,
     logout: vi.fn(),

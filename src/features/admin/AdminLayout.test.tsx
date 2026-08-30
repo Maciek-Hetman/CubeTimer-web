@@ -12,7 +12,7 @@ import { AdminErrorsPage } from './AdminErrorsPage'
 
 const authenticatedRequest = vi.hoisted(() => vi.fn())
 
-vi.mock('../../app/AppProviders', () => ({
+vi.mock('../../app/AppContext', () => ({
   useApp: () => ({ authenticatedRequest }),
 }))
 

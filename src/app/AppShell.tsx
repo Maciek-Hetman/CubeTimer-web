@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ConflictBanner } from '../features/sync/ConflictBanner'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
@@ -8,7 +8,8 @@ import { Button } from '../ui/Button'
 import { Footer } from '../ui/Footer'
 import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerIcon, HistoryIcon } from '../ui/NavIcons'
 import { useMediaQuery } from '../ui/useMediaQuery'
-import { useApp } from './AppProviders'
+import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 
 export interface ShellOutletContext {
   widgetEditing: boolean
@@ -16,7 +17,8 @@ export interface ShellOutletContext {
 }
 
 export function AppShell() {
-  const { user, isAdmin, settings } = useApp()
+  const { user, isAdmin } = useAuth()
+  const { settings } = useSettings()
   const location = useLocation()
   const isWide = useMediaQuery('(min-width: 768px)')
   const isDesktop = useMediaQuery('(min-width: 1200px)')
@@ -41,16 +43,11 @@ export function AppShell() {
   const isDesktopHome = isDesktop && isHome
   const showSync = !isAuthRoute && !isHome
   const [widgetEditing, setWidgetEditing] = useState(false)
-
-  useEffect(() => {
-    if (!isDesktopHome) {
-      setWidgetEditing(false)
-    }
-  }, [isDesktopHome])
+  const effectiveWidgetEditing = isDesktopHome && widgetEditing
 
   const outletContext = useMemo<ShellOutletContext>(
-    () => ({ widgetEditing, setWidgetEditing }),
-    [widgetEditing],
+    () => ({ widgetEditing: effectiveWidgetEditing, setWidgetEditing }),
+    [effectiveWidgetEditing],
   )
 
   const mainClass = [
@@ -81,12 +78,12 @@ export function AppShell() {
                 type="button"
                 variant="ghost"
                 className="icon"
-                aria-pressed={widgetEditing}
-                aria-label={widgetEditing ? 'Done editing widgets' : 'Edit widgets'}
-                title={widgetEditing ? 'Done' : 'Edit widgets'}
+                aria-pressed={effectiveWidgetEditing}
+                aria-label={effectiveWidgetEditing ? 'Done editing widgets' : 'Edit widgets'}
+                title={effectiveWidgetEditing ? 'Done' : 'Edit widgets'}
                 onClick={() => setWidgetEditing((value) => !value)}
               >
-                {widgetEditing ? <CheckIcon /> : <EditWidgetsIcon />}
+                {effectiveWidgetEditing ? <CheckIcon /> : <EditWidgetsIcon />}
               </Button>
             ) : null}
             <AccountButton />

@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
 }))
 
-vi.mock('../../app/AppProviders', () => ({
+vi.mock('../../app/AppContext', () => ({
   useApp: () => ({
     settings: mocks.settings,
     updateSettings: mocks.updateSettings,

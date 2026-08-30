@@ -1,8 +1,10 @@
-import { useApp } from '../../app/AppProviders'
+import { useAuth } from '../../contexts/AuthContext'
+import { useSync } from '../../contexts/SyncContext'
 import { SYNC_HINTS, SYNC_LABELS, syncTone } from './syncStatus'
 
 export function SyncIndicator() {
-  const { user, syncStatus, pendingMutations, requestSync } = useApp()
+  const { user } = useAuth()
+  const { syncStatus, pendingMutations, requestSync } = useSync()
   if (!user) {
     return (
       <div className="sync-pill" title="Times stay on this device until you sign in">

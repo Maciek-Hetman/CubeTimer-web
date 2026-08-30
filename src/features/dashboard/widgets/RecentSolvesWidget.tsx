@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useApp } from '../../../app/AppProviders'
+import { useSolves } from '../../../contexts/SolvesContext'
 import { effectiveTimeMs } from '../../../domain/models'
 import { formatSolveTime } from '../../../domain/stats/formatTime'
 import { Button } from '../../../ui/Button'
@@ -8,7 +8,7 @@ import { Dialog } from '../../../ui/Dialog'
 import { EmptyState } from '../../../ui/EmptyState'
 
 export function RecentSolvesWidget() {
-  const { recentSolves, solveStats, updateSolvePenalty, deleteSolve } = useApp()
+  const { recentSolves, solveStats, updateSolvePenalty, deleteSolve } = useSolves()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const recent = recentSolves.slice(0, 10)
 

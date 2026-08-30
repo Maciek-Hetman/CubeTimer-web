@@ -1086,10 +1086,6 @@ input[type='range']::-moz-range-thumb {
   padding-top: 0;
 }
 
-.history-meta {
-  font-size: var(--text-sm);
-}
-
 .session-list {
   gap: var(--space-2);
 }

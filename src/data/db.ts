@@ -7,12 +7,12 @@ import {
   type Solve,
 } from '../domain/models'
 
-export interface MetaRecord {
+interface MetaRecord {
   key: string
   value: unknown
 }
 
-export interface WidgetLayoutRecord {
+interface WidgetLayoutRecord {
   ownerId: string
   layout: unknown
   widgets: string[]
@@ -41,7 +41,7 @@ export interface RejectedRecord {
   createdAt: string
 }
 
-export class CubeTimerDB extends Dexie {
+class CubeTimerDB extends Dexie {
   solves!: Table<Solve, string>
   sessions!: Table<CubeSession, string>
   outbox!: Table<MutationRecord, string>

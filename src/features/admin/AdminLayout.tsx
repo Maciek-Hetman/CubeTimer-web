@@ -7,7 +7,7 @@ import {
   type AdminRequestStats,
   type AdminRequestTypeStats,
 } from '../../api/types'
-import { useApp } from '../../app/AppProviders'
+import { useApp } from '../../app/AppContext'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { PageHeader } from '../../ui/PageHeader'
@@ -35,8 +35,6 @@ export function AdminLayout() {
 
   const load = useCallback(async () => {
     const loadId = ++loadIdRef.current
-    setLoading(true)
-    setError('')
     const query = adminStatsQueryForRange(range)
     try {
       const [nextOverview, nextRequests, nextRequestTypes] = await Promise.all([
@@ -50,6 +48,7 @@ export function AdminLayout() {
       setOverview(nextOverview)
       setRequests(nextRequests)
       setRequestTypes(nextRequestTypes)
+      setError('')
     } catch (err) {
       if (loadId !== loadIdRef.current) {
         return
@@ -72,8 +71,39 @@ export function AdminLayout() {
   }, [authenticatedRequest, range])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    let cancelled = false
+    const query = adminStatsQueryForRange(range)
+    Promise.all([
+      getOverviewStats(authenticatedRequest),
+      getRequestStats(authenticatedRequest, query),
+      getRequestTypeStats(authenticatedRequest, query),
+    ])
+      .then(([nextOverview, nextRequests, nextRequestTypes]) => {
+        if (cancelled) return
+        setOverview(nextOverview)
+        setRequests(nextRequests)
+        setRequestTypes(nextRequestTypes)
+        setError('')
+        setLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setOverview(null)
+        setRequests(null)
+        setRequestTypes(null)
+        if (err instanceof ApiError && err.status === 403) {
+          setError('You do not have permission to view admin metrics.')
+        } else if (err instanceof ApiError && err.status === 401) {
+          setError('Sign in again to view admin metrics.')
+        } else {
+          setError(err instanceof ApiError ? err.message : 'Could not load admin metrics.')
+        }
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authenticatedRequest, range])
 
   const isOverview = location.pathname === '/admin' || location.pathname === '/admin/overview'
   const isErrors = location.pathname === '/admin/errors'
@@ -93,7 +123,11 @@ export function AdminLayout() {
                     type="button"
                     variant={range === value ? 'primary' : 'default'}
                     aria-pressed={range === value}
-                    onClick={() => setRange(value)}
+                    onClick={() => {
+                      setRange(value)
+                      setLoading(true)
+                      setError('')
+                    }}
                   >
                     {ADMIN_RANGE_LABELS[value]}
                   </Button>
@@ -101,7 +135,15 @@ export function AdminLayout() {
               </div>
             )}
             {!isErrors && (
-              <Button type="button" onClick={() => void load()} loading={loading}>
+              <Button
+                type="button"
+                onClick={() => {
+                  setLoading(true)
+                  setError('')
+                  void load()
+                }}
+                loading={loading}
+              >
                 Retry
               </Button>
             )}
@@ -117,7 +159,7 @@ export function AdminLayout() {
 
       {error ? <Alert tone="error">{error}</Alert> : null}
 
-      <Outlet context={{ overview, requests, requestTypes, loading, error, load } satisfies AdminContextType} />
+      <Outlet context={({ overview, requests, requestTypes, loading, error, load } as AdminContextType)} />
     </div>
   )
 }

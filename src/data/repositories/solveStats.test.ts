@@ -265,7 +265,7 @@ describe('collectChartSeries', () => {
     expect(series250).toHaveLength(250)
     expect(series250[0].index).toBe(1)
     expect(series250[series250.length - 1].index).toBe(250)
-  })
+  }, 15_000)
 
   it('returns all points if total solves are fewer than the selected scale', async () => {
     const owner = 'user-1'

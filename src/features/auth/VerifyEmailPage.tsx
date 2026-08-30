@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { verifyEmail } from '../../api/auth'
-import { useApp } from '../../app/AppProviders'
+import { useAuth } from '../../contexts/AuthContext'
 import { ApiError } from '../../api/types'
 import { Alert } from '../../ui/Alert'
 import { AuthLayout } from './AuthLayout'
 
 export function VerifyEmailPage() {
   const [params] = useSearchParams()
-  const { applyAuthSession } = useApp()
+  const { applyAuthSession } = useAuth()
   const navigate = useNavigate()
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)

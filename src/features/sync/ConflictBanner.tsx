@@ -1,11 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../data/db'
-import { useApp } from '../../app/AppProviders'
+import { useAuth } from '../../contexts/AuthContext'
+import { useSync } from '../../contexts/SyncContext'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 
 export function ConflictBanner() {
-  const { ownerId, resolveConflictKeepLocal, resolveConflictKeepServer } = useApp()
+  const { ownerId } = useAuth()
+  const { resolveConflictKeepLocal, resolveConflictKeepServer } = useSync()
   const conflicts =
     useLiveQuery(async () => (ownerId ? db.conflicts.where('ownerId').equals(ownerId).toArray() : []), [ownerId]) ??
     []

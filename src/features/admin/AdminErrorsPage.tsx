@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { getErrorLogs } from '../../api/admin'
 import { ApiError, type AdminErrorLog } from '../../api/types'
-import { useApp } from '../../app/AppProviders'
+import { useApp } from '../../app/AppContext'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
@@ -16,13 +16,12 @@ export function AdminErrorsPage() {
   const [expandedTraceId, setExpandedTraceId] = useState<number | null>(null)
 
   const load = useCallback(async (before?: string, append = false) => {
-    setLoading(true)
-    setError('')
     try {
       const response = await getErrorLogs(authenticatedRequest, { before })
       const incoming = response.errors || []
       setLogs((prev) => (append ? [...prev, ...incoming] : incoming))
       setNextCursor(response.next_cursor)
+      setError('')
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setError('You do not have permission to view admin metrics.')
@@ -37,8 +36,31 @@ export function AdminErrorsPage() {
   }, [authenticatedRequest])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    let cancelled = false
+    getErrorLogs(authenticatedRequest)
+      .then((response) => {
+        if (cancelled) return
+        const incoming = response.errors || []
+        setLogs(incoming)
+        setNextCursor(response.next_cursor)
+        setError('')
+        setLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        if (err instanceof ApiError && err.status === 403) {
+          setError('You do not have permission to view admin metrics.')
+        } else if (err instanceof ApiError && err.status === 401) {
+          setError('Sign in again to view admin metrics.')
+        } else {
+          setError(err instanceof ApiError ? err.message : 'Could not load error logs.')
+        }
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authenticatedRequest])
 
   if (loading && logs.length === 0) {
     return (
@@ -54,7 +76,16 @@ export function AdminErrorsPage() {
     <Panel className="stack">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h2>Error Logs</h2>
-        <Button onClick={() => void load()} loading={loading}>Refresh</Button>
+        <Button
+          onClick={() => {
+            setLoading(true)
+            setError('')
+            void load()
+          }}
+          loading={loading}
+        >
+          Refresh
+        </Button>
       </div>
       
       {error && <Alert tone="error">{error}</Alert>}
@@ -113,7 +144,13 @@ export function AdminErrorsPage() {
           
           {nextCursor && (
             <div style={{ marginTop: '16px', textAlign: 'center' }}>
-              <Button onClick={() => void load(nextCursor, true)} loading={loading}>
+              <Button
+                onClick={() => {
+                  setLoading(true)
+                  void load(nextCursor, true)
+                }}
+                loading={loading}
+              >
                 Load More
               </Button>
             </div>

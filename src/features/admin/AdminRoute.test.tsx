@@ -8,7 +8,7 @@ import { AdminRoute } from './AdminRoute'
 
 const useApp = vi.hoisted(() => vi.fn())
 
-vi.mock('../../app/AppProviders', () => ({
+vi.mock('../../app/AppContext', () => ({
   useApp,
 }))
 

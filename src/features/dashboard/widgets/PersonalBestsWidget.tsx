@@ -1,11 +1,11 @@
-import { useApp } from '../../../app/AppProviders'
+import { Link } from 'react-router-dom'
+import { useSolves } from '../../../contexts/SolvesContext'
 import { formatAverage } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 import { StatGrid } from '../../../ui/StatGrid'
-import { Link } from 'react-router-dom'
 
 export function PersonalBestsWidget() {
-  const { solveStats } = useApp()
+  const { solveStats } = useSolves()
 
   if (solveStats.count === 0) {
     return (

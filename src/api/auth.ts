@@ -1,5 +1,5 @@
 import { apiRequest, type AuthenticatedRequest } from './client'
-import type { AuthSession, User } from './types'
+import type { AuthSession, FederatedInput, FederatedProvider, User } from './types'
 
 export function register(email: string, password: string) {
   return apiRequest<{ status: string }>('/v1/auth/register', {
@@ -54,6 +54,24 @@ export function resetPassword(token: string, newPassword: string) {
   return apiRequest<AuthSession>('/v1/auth/password/reset', {
     method: 'POST',
     body: { token, new_password: newPassword },
+  })
+}
+
+export function federatedLogin(provider: FederatedProvider, input: FederatedInput) {
+  return apiRequest<AuthSession>(`/v1/auth/federated/${provider}`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+export function linkFederatedIdentity(
+  request: AuthenticatedRequest,
+  provider: FederatedProvider,
+  input: FederatedInput,
+) {
+  return request<void>(`/v1/auth/link/${provider}`, {
+    method: 'POST',
+    body: input,
   })
 }
 

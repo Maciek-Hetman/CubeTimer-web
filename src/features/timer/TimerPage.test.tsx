@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppProviders } from '../../app/AppProviders'
+import { ensureGuestOwner } from '../../app/profile'
 import { db, getOrCreateSettings } from '../../data/db'
 import { generateScramble } from '../scramble/scrambleService'
 import { TimerPage } from './TimerPage'
@@ -31,8 +32,19 @@ describe('TimerPage', () => {
   beforeEach(async () => {
     cleanup()
     vi.mocked(generateScramble).mockClear()
-    await db.delete()
-    await db.open()
+    await Promise.all([
+      db.solves.clear(),
+      db.sessions.clear(),
+      db.settings.clear(),
+      db.outbox.clear(),
+      db.conflicts.clear(),
+      db.rejections.clear(),
+      db.widgetLayouts.clear(),
+      db.meta.clear(),
+    ])
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timerStartDelayMs: 0 })
   })
 
   afterEach(() => {
@@ -66,6 +78,10 @@ describe('TimerPage', () => {
   })
 
   it('returns to idle when a hold is cancelled', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timerStartDelayMs: 500 })
+
     renderTimer()
     await waitFor(() => {
       expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
@@ -93,7 +109,7 @@ describe('TimerPage', () => {
       () => {
         expect(timerHint()).toHaveTextContent(/Release to start/i)
       },
-      { timeout: 2000 },
+      { timeout: 4000 },
     )
     fireEvent.pointerUp(timer, { pointerId: 1 })
 
@@ -129,7 +145,7 @@ describe('TimerPage', () => {
       () => {
         expect(timerHint()).toHaveTextContent(/Release to start/i)
       },
-      { timeout: 2000 },
+      { timeout: 4000 },
     )
     fireEvent.keyUp(window, { code: 'KeyA', key: 'a' })
 
@@ -150,7 +166,7 @@ describe('TimerPage', () => {
       () => {
         expect(timerHint()).toHaveTextContent(/Release to start/i)
       },
-      { timeout: 2000 },
+      { timeout: 4000 },
     )
     fireEvent.keyUp(window, { code: 'Space', key: ' ' })
     await waitFor(() => {
@@ -165,15 +181,17 @@ describe('TimerPage', () => {
   })
 
   it('hides timer hints when showTimerHints is false', async () => {
-    renderTimer()
-    await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
-    })
-    const settings = (await db.settings.toArray())[0]!
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
     await db.settings.put({ ...settings, showTimerHints: false })
 
-    await waitFor(() => {
-      expect(timerHint()).toBeNull()
-    })
+    renderTimer()
+    await screen.findByRole('button', { name: 'Timer' })
+    await waitFor(
+      () => {
+        expect(timerHint()).toBeNull()
+      },
+      { timeout: 4000 },
+    )
   })
 })

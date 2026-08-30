@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from 'react'
-import { useApp } from '../../app/AppProviders'
+import { useApp } from '../../app/AppContext'
 import type { AppSettings, SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
 import { WIDGET_SCALE_MAX, WIDGET_SCALE_MIN, WIDGET_SCALE_PRESETS, WIDGET_SCALE_STEP } from '../../domain/models'
 import { Button } from '../../ui/Button'

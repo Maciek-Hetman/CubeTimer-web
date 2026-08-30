@@ -1,13 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
-import { useApp } from '../../../app/AppProviders'
+import { useAuth } from '../../../contexts/AuthContext'
+import { useSettings } from '../../../contexts/SettingsContext'
+import { useSolves } from '../../../contexts/SolvesContext'
 import { computeSolveStats } from '../../../data/repositories/solveStats'
 import { formatAverage } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 import { StatGrid } from '../../../ui/StatGrid'
 
 export function SessionStatsWidget() {
-  const { ownerId, currentSession, settings } = useApp()
+  const { ownerId } = useAuth()
+  const { settings } = useSettings()
+  const { currentSession } = useSolves()
   const sessionStats = useLiveQuery(
     async () =>
       currentSession ? computeSolveStats(ownerId, settings.event, currentSession.id) : null,

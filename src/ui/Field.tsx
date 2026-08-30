@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
+import type { ReactNode } from 'react'
 
 export function Field({
   label,
@@ -15,12 +15,4 @@ export function Field({
       {children}
     </label>
   )
-}
-
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} />
-}
-
-export function TextTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} />
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
-import { useApp } from '../../app/AppProviders'
+import { useApp } from '../../app/AppContext'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 

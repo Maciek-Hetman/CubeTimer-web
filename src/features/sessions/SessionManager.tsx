@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { useApp } from '../../app/AppProviders'
+import { useSolves } from '../../contexts/SolvesContext'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
 
 export function SessionManager({ onClose }: { onClose: () => void }) {
-  const { sessions, currentSession, createSession, renameSession, switchSession, removeSession } = useApp()
+  const { sessions, currentSession, createSession, renameSession, switchSession, removeSession } = useSolves()
   const [name, setName] = useState('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [confirmCount, setConfirmCount] = useState(0)

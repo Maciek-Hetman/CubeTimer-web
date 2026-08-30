@@ -1,6 +1,6 @@
 import type { CubeEvent, CubeSession, Solve } from '../models'
 
-export type DayPart = 'morning' | 'afternoon' | 'evening' | 'night'
+type DayPart = 'morning' | 'afternoon' | 'evening' | 'night'
 
 export function dayPartFromDate(date: Date): DayPart {
   const hour = date.getHours()

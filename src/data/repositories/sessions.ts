@@ -1,7 +1,7 @@
 import type { CubeEvent, CubeSession, SessionInput } from '../../domain/models'
 import { createId, nowIso } from '../../domain/models'
 import { db } from '../db'
-import { enqueueMutation } from './outbox'
+import { enqueueMutation, enqueueMutationsBatch } from './outbox'
 
 export async function listSessions(ownerId: string, event?: CubeEvent): Promise<CubeSession[]> {
   const sessions = event
@@ -77,34 +77,46 @@ export async function deleteSessionCascade(
   }
   const now = nowIso()
   const solves = await db.solves.where('[ownerId+sessionId]').equals([session.ownerId, sessionId]).toArray()
+  const activeSolves = solves.filter((solve) => !solve.deletedAt)
+  const deletedSolves = activeSolves.map((solve) => ({
+    ...solve,
+    deletedAt: now,
+    updatedAt: now,
+  }))
+
   await db.transaction('rw', db.sessions, db.solves, db.outbox, async () => {
     const tombstoned: CubeSession = { ...session, deletedAt: now, updatedAt: now }
     await db.sessions.put(tombstoned)
-    if (options.enqueue) {
-      await enqueueMutation({
-        ownerId: session.ownerId,
-        entity: 'session',
-        entityId: session.id,
-        operation: 'delete',
-        baseVersion: session.version,
-      })
+
+    if (deletedSolves.length > 0) {
+      await db.solves.bulkPut(deletedSolves)
     }
-    for (const solve of solves) {
-      if (solve.deletedAt) {
-        continue
-      }
-      const deletedSolve = { ...solve, deletedAt: now, updatedAt: now }
-      await db.solves.put(deletedSolve)
-      if (options.enqueue) {
-        await enqueueMutation({
-          ownerId: solve.ownerId,
-          entity: 'solve',
-          entityId: solve.id,
+
+    if (options.enqueue) {
+      const mutationsToEnqueue: Array<{
+        ownerId: string
+        entity: 'session' | 'solve'
+        entityId: string
+        operation: 'delete'
+        baseVersion: number
+      }> = [
+        {
+          ownerId: session.ownerId,
+          entity: 'session',
+          entityId: session.id,
           operation: 'delete',
-          baseVersion: solve.version,
-        })
-      }
+          baseVersion: session.version,
+        },
+        ...deletedSolves.map((s) => ({
+          ownerId: s.ownerId,
+          entity: 'solve' as const,
+          entityId: s.id,
+          operation: 'delete' as const,
+          baseVersion: s.version,
+        })),
+      ]
+      await enqueueMutationsBatch(mutationsToEnqueue)
     }
   })
-  return solves.filter((solve) => !solve.deletedAt).length
+  return activeSolves.length
 }

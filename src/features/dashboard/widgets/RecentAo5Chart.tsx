@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
-import { useApp } from '../../../app/AppProviders'
+import { useSolves } from '../../../contexts/SolvesContext'
 import { averageOfN } from '../../../domain/stats/averages'
 import { formatDuration } from '../../../domain/stats/formatTime'
 import { EmptyState } from '../../../ui/EmptyState'
 
 export function RecentAo5Chart() {
-  const { recentSolves } = useApp()
+  const { recentSolves } = useSolves()
   const data = useMemo(() => {
     const points = []
     for (let i = 0; i < 20; i++) {

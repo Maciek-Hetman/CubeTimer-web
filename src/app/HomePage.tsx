@@ -1,14 +1,14 @@
 import { lazy, Suspense } from 'react'
 import { TimerPage } from '../features/timer/TimerPage'
 import { useMediaQuery } from '../ui/useMediaQuery'
-import { useApp } from './AppProviders'
+import { useSettings } from '../contexts/SettingsContext'
 
 const DesktopDashboard = lazy(() =>
   import('../features/dashboard/DesktopDashboard').then((m) => ({ default: m.DesktopDashboard })),
 )
 
 export function HomePage() {
-  const { settings } = useApp()
+  const { settings } = useSettings()
   const isDesktop = useMediaQuery('(min-width: 1200px)')
   
   if (isDesktop) {

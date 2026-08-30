@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { resetPassword } from '../../api/auth'
-import { useApp } from '../../app/AppProviders'
+import { useAuth } from '../../contexts/AuthContext'
 import { ApiError } from '../../api/types'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -10,7 +10,7 @@ import { AuthLayout } from './AuthLayout'
 
 export function ResetPasswordPage() {
   const [params] = useSearchParams()
-  const { applyAuthSession } = useApp()
+  const { applyAuthSession } = useAuth()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')

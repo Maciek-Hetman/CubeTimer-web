@@ -24,7 +24,9 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-import { useApp } from '../../app/AppProviders'
+import { useAuth } from '../../contexts/AuthContext'
+import { useSettings } from '../../contexts/SettingsContext'
+import { useSolves } from '../../contexts/SolvesContext'
 import type { ShellOutletContext } from '../../app/AppShell'
 import { db } from '../../data/db'
 import { Button } from '../../ui/Button'
@@ -35,17 +37,17 @@ import {
   DEFAULT_WIDGETS,
   WIDGET_LABELS,
   WIDGET_TYPES,
-  renderWidget,
   type WidgetInstance,
   type WidgetType,
-} from './widgetRegistry'
+} from './widgetTypes'
+import { WidgetRenderer } from './widgetRegistry'
 
 interface StoredDashboard {
   widgets: WidgetInstance[]
 }
 
 export function DesktopDashboard() {
-  const { ownerId } = useApp()
+  const { ownerId } = useAuth()
   const { widgetEditing: editing = false } = useOutletContext<ShellOutletContext>() ?? {}
   const [store, setStore] = useState<StoredDashboard>({
     widgets: DEFAULT_WIDGETS,
@@ -55,8 +57,6 @@ export function DesktopDashboard() {
 
   useEffect(() => {
     let cancelled = false
-    setHydrated(false)
-    setStore({ widgets: DEFAULT_WIDGETS })
     void db.widgetLayouts.get(ownerId).then((record) => {
       if (cancelled) {
         return
@@ -66,6 +66,8 @@ export function DesktopDashboard() {
         const knownWidgets = layout.widgets.filter(isWidgetInstance)
         const widgets = knownWidgets.length > 0 ? knownWidgets : DEFAULT_WIDGETS
         setStore({ widgets })
+      } else {
+        setStore({ widgets: DEFAULT_WIDGETS })
       }
       setHydrated(true)
     })
@@ -250,7 +252,7 @@ function WidgetColumn({
 }) {
   const widgets = useMemo(() => store.widgets.filter((widget) => widget.side === side), [side, store.widgets])
   const available = WIDGET_TYPES.filter((type) => !store.widgets.some((widget) => widget.type === type))
-  const { settings } = useApp()
+  const { settings } = useSettings()
   const scale = settings.widgetScale / 100
 
   return (
@@ -337,7 +339,7 @@ function WidgetCard({
   dragHandleListeners?: DraggableSyntheticListeners
   overlay?: boolean
 }) {
-  const { currentSession } = useApp()
+  const { currentSession } = useSolves()
 
   return (
     <div
@@ -364,7 +366,7 @@ function WidgetCard({
           </Button>
         ) : null}
       </div>
-      {renderWidget(widget.type)}
+      <WidgetRenderer type={widget.type} />
     </div>
   )
 }

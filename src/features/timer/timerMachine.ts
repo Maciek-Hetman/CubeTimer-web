@@ -1,4 +1,4 @@
-export type TimerPhase = 'idle' | 'holding' | 'ready' | 'running' | 'finished'
+type TimerPhase = 'idle' | 'holding' | 'ready' | 'running' | 'finished'
 
 export interface TimerSnapshot {
   phase: TimerPhase
@@ -23,9 +23,11 @@ export interface TimerEngine {
   cancel(): TimerSnapshot
   tick(now: number): TimerSnapshot
   reset(): TimerSnapshot
+  setHoldDelay?(ms: number): void
 }
 
-export function createTimerEngine(getHoldMs: () => number): TimerEngine {
+export function createTimerEngine(getHoldMs?: () => number): TimerEngine {
+  let holdMsValue = 500
   let phase: TimerPhase = 'idle'
   let holdStartedAt = 0
   let runStartedAt = 0
@@ -38,26 +40,34 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
   }
 
   function holdDurationMs(): number {
-    const duration = getHoldMs()
+    const duration = getHoldMs ? getHoldMs() : holdMsValue
     return Number.isFinite(duration) ? Math.max(0, duration) : 0
+  }
+
+  function normalizeTime(now?: number): number {
+    if (typeof now === 'number' && Number.isFinite(now) && now >= 0) {
+      return now
+    }
+    return typeof performance !== 'undefined' ? performance.now() : Date.now()
   }
 
   function beginRun(now: number): void {
     phase = 'running'
-    runStartedAt = now
+    runStartedAt = normalizeTime(now)
     elapsedMs = 0
     finishedMs = null
     holdProgress = 1
   }
 
   function finishRun(now: number): void {
+    const t = normalizeTime(now)
     phase = 'finished'
-    finishedMs = Math.max(0, now - runStartedAt)
+    finishedMs = Math.max(0, t - runStartedAt)
     elapsedMs = finishedMs
   }
 
   function startHold(now: number): void {
-    holdStartedAt = now
+    holdStartedAt = normalizeTime(now)
     holdProgress = 0
     if (holdDurationMs() === 0) {
       phase = 'ready'
@@ -99,10 +109,11 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
       return snapshot()
     },
     release(now) {
+      const t = normalizeTime(now)
       if (phase === 'holding') {
         const holdMs = holdDurationMs()
-        if (holdMs === 0 || now - holdStartedAt >= holdMs) {
-          beginRun(now)
+        if (holdMs === 0 || t - holdStartedAt >= holdMs) {
+          beginRun(t)
         } else {
           phase = 'idle'
           holdProgress = 0
@@ -110,7 +121,7 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
         return snapshot()
       }
       if (phase === 'ready') {
-        beginRun(now)
+        beginRun(t)
         return snapshot()
       }
       return snapshot()
@@ -124,6 +135,7 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
       return snapshot()
     },
     tick(now) {
+      const t = normalizeTime(now)
       if (phase === 'holding') {
         const holdMs = holdDurationMs()
         if (holdMs === 0) {
@@ -131,7 +143,7 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
           holdProgress = 1
           return snapshot()
         }
-        holdProgress = Math.max(0, Math.min(1, (now - holdStartedAt) / holdMs))
+        holdProgress = Math.max(0, Math.min(1, (t - holdStartedAt) / holdMs))
         if (holdProgress >= 1) {
           phase = 'ready'
           holdProgress = 1
@@ -139,7 +151,7 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
         return snapshot()
       }
       if (phase === 'running') {
-        elapsedMs = Math.max(0, now - runStartedAt)
+        elapsedMs = Math.max(0, t - runStartedAt)
         return snapshot()
       }
       return snapshot()
@@ -150,6 +162,9 @@ export function createTimerEngine(getHoldMs: () => number): TimerEngine {
       elapsedMs = 0
       finishedMs = null
       return snapshot()
+    },
+    setHoldDelay(ms: number) {
+      holdMsValue = ms
     },
   }
 }

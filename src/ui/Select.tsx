@@ -1,13 +1,13 @@
 import type { CSSProperties, ReactNode, SelectHTMLAttributes } from 'react'
 import './Select.css'
 
-export interface SelectOption {
+interface SelectOption {
   value: string
   label: ReactNode
   disabled?: boolean
 }
 
-export interface SelectProps {
+interface SelectProps {
   value?: string
   defaultValue?: string
   onChange?: (value: string) => void

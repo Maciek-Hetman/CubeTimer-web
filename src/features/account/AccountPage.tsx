@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { changePassword, resendVerification } from '../../api/auth'
-import { useApp } from '../../app/AppProviders'
+import { useApp } from '../../app/AppContext'
 import { ApiError } from '../../api/types'
 import { getApiBaseUrl } from '../../config/env'
 import { SYNC_HINTS, SYNC_LABELS, syncTone } from '../sync/syncStatus'

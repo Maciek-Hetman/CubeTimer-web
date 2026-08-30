@@ -1,6 +1,8 @@
 import confetti from 'canvas-confetti'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useApp } from '../../app/AppProviders'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSettings } from '../../contexts/SettingsContext'
+import { useSolves } from '../../contexts/SolvesContext'
+import { useScramble } from '../../contexts/ScrambleContext'
 import {
   EVENTS,
   effectiveTimeMs,
@@ -19,7 +21,7 @@ import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
 import { Select } from '../../ui/Select'
 import { SessionManager } from '../sessions/SessionManager'
-import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot } from './timerMachine'
+import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot, type TimerEngine } from './timerMachine'
 import { getAccentColor } from '../../styles/accents'
 import { loadTimerFont } from '../../styles/timerFonts'
 
@@ -52,6 +54,13 @@ function isSystemKey(event: KeyboardEvent): boolean {
     event.metaKey ||
     event.shiftKey
   )
+}
+
+function getEventTimestamp(event?: { timeStamp?: number }): number {
+  if (event && typeof event.timeStamp === 'number' && event.timeStamp > 0 && event.timeStamp < 1_000_000_000) {
+    return event.timeStamp
+  }
+  return performance.now()
 }
 
 function getFontFamily(font?: TimerFont): string | undefined {
@@ -99,62 +108,156 @@ const TIMER_SIZE_STYLES: Record<'mobile' | 'desktop', Record<TimerSize, string>>
   },
 }
 
+interface TimerDisplayProps {
+  engine: TimerEngine
+  phase: TimerSnapshot['phase']
+  finishedMs: number | null
+  colorClass: string
+  hint: string
+  showHints: boolean
+  variant: 'mobile' | 'desktop'
+  timerFont?: TimerFont
+  timerSize?: TimerSize
+  timerDisplayMode?: TimerDisplayMode
+  timerStartDelayMs: number
+  onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onPointerCancel: () => void
+  onLostPointerCapture: () => void
+  onReady: (snapshot: TimerSnapshot) => void
+}
+
+const TimerDisplay = React.memo(function TimerDisplay({
+  engine,
+  phase,
+  finishedMs,
+  colorClass,
+  hint,
+  showHints,
+  variant,
+  timerFont,
+  timerSize,
+  timerDisplayMode,
+  timerStartDelayMs,
+  onPointerDown,
+  onPointerUp,
+  onPointerCancel,
+  onLostPointerCapture,
+  onReady,
+}: TimerDisplayProps) {
+  const [elapsedMs, setElapsedMs] = useState(0)
+
+  useEffect(() => {
+    if (phase !== 'running') {
+      return
+    }
+    let frame = 0
+    const loop = (now: number) => {
+      const snap = engine.tick(now)
+      setElapsedMs(snap.elapsedMs)
+      frame = requestAnimationFrame(loop)
+    }
+    frame = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(frame)
+  }, [engine, phase])
+
+  useEffect(() => {
+    if (phase !== 'holding') {
+      return
+    }
+    let frame = 0
+    const loop = (now: number) => {
+      const snap = engine.tick(now)
+      if (snap.phase === 'ready') {
+        onReady(snap)
+        return
+      }
+      frame = requestAnimationFrame(loop)
+    }
+    frame = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(frame)
+  }, [engine, onReady, phase])
+
+  const timeMs =
+    phase === 'running'
+      ? elapsedMs
+      : phase === 'finished'
+        ? (finishedMs ?? 0)
+        : 0
+
+  return (
+    <button
+      type="button"
+      className={`timer-display ${colorClass}`}
+      aria-label="Timer"
+      aria-describedby={showHints ? `timer-hint-${variant}` : undefined}
+      style={{
+        flex: 1,
+        width: '100%',
+        border: 0,
+        background: 'transparent',
+        minHeight: variant === 'desktop' ? 380 : 240,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingBottom: '8vh',
+        fontFamily: getFontFamily(timerFont),
+        fontSize: getSizeStyles(timerSize, variant === 'desktop'),
+        ...getFontStyles(timerFont),
+      }}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onLostPointerCapture}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <TimeDigits
+        ms={timeMs}
+        mode={timerDisplayMode ?? 'show'}
+        isRunning={phase === 'running'}
+        font={timerFont}
+      />
+      {showHints ? (
+        <div id={`timer-hint-${variant}`} className="timer-hint">
+          {hint}
+        </div>
+      ) : null}
+      {phase === 'holding' ? (
+        <div className="progress" aria-hidden="true">
+          <span style={{ animation: `fill-progress ${timerStartDelayMs}ms linear forwards` }} />
+        </div>
+      ) : null}
+    </button>
+  )
+})
+
 export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
-  const {
-    settings,
-    setEvent,
-    recentSolves,
-    solveStats,
-    saveSolve,
-    scramble,
-    scrambleState,
-    loadScramble,
-  } = useApp()
-  const engineRef = useRef(createTimerEngine(() => settings.timerStartDelayMs))
+  const { settings, setEvent } = useSettings()
+  const { recentSolves, solveStats, saveSolve } = useSolves()
+  const { scramble, scrambleState, loadScramble } = useScramble()
+
+  const [engine] = useState(() => createTimerEngine())
+
+  useEffect(() => {
+    engine.setHoldDelay?.(settings.timerStartDelayMs)
+  }, [engine, settings.timerStartDelayMs])
+
   const [snapshot, setSnapshot] = useState<TimerSnapshot>(IDLE_TIMER)
-  const snapshotRef = useRef(snapshot)
   const [sessionOpen, setSessionOpen] = useState(false)
   const [notice, setNotice] = useState('')
-  const [liveMessage, setLiveMessage] = useState('Timer ready')
+  const [runningSeconds, setRunningSeconds] = useState(0)
   const autoSavedRef = useRef(false)
   const activeKeyRef = useRef<string | null>(null)
   const activePointerRef = useRef<number | null>(null)
   const isSolvingOrPreparing = isTimerBusy(snapshot.phase)
 
   useEffect(() => {
-    snapshotRef.current = snapshot
-  }, [snapshot])
-
-  useEffect(() => {
     loadTimerFont(settings.timerFont ?? 'jetbrains')
   }, [settings.timerFont])
 
-  useEffect(() => {
-    engineRef.current = createTimerEngine(() => settings.timerStartDelayMs)
-    setSnapshot(IDLE_TIMER)
-  }, [settings.timerStartDelayMs])
-
-  useEffect(() => {
-    let frame = 0
-    const loop = (now: number) => {
-      const next = engineRef.current.tick(now)
-      if (next.phase !== 'idle' && next.phase !== 'finished') {
-        setSnapshot(next)
-      }
-      frame = requestAnimationFrame(loop)
-    }
-    frame = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(frame)
-  }, [])
-
   const finish = useCallback(
-    async () => {
-      const current = snapshotRef.current
-      if (current.finishedMs === null) {
-        return
-      }
-      const durationMs = current.finishedMs
-
+    async (durationMs: number) => {
       const prevSingle = solveStats.best
       const prevAo5 = solveStats.bestAo5
       const prevAo12 = solveStats.bestAo12
@@ -214,7 +317,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       return
     }
     autoSavedRef.current = true
-    void finish().catch(() => {
+    const duration = snapshot.finishedMs
+    void finish(duration).catch(() => {
       setNotice('Could not save solve')
     })
   }, [finish, snapshot.finishedMs, snapshot.phase])
@@ -228,32 +332,38 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   }, [notice])
 
   useEffect(() => {
-    if (snapshot.phase === 'idle') {
-      setLiveMessage(
-        variant === 'desktop'
-          ? 'Timer ready. Hold any key to start.'
-          : 'Timer ready. Hold Space or tap and hold to start.',
-      )
-    } else if (snapshot.phase === 'holding') {
-      setLiveMessage('Holding to start')
-    } else if (snapshot.phase === 'ready') {
-      setLiveMessage('Ready. Release to start.')
-    } else if (snapshot.phase === 'finished') {
-      setLiveMessage(`Saved ${formatDuration(snapshot.finishedMs ?? 0)}`)
-    }
-  }, [snapshot.finishedMs, snapshot.phase, variant])
-
-  useEffect(() => {
     if (snapshot.phase !== 'running') {
       return
     }
-    const updateLiveMessage = () => {
-      setLiveMessage(`Running ${formatDuration(snapshotRef.current.elapsedMs)}`)
+    const timer = window.setInterval(() => {
+      setRunningSeconds((prev) => prev + 1)
+    }, 1000)
+    return () => {
+      window.clearInterval(timer)
+      setRunningSeconds(0)
     }
-    updateLiveMessage()
-    const timer = window.setInterval(updateLiveMessage, 1000)
-    return () => window.clearInterval(timer)
   }, [snapshot.phase])
+
+  const liveMessage = useMemo(() => {
+    if (snapshot.phase === 'idle') {
+      return variant === 'desktop'
+        ? 'Timer ready. Hold any key to start.'
+        : 'Timer ready. Hold Space or tap and hold to start.'
+    }
+    if (snapshot.phase === 'holding') {
+      return 'Holding to start'
+    }
+    if (snapshot.phase === 'ready') {
+      return 'Ready. Release to start.'
+    }
+    if (snapshot.phase === 'finished') {
+      return `Saved ${formatDuration(snapshot.finishedMs ?? 0)}`
+    }
+    if (snapshot.phase === 'running') {
+      return `Running ${formatDuration(runningSeconds * 1000)}`
+    }
+    return 'Timer ready'
+  }, [snapshot.phase, snapshot.finishedMs, variant, runningSeconds])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -271,7 +381,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         return
       }
       activeKeyRef.current = event.code
-      setSnapshot(engineRef.current.press(performance.now()))
+      const now = getEventTimestamp(event)
+      setSnapshot(engine.press(now))
     }
     const onKeyUp = (event: KeyboardEvent) => {
       if (isFormTarget(event.target) || (variant !== 'desktop' && event.code !== 'Space')) {
@@ -282,9 +393,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       }
       activeKeyRef.current = null
       event.preventDefault()
+      const now = getEventTimestamp(event)
       const next = isSystemKey(event)
-        ? engineRef.current.cancel()
-        : engineRef.current.release(performance.now())
+        ? engine.cancel()
+        : engine.release(now)
       setSnapshot(next)
     }
     window.addEventListener('keydown', onKeyDown)
@@ -293,7 +405,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [variant])
+  }, [engine, variant])
 
   const ao5 = useMemo(() => solveStats.ao5, [solveStats])
   const ao12 = useMemo(() => solveStats.ao12, [solveStats])
@@ -310,12 +422,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     return () => document.body.classList.remove('hide-widgets')
   }, [settings.hideWidgetsDuringSolve, isSolvingOrPreparing])
 
-  const timeMs =
-    snapshot.phase === 'running'
-      ? snapshot.elapsedMs
-      : snapshot.phase === 'finished'
-        ? (snapshot.finishedMs ?? 0)
-        : 0
   const colorClass =
     snapshot.phase === 'holding'
       ? 'timer-holding'
@@ -344,12 +450,45 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
               ? 'Hold any key to start'
               : 'Hold Space or tap and hold to start'
 
-  function cancelHold() {
+  const cancelHold = useCallback(() => {
     activePointerRef.current = null
-    if (snapshotRef.current.phase === 'holding' || snapshotRef.current.phase === 'ready') {
-      setSnapshot(engineRef.current.cancel())
-    }
-  }
+    setSnapshot((prev) => {
+      if (prev.phase === 'holding' || prev.phase === 'ready') {
+        return engine.cancel()
+      }
+      return prev
+    })
+  }, [engine])
+
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0 || activePointerRef.current !== null) {
+        return
+      }
+      event.preventDefault()
+      activePointerRef.current = event.pointerId
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      const now = getEventTimestamp(event)
+      setSnapshot(engine.press(now))
+    },
+    [engine],
+  )
+
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (activePointerRef.current !== event.pointerId) {
+        return
+      }
+      activePointerRef.current = null
+      const now = getEventTimestamp(event)
+      setSnapshot(engine.release(now))
+    },
+    [engine],
+  )
+
+  const handleReady = useCallback((snap: TimerSnapshot) => {
+    setSnapshot(snap)
+  }, [])
 
   return (
     <div className={`stack timer-page${variant === 'desktop' ? ' desktop' : ''}`}>
@@ -403,63 +542,24 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         ) : null}
       </div>
 
-      <button
-        type="button"
-        className={`timer-display ${colorClass}`}
-        aria-label="Timer"
-        aria-describedby={showHints ? `timer-hint-${variant}` : undefined}
-        style={{
-          flex: 1,
-          width: '100%',
-          border: 0,
-          background: 'transparent',
-          minHeight: variant === 'desktop' ? 380 : 240,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingBottom: '8vh',
-          fontFamily: getFontFamily(settings.timerFont),
-          fontSize: getSizeStyles(settings.timerSize, variant === 'desktop'),
-          ...getFontStyles(settings.timerFont),
-        }}
-        onPointerDown={(event) => {
-          if (event.button !== 0 || activePointerRef.current !== null) {
-            return
-          }
-          event.preventDefault()
-          activePointerRef.current = event.pointerId
-          event.currentTarget.setPointerCapture?.(event.pointerId)
-          setSnapshot(engineRef.current.press(performance.now()))
-        }}
-        onPointerUp={(event) => {
-          if (activePointerRef.current !== event.pointerId) {
-            return
-          }
-          activePointerRef.current = null
-          setSnapshot(engineRef.current.release(performance.now()))
-        }}
+      <TimerDisplay
+        engine={engine}
+        phase={snapshot.phase}
+        finishedMs={snapshot.finishedMs}
+        colorClass={colorClass}
+        hint={hint}
+        showHints={showHints}
+        variant={variant}
+        timerFont={settings.timerFont}
+        timerSize={settings.timerSize}
+        timerDisplayMode={settings.timerDisplayMode}
+        timerStartDelayMs={settings.timerStartDelayMs}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
         onPointerCancel={cancelHold}
         onLostPointerCapture={cancelHold}
-        onContextMenu={(event) => event.preventDefault()}
-      >
-        <TimeDigits
-          ms={timeMs}
-          mode={settings.timerDisplayMode ?? 'show'}
-          isRunning={snapshot.phase === 'running'}
-          font={settings.timerFont}
-        />
-        {showHints ? (
-          <div id={`timer-hint-${variant}`} className="timer-hint">
-            {hint}
-          </div>
-        ) : null}
-        {snapshot.phase === 'holding' ? (
-          <div className="progress" aria-hidden="true">
-            <span style={{ animation: `fill-progress ${settings.timerStartDelayMs}ms linear forwards` }} />
-          </div>
-        ) : null}
-      </button>
+        onReady={handleReady}
+      />
 
       {variant !== 'desktop' ? (
         <Panel muted className="row wrap" style={{ justifyContent: 'space-around' }}>

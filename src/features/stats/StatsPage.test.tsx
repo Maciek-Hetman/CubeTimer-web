@@ -66,7 +66,7 @@ const mocks = vi.hoisted(() => ({
   currentSession: null as CubeSession | null,
 }))
 
-vi.mock('../../app/AppProviders', () => ({
+vi.mock('../../app/AppContext', () => ({
   useApp: () => ({
     ownerId: 'u1',
     settings: mocks.settings,

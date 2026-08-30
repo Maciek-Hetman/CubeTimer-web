@@ -24,8 +24,16 @@ function renderHistory() {
 describe('HistoryPage', () => {
   beforeEach(async () => {
     cleanup()
-    await db.delete()
-    await db.open()
+    await Promise.all([
+      db.solves.clear(),
+      db.sessions.clear(),
+      db.settings.clear(),
+      db.outbox.clear(),
+      db.conflicts.clear(),
+      db.rejections.clear(),
+      db.widgetLayouts.clear(),
+      db.meta.clear(),
+    ])
   })
 
   afterEach(() => {

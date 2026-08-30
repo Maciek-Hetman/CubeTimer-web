@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useApp } from '../../app/AppProviders'
+import { useAuth } from '../../contexts/AuthContext'
 import { ApiError } from '../../api/types'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -8,7 +8,7 @@ import { Field } from '../../ui/Field'
 import { AuthLayout } from './AuthLayout'
 
 export function LoginPage() {
-  const { login } = useApp()
+  const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
