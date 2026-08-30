@@ -181,7 +181,7 @@ export function SettingsPage() {
               />
             </Field>
             {settings.sessionMode === 'manual' ? (
-              <Button type="button" onClick={() => setSessionOpen(true)}>
+              <Button type="button" variant="ghost" onClick={() => setSessionOpen(true)}>
                 Manage sessions
               </Button>
             ) : null}

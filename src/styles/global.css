@@ -509,13 +509,13 @@ input[type='email'],
 input[type='password'],
 input[type='number'] {
   border: 0;
-  background: var(--surface);
+  background: var(--surface-muted);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   min-height: 44px;
   font-weight: 500;
   font-size: var(--text-sm);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   transition:
     box-shadow var(--duration) var(--ease),
     background-color var(--duration) var(--ease);
@@ -524,9 +524,9 @@ input[type='number'] {
 input[type='text']:hover:not(:disabled),
 input[type='email']:hover:not(:disabled),
 input[type='password']:hover:not(:disabled),
-input[type='number']:hover:not(:disabled) {
-  background: var(--surface-muted);
-  box-shadow: var(--shadow-md);
+input[type='number']:hover:not(:disabled),
+.field textarea:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-muted) 80%, var(--border));
 }
 
 input[type='range'] {

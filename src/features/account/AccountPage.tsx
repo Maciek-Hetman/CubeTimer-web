@@ -141,7 +141,7 @@ export function AccountPage() {
                 <Alert tone="warning">Verify your email to enable sync.</Alert>
                 {resendError ? <Alert tone="error">{resendError}</Alert> : null}
                 {resendMessage ? <Alert tone="success" role="status">{resendMessage}</Alert> : null}
-                <Button type="button" loading={resending} onClick={() => void sendVerification()}>
+                <Button type="button" variant="ghost" loading={resending} onClick={() => void sendVerification()}>
                   Resend verification email
                 </Button>
               </div>
@@ -150,7 +150,7 @@ export function AccountPage() {
                 Email verified · sync enabled
               </p>
             )}
-            <Button type="button" onClick={() => void logout()}>
+            <Button type="button" variant="ghost" onClick={() => void logout()}>
               Log out
             </Button>
           </>
@@ -159,7 +159,7 @@ export function AccountPage() {
               <Link className="btn primary" to="/login">
                 Sign in
               </Link>
-              <Link className="btn" to="/register">
+              <Link className="btn ghost" to="/register">
                 Create account
               </Link>
             </div>
