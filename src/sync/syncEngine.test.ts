@@ -4,6 +4,8 @@ import { newSession, putSession } from '../data/repositories/sessions'
 import { newSolve, putSolve } from '../data/repositories/solves'
 import { listOutbox } from '../data/repositories/outbox'
 import {
+  applySnapshotData,
+  applySyncResponse,
   getCursor,
   getLastSyncedAt,
   runSnapshotBootstrap,
@@ -13,7 +15,7 @@ import {
 } from './syncEngine'
 import { createId, nowIso } from '../domain/models'
 import { ApiError } from '../api/types'
-import type { SnapshotResponse, SyncResponse } from '../api/types'
+import type { Change, SnapshotResponse, SyncResponse } from '../api/types'
 
 vi.mock('../api/sync', () => ({
   sync: vi.fn(),
@@ -592,6 +594,144 @@ describe('syncEngine', () => {
       expect(getAccessToken).toHaveBeenCalledTimes(1)
       expect(mockedSnapshot).toHaveBeenCalledTimes(2)
       expect(await getLastSyncedAt('account-1')).toBeNull()
+    })
+  })
+
+  describe('batched apply', () => {
+    const solveChange = (id: string, version: number, durationMs: number): Change => ({
+      cursor: version,
+      entity: 'solve',
+      entity_id: id,
+      operation: 'upsert',
+      version,
+      changed_at: nowIso(),
+      data: {
+        id,
+        session_id: null,
+        duration_ms: durationMs,
+        penalty: 'none',
+        solved_at: '2026-08-22T18:00:00.000Z',
+        scramble: 'R U',
+        event: '3x3',
+        version,
+        updated_at: nowIso(),
+      },
+    })
+
+    it('applies the newest version when one response carries several changes for an entity', async () => {
+      const id = createId()
+      await applySyncResponse(
+        'account-1',
+        [],
+        [],
+        [solveChange(id, 1, 1000), solveChange(id, 3, 3000), solveChange(id, 2, 2000)],
+        3,
+      )
+
+      const stored = await db.solves.get(id)
+      expect(stored?.version).toBe(3)
+      expect(stored?.durationMs).toBe(3000)
+    })
+
+    it('skips a change for an entity that still has a pending mutation', async () => {
+      const solve = newSolve({
+        ownerId: 'account-1',
+        sessionId: null,
+        durationMs: 1234,
+        penalty: 'none',
+        scramble: 'R',
+        event: '3x3',
+      })
+      await putSolve(solve, { enqueue: true, baseVersion: 0 })
+
+      await applySyncResponse('account-1', [], [], [solveChange(solve.id, 5, 9999)], 5)
+
+      const stored = await db.solves.get(solve.id)
+      expect(stored?.durationMs).toBe(1234)
+      expect(stored?.version).toBe(0)
+      expect(await db.outbox.count()).toBe(1)
+    })
+
+    it('rebases a mutation edited while it was in flight and keeps later outcomes consistent', async () => {
+      const solve = newSolve({
+        ownerId: 'account-1',
+        sessionId: null,
+        durationMs: 1000,
+        penalty: 'none',
+        scramble: 'R',
+        event: '3x3',
+      })
+      await putSolve(solve, { enqueue: true, baseVersion: 0 })
+      const [sent] = await listOutbox('account-1')
+
+      // The user edits the same solve while the request is in flight: the outbox row is
+      // updated in place, so the server's outcome no longer matches what is queued.
+      await putSolve({ ...solve, durationMs: 2000 }, { enqueue: true, baseVersion: 0 })
+
+      await applySyncResponse(
+        'account-1',
+        [sent],
+        [{ mutation_id: sent.id, status: 'accepted', version: 1 }],
+        [],
+        1,
+      )
+
+      const outbox = await listOutbox('account-1')
+      expect(outbox).toHaveLength(1)
+      expect(outbox[0].id).not.toBe(sent.id)
+      expect(outbox[0].baseVersion).toBe(1)
+      expect((outbox[0].data as { duration_ms: number }).duration_ms).toBe(2000)
+      // The accepted version is not stamped onto a solve that no longer matches the mutation.
+      expect((await db.solves.get(solve.id))?.version).toBe(0)
+    })
+
+    it('skips pending and older entities when applying a snapshot page', async () => {
+      const pending = newSolve({
+        ownerId: 'account-1',
+        sessionId: null,
+        durationMs: 1000,
+        penalty: 'none',
+        scramble: 'R',
+        event: '3x3',
+      })
+      await putSolve(pending, { enqueue: true, baseVersion: 0 })
+      const newer = newSolve({
+        ownerId: 'account-1',
+        sessionId: null,
+        durationMs: 2000,
+        penalty: 'none',
+        scramble: 'R',
+        event: '3x3',
+      })
+      await putSolve({ ...newer, version: 4 }, { enqueue: false })
+
+      await applySnapshotData('account-1', [], [
+        {
+          id: pending.id,
+          session_id: null,
+          duration_ms: 5555,
+          penalty: 'none',
+          solved_at: pending.solvedAt,
+          scramble: 'R',
+          event: '3x3',
+          version: 9,
+          updated_at: nowIso(),
+        },
+        {
+          id: newer.id,
+          session_id: null,
+          duration_ms: 5555,
+          penalty: 'none',
+          solved_at: newer.solvedAt,
+          scramble: 'R',
+          event: '3x3',
+          version: 2,
+          updated_at: nowIso(),
+        },
+      ])
+
+      expect((await db.solves.get(pending.id))?.durationMs).toBe(1000)
+      expect((await db.solves.get(newer.id))?.durationMs).toBe(2000)
     })
   })
 

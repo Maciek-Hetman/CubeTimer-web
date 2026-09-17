@@ -1,3 +1,4 @@
+import type { Table } from 'dexie'
 import { snapshot as snapshotRequest, sync as syncRequest } from '../api/sync'
 import { ApiError } from '../api/types'
 import type {
@@ -117,13 +118,15 @@ export async function applySnapshotData(
   await db.transaction('rw', [db.sessions, db.solves, db.outbox], async () => {
     const pendingOutbox = await db.outbox.where('ownerId').equals(ownerId).toArray()
     const pendingEntityIds = new Set(pendingOutbox.map((r) => r.entityId))
+    const existingSessions = await loadById(db.sessions, sessions.map((s) => s.id).filter((id) => !pendingEntityIds.has(id)))
+    const existingSolves = await loadById(db.solves, solves.map((sl) => sl.id).filter((id) => !pendingEntityIds.has(id)))
 
     const sessionsToPut: CubeSession[] = []
     for (const s of sessions) {
       if (pendingEntityIds.has(s.id)) {
         continue
       }
-      const existing = await db.sessions.get(s.id)
+      const existing = existingSessions.get(s.id)
       if (existing && existing.version >= s.version) {
         continue
       }
@@ -150,7 +153,7 @@ export async function applySnapshotData(
       if (pendingEntityIds.has(sl.id)) {
         continue
       }
-      const existing = await db.solves.get(sl.id)
+      const existing = existingSolves.get(sl.id)
       if (existing && existing.version >= sl.version) {
         continue
       }
@@ -189,9 +192,12 @@ export async function runSync(options: SyncEngineOptions): Promise<{
   let loops = 0
   let refreshedForRequest = false
   let bootstrapped = false
+  // The outbox read after applying a response is reused as the next request's mutations.
+  let nextMutations: MutationRecord[] | null = null
   while (hasMore && loops < 50) {
     loops += 1
-    const mutations = await listOutbox(options.ownerId)
+    const mutations = nextMutations ?? (await listOutbox(options.ownerId))
+    nextMutations = null
     const cursor = await getCursor(options.ownerId)
     let response
     try {
@@ -234,6 +240,7 @@ export async function runSync(options: SyncEngineOptions): Promise<{
     conflicts += applied.conflicts
     rejected += applied.rejected
     const remaining = await listOutbox(options.ownerId)
+    nextMutations = remaining
     hasMore = response.has_more || remaining.length > 0
     if (!response.has_more && mutations.length === 0) {
       break
@@ -281,21 +288,50 @@ export async function applySyncResponse(
       const conflictsToPut: ConflictRecord[] = []
       const rejectionsToPut: RejectedRecord[] = []
 
+      // Nothing else writes these tables inside this transaction until the final bulk writes,
+      // so one read up front matches reading each row when it is needed.
+      const outboxById = new Map<string, MutationRecord>()
+      for (const record of await db.outbox.where('ownerId').equals(ownerId).toArray()) {
+        outboxById.set(record.id, record)
+      }
+      // Rebasing keeps a row's entityId, so this set stays valid for the whole transaction.
+      const pendingEntityIds = new Set<string>()
+      for (const record of outboxById.values()) {
+        pendingEntityIds.add(record.entityId)
+      }
+      const sessionIds: string[] = []
+      const solveIds: string[] = []
+      for (const outcome of outcomes) {
+        const local = sentById.get(outcome.mutation_id)
+        if (local) {
+          const ids = local.entity === 'session' ? sessionIds : solveIds
+          ids.push(local.entityId)
+        }
+      }
+      for (const change of changes) {
+        if (!pendingEntityIds.has(change.entity_id)) {
+          const ids = change.entity === 'session' ? sessionIds : solveIds
+          ids.push(change.entity_id)
+        }
+      }
+      const storedSessions = await loadById(db.sessions, sessionIds)
+      const storedSolves = await loadById(db.solves, solveIds)
+
       for (const outcome of outcomes) {
         const local = sentById.get(outcome.mutation_id)
         if (!local) {
           continue
         }
-        const pending = await db.outbox.get(local.id)
+        const pending = outboxById.get(local.id)
         const changedWhileSending = pending !== undefined && !sameMutation(pending, local)
         if (outcome.status === 'accepted') {
           removedIds.push(outcome.mutation_id)
           if (changedWhileSending && pending) {
-            await rebasePendingMutation(pending, outcome.version)
+            await rebasePendingMutation(outboxById, pending, outcome.version)
             continue
           }
           if (local.entity === 'session') {
-            const session = sessionsToPut.get(local.entityId) ?? (await db.sessions.get(local.entityId))
+            const session = sessionsToPut.get(local.entityId) ?? storedSessions.get(local.entityId)
             if (
               session &&
               outcome.version !== undefined &&
@@ -306,7 +342,7 @@ export async function applySyncResponse(
               sessionsToPut.set(session.id, { ...session, version: outcome.version })
             }
           } else {
-            const solve = solvesToPut.get(local.entityId) ?? (await db.solves.get(local.entityId))
+            const solve = solvesToPut.get(local.entityId) ?? storedSolves.get(local.entityId)
             if (
               solve &&
               outcome.version !== undefined &&
@@ -322,8 +358,8 @@ export async function applySyncResponse(
 
         const previous =
           local.entity === 'session'
-            ? (sessionsToPut.get(local.entityId) ?? (await db.sessions.get(local.entityId)))
-            : (solvesToPut.get(local.entityId) ?? (await db.solves.get(local.entityId)))
+            ? (sessionsToPut.get(local.entityId) ?? storedSessions.get(local.entityId))
+            : (solvesToPut.get(local.entityId) ?? storedSolves.get(local.entityId))
         // Without `current`, a conflict is only resolvable when we know the server version and
         // still have the local entity to show; otherwise it falls through to a rejection.
         const rawCurrent: Record<string, unknown> | undefined =
@@ -365,7 +401,7 @@ export async function applySyncResponse(
             createdAt: nowIso(),
           })
         } else if (changedWhileSending && pending) {
-          await rebasePendingMutation(pending, outcome.version)
+          await rebasePendingMutation(outboxById, pending, outcome.version)
         } else {
           // Rejections, unresolvable conflicts and unknown statuses must leave the outbox,
           // otherwise the same mutation is resent on every sync.
@@ -386,12 +422,9 @@ export async function applySyncResponse(
       }
 
       for (const change of changes) {
-        const pending = await db.outbox
-          .where('entityId')
-          .equals(change.entity_id)
-          .filter((record) => record.ownerId === ownerId)
-          .count()
-        if (pending > 0) {
+        // Matches on entityId alone, whatever the entity type, and still counts rows whose
+        // outcomes are handled above because they are only removed at the end.
+        if (pendingEntityIds.has(change.entity_id)) {
           continue
         }
 
@@ -400,7 +433,7 @@ export async function applySyncResponse(
         const isDeleteStub = isDelete && rawData.name === undefined && rawData.duration_ms === undefined
 
         if (change.entity === 'session') {
-          const existing = sessionsToPut.get(change.entity_id) ?? (await db.sessions.get(change.entity_id))
+          const existing = sessionsToPut.get(change.entity_id) ?? storedSessions.get(change.entity_id)
           if (existing && existing.version >= change.version) {
             continue
           }
@@ -431,7 +464,7 @@ export async function applySyncResponse(
             sessionsToPut.set(change.entity_id, mapChangeData(ownerId, 'session', rawData) as CubeSession)
           }
         } else {
-          const existing = solvesToPut.get(change.entity_id) ?? (await db.solves.get(change.entity_id))
+          const existing = solvesToPut.get(change.entity_id) ?? storedSolves.get(change.entity_id)
           if (existing && existing.version >= change.version) {
             continue
           }
@@ -517,14 +550,33 @@ function matchesMutation(entity: CubeSession | Solve, mutation: MutationRecord):
   return JSON.stringify(payload) === JSON.stringify(mutation.data)
 }
 
-async function rebasePendingMutation(record: MutationRecord, baseVersion?: number): Promise<void> {
-  await db.outbox.delete(record.id)
-  await db.outbox.put({
+async function rebasePendingMutation(
+  outboxById: Map<string, MutationRecord>,
+  record: MutationRecord,
+  baseVersion?: number,
+): Promise<void> {
+  const rebased: MutationRecord = {
     ...record,
     id: createId(),
     baseVersion: baseVersion ?? record.baseVersion,
     createdAt: nowIso(),
-  })
+  }
+  await db.outbox.delete(record.id)
+  await db.outbox.put(rebased)
+  outboxById.delete(record.id)
+  outboxById.set(rebased.id, rebased)
+}
+
+async function loadById<T extends { id: string }>(table: Table<T, string>, ids: string[]): Promise<Map<string, T>> {
+  const unique = Array.from(new Set(ids))
+  const rows = unique.length > 0 ? await table.bulkGet(unique) : []
+  const byId = new Map<string, T>()
+  for (const row of rows) {
+    if (row) {
+      byId.set(row.id, row)
+    }
+  }
+  return byId
 }
 
 function mapChangeData(

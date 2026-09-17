@@ -1,6 +1,8 @@
+import Dexie from 'dexie'
 import type { CubeEvent, Solve, StatsChartScale } from '../../domain/models'
 import { effectiveTimeMs } from '../../domain/models'
 import { averageFromValues } from '../../domain/stats/averages'
+import { RollingAverage } from '../../domain/stats/rollingAverage'
 import { db } from '../db'
 
 export interface SolveStats {
@@ -57,42 +59,72 @@ export interface ChartPoint {
   ao12: number | null
 }
 
-async function loadSolvesByTime(
+/**
+ * Loads non-deleted solves oldest-first straight from the solvedAt compound index, so no
+ * JS sort is needed. Ties on solvedAt come back in id order, the same order a stable
+ * sort by solvedAt over the [ownerId+event] / [ownerId+sessionId] index gives.
+ */
+async function loadSolvesOldestFirst(
   ownerId: string,
   event: CubeEvent,
   sessionId?: string,
-  descending = true,
 ): Promise<Solve[]> {
   const collection = sessionId
-    ? db.solves.where('[ownerId+sessionId]').equals([ownerId, sessionId])
-    : db.solves.where('[ownerId+event]').equals([ownerId, event])
-  const rows = await collection.filter((solve) => !solve.deletedAt).toArray()
-  if (descending) {
-    rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
-  } else {
-    rows.sort((a, b) => a.solvedAt.localeCompare(b.solvedAt))
-  }
-  return rows
+    ? db.solves
+        .where('[ownerId+sessionId+solvedAt]')
+        .between([ownerId, sessionId, Dexie.minKey], [ownerId, sessionId, Dexie.maxKey])
+    : db.solves
+        .where('[ownerId+event+solvedAt]')
+        .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey])
+  return collection.filter((solve) => !solve.deletedAt).toArray()
 }
 
 /**
- * Computes all statistics for an event (or a single session) by streaming
- * solves newest-first with a single pass. Memory stays bounded by the largest
- * average window regardless of history size.
+ * Reverses an oldest-first list to newest-first while keeping solves that share a
+ * solvedAt in their original relative order (what a stable descending sort yields).
+ */
+function newestFirst(oldestFirst: Solve[]): Solve[] {
+  const out: Solve[] = new Array(oldestFirst.length)
+  let write = 0
+  let end = oldestFirst.length
+  while (end > 0) {
+    let start = end - 1
+    const solvedAt = oldestFirst[start].solvedAt
+    while (start > 0 && oldestFirst[start - 1].solvedAt === solvedAt) {
+      start -= 1
+    }
+    for (let i = start; i < end; i += 1) {
+      out[write] = oldestFirst[i]
+      write += 1
+    }
+    end = start
+  }
+  return out
+}
+
+/**
+ * Computes all statistics for an event (or a single session). Every non-deleted solve
+ * is loaded; the pass itself is linear, with rolling averages kept incrementally.
  */
 export async function computeSolveStats(
   ownerId: string,
   event: CubeEvent,
   sessionId?: string,
 ): Promise<SolveStats> {
+  const solves = await loadSolvesOldestFirst(ownerId, event, sessionId)
+  return summarizeSolves(newestFirst(solves))
+}
+
+export function summarizeSolves(solvesNewestFirst: Solve[]): SolveStats {
   const stats: SolveStats = { ...EMPTY_SOLVE_STATS }
   const currentWindow: Array<number | null> = []
-  const deques: Array<Array<number | null>> = AO_WINDOWS.map(() => [])
+  const windows = AO_WINDOWS.map((n) => new RollingAverage(n))
+  const bests: Array<number | null> = AO_WINDOWS.map(() => null)
   let mean = 0
   let m2 = 0
   let counted = 0
 
-  const feed = (solve: Solve) => {
+  for (const solve of solvesNewestFirst) {
     const effective = effectiveTimeMs(solve)
     stats.count += 1
     stats.totalTime += solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
@@ -113,32 +145,22 @@ export async function computeSolveStats(
     if (currentWindow.length < CURRENT_WINDOW_CAP) {
       currentWindow.push(effective)
     }
-    for (let i = 0; i < AO_WINDOWS.length; i += 1) {
-      const n = AO_WINDOWS[i]
-      const deque = deques[i]
-      deque.push(effective)
-      if (deque.length > n) {
-        deque.shift()
-      }
-      if (deque.length === n) {
-        const value = averageFromValues(deque, n)
-        const field = BEST_FIELDS[i]
-        if (value !== null && (stats[field] === null || value < (stats[field] as number))) {
-          stats[field] = value
-        }
+    for (let i = 0; i < windows.length; i += 1) {
+      const window = windows[i]
+      window.push(effective)
+      const value = window.average()
+      const best = bests[i]
+      if (value !== null && (best === null || value < best)) {
+        bests[i] = value
       }
     }
-  }
-
-  const solves = await loadSolvesByTime(ownerId, event, sessionId, true)
-  for (const solve of solves) {
-    feed(solve)
   }
 
   stats.mean = counted > 0 ? mean : null
   stats.stdDev = counted > 0 ? Math.sqrt(m2 / counted) : null
   for (let i = 0; i < AO_WINDOWS.length; i += 1) {
     const n = AO_WINDOWS[i]
+    stats[BEST_FIELDS[i]] = bests[i]
     if (currentWindow.length >= n) {
       stats[CURRENT_FIELDS[i]] = averageFromValues(currentWindow.slice(0, n), n)
     }
@@ -156,41 +178,32 @@ export async function collectChartSeries(
   scale: StatsChartScale = 'all',
   maxPoints = DEFAULT_CHART_POINTS,
 ): Promise<ChartPoint[]> {
-  const pts: ChartPoint[] = []
-  const aoWindows: Array<{ n: number; deque: Array<number | null> }> = [
-    { n: 5, deque: [] },
-    { n: 12, deque: [] },
-  ]
-  let pos = 0
   const limit = scale === 'all' ? null : Number(scale)
-
-  const solves = await loadSolvesByTime(ownerId, event, undefined, false)
-  for (const solve of solves) {
-    pos += 1
-    const effective = effectiveTimeMs(solve)
-    const time = effective === null ? null : effective / 1000
-    const point: ChartPoint = { index: pos, time, ao5: null, ao12: null }
-    for (const window of aoWindows) {
-      window.deque.push(effective)
-      if (window.deque.length > window.n) {
-        window.deque.shift()
-      }
-      if (window.deque.length === window.n) {
-        const value = averageFromValues(window.deque, window.n)
-        if (window.n === 5) {
-          point.ao5 = value === null ? null : value / 1000
-        } else {
-          point.ao12 = value === null ? null : value / 1000
-        }
-      }
-    }
-    pts.push(point)
-  }
-
+  const pts = chartPointsFromSolves(await loadSolvesOldestFirst(ownerId, event))
   if (limit !== null) {
     return pts.length > limit ? pts.slice(-limit) : pts
   }
   return downsampleChartPoints(pts, maxPoints)
+}
+
+export function chartPointsFromSolves(solvesOldestFirst: Solve[]): ChartPoint[] {
+  const pts: ChartPoint[] = new Array(solvesOldestFirst.length)
+  const ao5 = new RollingAverage(5)
+  const ao12 = new RollingAverage(12)
+  for (let i = 0; i < solvesOldestFirst.length; i += 1) {
+    const effective = effectiveTimeMs(solvesOldestFirst[i])
+    ao5.push(effective)
+    ao12.push(effective)
+    const avg5 = ao5.average()
+    const avg12 = ao12.average()
+    pts[i] = {
+      index: i + 1,
+      time: effective === null ? null : effective / 1000,
+      ao5: avg5 === null ? null : avg5 / 1000,
+      ao12: avg12 === null ? null : avg12 / 1000,
+    }
+  }
+  return pts
 }
 
 /**

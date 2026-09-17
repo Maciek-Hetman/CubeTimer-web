@@ -1,3 +1,4 @@
+import Dexie from 'dexie'
 import type { CubeEvent, Solve, SolveInput } from '../../domain/models'
 import { createId, effectiveTimeMs, nowIso } from '../../domain/models'
 import { db } from '../db'
@@ -54,30 +55,60 @@ export async function countSolves(ownerId: string, event: CubeEvent): Promise<nu
     .count()
 }
 
+type SolvedAtIndex = '[ownerId+event+solvedAt]' | '[ownerId+sessionId+solvedAt]'
+
+function newestFirstOrder(a: Solve, b: Solve): number {
+  if (a.solvedAt !== b.solvedAt) {
+    return a.solvedAt < b.solvedAt ? 1 : -1
+  }
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+}
+
+/**
+ * Newest `limit` solves under an index prefix, read backwards from the solvedAt index
+ * instead of loading and sorting the whole history. Solves sharing a solvedAt stay in
+ * id order, so a tie at the cut-off picks the same rows as sorting everything would.
+ */
+async function newestSolves(
+  index: SolvedAtIndex,
+  prefix: [string, string],
+  limit: number,
+  keep: (solve: Solve) => boolean,
+): Promise<Solve[]> {
+  if (limit <= 0) {
+    return []
+  }
+  const head = await db.solves
+    .where(index)
+    .between([...prefix, Dexie.minKey], [...prefix, Dexie.maxKey])
+    .reverse()
+    .filter(keep)
+    .limit(limit)
+    .toArray()
+  if (head.length < limit) {
+    return head.sort(newestFirstOrder)
+  }
+  const cutoff = head[head.length - 1].solvedAt
+  const ties = await db.solves.where(index).equals([...prefix, cutoff]).filter(keep).toArray()
+  const rows = head.filter((solve) => solve.solvedAt !== cutoff).concat(ties)
+  return rows.sort(newestFirstOrder).slice(0, limit)
+}
+
+const notDeleted = (solve: Solve) => !solve.deletedAt
+
 export async function recentSolves(
   ownerId: string,
   event: CubeEvent,
   limit = RECENT_SOLVES_LIMIT,
 ): Promise<Solve[]> {
-  const rows = await db.solves
-    .where('[ownerId+event]')
-    .equals([ownerId, event])
-    .filter((solve) => !solve.deletedAt)
-    .toArray()
-  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
-  return rows.slice(0, limit)
+  return newestSolves('[ownerId+event+solvedAt]', [ownerId, event], limit, notDeleted)
 }
 
 export async function latestSolveInSession(
   ownerId: string,
   sessionId: string,
 ): Promise<Solve | undefined> {
-  const rows = await db.solves
-    .where('[ownerId+sessionId]')
-    .equals([ownerId, sessionId])
-    .filter((solve) => !solve.deletedAt)
-    .toArray()
-  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
+  const rows = await newestSolves('[ownerId+sessionId+solvedAt]', [ownerId, sessionId], 1, notDeleted)
   return rows[0]
 }
 
@@ -86,13 +117,7 @@ export async function listSolvesForSession(
   sessionId: string,
   limit = 200,
 ): Promise<Solve[]> {
-  const rows = await db.solves
-    .where('[ownerId+sessionId]')
-    .equals([ownerId, sessionId])
-    .filter((solve) => !solve.deletedAt)
-    .toArray()
-  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
-  return rows.slice(0, limit)
+  return newestSolves('[ownerId+sessionId+solvedAt]', [ownerId, sessionId], limit, notDeleted)
 }
 
 export async function listOrphanSolves(
@@ -100,13 +125,12 @@ export async function listOrphanSolves(
   event: CubeEvent,
   limit = 200,
 ): Promise<Solve[]> {
-  const rows = await db.solves
-    .where('[ownerId+event]')
-    .equals([ownerId, event])
-    .filter((solve) => !solve.deletedAt && !solve.sessionId)
-    .toArray()
-  rows.sort((a, b) => b.solvedAt.localeCompare(a.solvedAt))
-  return rows.slice(0, limit)
+  return newestSolves(
+    '[ownerId+event+solvedAt]',
+    [ownerId, event],
+    limit,
+    (solve) => !solve.deletedAt && !solve.sessionId,
+  )
 }
 
 export async function countSolvesBySession(
