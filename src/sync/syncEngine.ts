@@ -48,25 +48,30 @@ export async function getLastSyncedAt(ownerId: string): Promise<string | null> {
   return getMeta<string | null>(lastSyncKey(ownerId), null)
 }
 
+const SNAPSHOT_PAGE_SIZE = 500
+const SNAPSHOT_MAX_PAGES = 10_000
+
 export async function runSnapshotBootstrap(options: SyncEngineOptions): Promise<number> {
   let accessToken = options.accessToken
-  let watermark = 0
+  let requestCursor = 0
+  // The spec calls the cursor a stable watermark; keep the lowest one seen so a server that
+  // advances it mid-paging makes incremental sync replay changes instead of skipping them.
+  let watermark: number | null = null
   let entity: 'session' | 'solve' = 'session'
   let afterId: string = ZERO_UUID
-  let hasMore = true
+  const seenPositions = new Set<string>([`${entity}:${afterId}`])
   let pages = 0
   let refreshedForRequest = false
 
-  while (hasMore && pages < 100) {
-    pages += 1
+  for (;;) {
     let response: SnapshotResponse
     try {
       response = await snapshotRequest(accessToken, {
         device: options.device,
-        cursor: watermark,
+        cursor: requestCursor,
         after_id: afterId,
         entity,
-        page_size: 500,
+        page_size: SNAPSHOT_PAGE_SIZE,
       })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401 && options.getAccessToken && !refreshedForRequest) {
@@ -77,18 +82,25 @@ export async function runSnapshotBootstrap(options: SyncEngineOptions): Promise<
       throw error
     }
     refreshedForRequest = false
+    pages += 1
 
-    if (response.cursor !== undefined) {
-      watermark = response.cursor
-    }
+    requestCursor = response.cursor
+    watermark = watermark === null ? response.cursor : Math.min(watermark, response.cursor)
 
     await applySnapshotData(options.ownerId, response.sessions, response.solves)
 
-    if (response.has_more) {
-      entity = response.next_entity ?? (response.sessions && response.sessions.length > 0 ? 'session' : 'solve')
-      afterId = response.next_after_id ?? ZERO_UUID
-    } else {
-      hasMore = false
+    if (!response.has_more) {
+      break
+    }
+    entity = response.next_entity ?? (response.sessions && response.sessions.length > 0 ? 'session' : 'solve')
+    afterId = response.next_after_id ?? ZERO_UUID
+    const position = `${entity}:${afterId}`
+    if (seenPositions.has(position)) {
+      throw new Error(`Snapshot bootstrap made no progress at ${position}`)
+    }
+    seenPositions.add(position)
+    if (pages >= SNAPSHOT_MAX_PAGES) {
+      throw new Error(`Snapshot bootstrap exceeded ${SNAPSHOT_MAX_PAGES} pages`)
     }
   }
 
@@ -176,6 +188,7 @@ export async function runSync(options: SyncEngineOptions): Promise<{
   let rejected = 0
   let loops = 0
   let refreshedForRequest = false
+  let bootstrapped = false
   while (hasMore && loops < 50) {
     loops += 1
     const mutations = await listOutbox(options.ownerId)
@@ -199,6 +212,11 @@ export async function runSync(options: SyncEngineOptions): Promise<{
         continue
       }
       if (error instanceof ApiError && error.status === 409 && error.code === 'cursor_expired') {
+        // A fresh snapshot watermark that is already expired would bootstrap forever.
+        if (bootstrapped) {
+          throw error
+        }
+        bootstrapped = true
         await setCursor(options.ownerId, 0)
         await runSnapshotBootstrap({
           ownerId: options.ownerId,

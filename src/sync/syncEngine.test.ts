@@ -403,6 +403,29 @@ describe('syncEngine', () => {
       expect(await getCursor('account-1')).toBe(50)
     })
 
+    it('throws instead of bootstrapping again when cursor_expired repeats after a bootstrap', async () => {
+      await setCursor('account-1', 9999)
+      mockedSync.mockRejectedValue(new ApiError(409, 'cursor_expired', 'The sync cursor has expired.'))
+      mockedSnapshot.mockResolvedValue({ cursor: 50, has_more: false } satisfies SnapshotResponse)
+
+      await expect(runSync(options)).rejects.toThrow('The sync cursor has expired.')
+
+      expect(mockedSnapshot).toHaveBeenCalledTimes(1)
+      expect(mockedSync).toHaveBeenCalledTimes(2)
+    })
+
+    it('propagates a failed snapshot bootstrap from runSync', async () => {
+      await setCursor('account-1', 9999)
+      mockedSync.mockRejectedValue(new ApiError(409, 'cursor_expired', 'The sync cursor has expired.'))
+      mockedSnapshot.mockResolvedValue({ cursor: 50, has_more: true } satisfies SnapshotResponse)
+
+      await expect(runSync(options)).rejects.toThrow('no progress')
+
+      expect(mockedSync).toHaveBeenCalledTimes(1)
+      expect(await getCursor('account-1')).toBe(0)
+      expect(await getLastSyncedAt('account-1')).toBeNull()
+    })
+
     it('retries request on 401 Unauthorized using getAccessToken', async () => {
       const refreshedToken = 'new-access-token-456'
       const getAccessToken = vi.fn().mockResolvedValue(refreshedToken)
@@ -480,6 +503,95 @@ describe('syncEngine', () => {
       expect(await db.sessions.get(sessId1)).toBeTruthy()
       expect(await db.solves.get(solveId1)).toBeTruthy()
       expect(await getCursor('account-1')).toBe(100)
+    })
+
+    it('keeps paging past 100 pages until has_more is false', async () => {
+      const ids = Array.from({ length: 120 }, () => createId())
+      ids.forEach((id, index) => {
+        const last = index === ids.length - 1
+        mockedSnapshot.mockResolvedValueOnce({
+          solves: [
+            {
+              id,
+              duration_ms: 10000 + index,
+              penalty: 'none',
+              solved_at: nowIso(),
+              scramble: '',
+              event: '3x3',
+              version: 1,
+              updated_at: nowIso(),
+            },
+          ],
+          cursor: 700,
+          has_more: !last,
+          next_entity: last ? undefined : 'solve',
+          next_after_id: last ? undefined : id,
+        } satisfies SnapshotResponse)
+      })
+
+      const finalCursor = await runSnapshotBootstrap(options)
+
+      expect(finalCursor).toBe(700)
+      expect(mockedSnapshot).toHaveBeenCalledTimes(120)
+      expect(await db.solves.count()).toBe(120)
+      expect(mockedSnapshot.mock.calls[119][1]).toMatchObject({ cursor: 700, entity: 'solve', after_id: ids[118] })
+      expect(await getCursor('account-1')).toBe(700)
+      expect(await getLastSyncedAt('account-1')).toBeTruthy()
+    })
+
+    it('throws without persisting the cursor when the server repeats the same position', async () => {
+      const afterId = createId()
+      mockedSnapshot.mockResolvedValue({
+        solves: [],
+        cursor: 300,
+        has_more: true,
+        next_entity: 'solve',
+        next_after_id: afterId,
+      } satisfies SnapshotResponse)
+
+      await expect(runSnapshotBootstrap(options)).rejects.toThrow('no progress')
+
+      expect(mockedSnapshot).toHaveBeenCalledTimes(2)
+      expect(await getCursor('account-1')).toBe(0)
+      expect(await getLastSyncedAt('account-1')).toBeNull()
+    })
+
+    it('throws when an empty page reports has_more without advancing', async () => {
+      mockedSnapshot.mockResolvedValue({ cursor: 300, has_more: true } satisfies SnapshotResponse)
+
+      await expect(runSnapshotBootstrap(options)).rejects.toThrow('no progress')
+
+      expect(await getCursor('account-1')).toBe(0)
+      expect(await getLastSyncedAt('account-1')).toBeNull()
+    })
+
+    it('echoes the response cursor but stores the lowest watermark seen', async () => {
+      mockedSnapshot.mockResolvedValueOnce({
+        cursor: 40,
+        has_more: true,
+        next_entity: 'solve',
+        next_after_id: '00000000-0000-0000-0000-000000000000',
+      } satisfies SnapshotResponse)
+      mockedSnapshot.mockResolvedValueOnce({ cursor: 55, has_more: false } satisfies SnapshotResponse)
+
+      const finalCursor = await runSnapshotBootstrap(options)
+
+      expect(mockedSnapshot.mock.calls[0][1].cursor).toBe(0)
+      expect(mockedSnapshot.mock.calls[1][1].cursor).toBe(40)
+      expect(finalCursor).toBe(40)
+      expect(await getCursor('account-1')).toBe(40)
+    })
+
+    it('refreshes the token once per request on 401', async () => {
+      const getAccessToken = vi.fn().mockResolvedValue('fresh-token')
+      mockedSnapshot.mockRejectedValueOnce(new ApiError(401, 'invalid_token', 'Expired token'))
+      mockedSnapshot.mockRejectedValueOnce(new ApiError(401, 'invalid_token', 'Expired token'))
+
+      await expect(runSnapshotBootstrap({ ...options, getAccessToken })).rejects.toThrow('Expired token')
+
+      expect(getAccessToken).toHaveBeenCalledTimes(1)
+      expect(mockedSnapshot).toHaveBeenCalledTimes(2)
+      expect(await getLastSyncedAt('account-1')).toBeNull()
     })
   })
 
