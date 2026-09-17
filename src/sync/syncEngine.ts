@@ -215,8 +215,19 @@ export async function runSync(options: SyncEngineOptions): Promise<{
     const applied = await applySyncResponse(options.ownerId, mutations, response.outcomes, response.changes, response.next_cursor)
     conflicts += applied.conflicts
     rejected += applied.rejected
-    hasMore = response.has_more || (await listOutbox(options.ownerId)).length > 0
+    const remaining = await listOutbox(options.ownerId)
+    hasMore = response.has_more || remaining.length > 0
     if (!response.has_more && mutations.length === 0) {
+      break
+    }
+    // Stop when the server left every remaining mutation unresolved; resending them unchanged
+    // in the same run would only repeat the same outcome. They are retried on the next sync.
+    const sentById = new Map(mutations.map((record) => [record.id, record]))
+    const unchanged = remaining.every((record) => {
+      const sentRecord = sentById.get(record.id)
+      return sentRecord !== undefined && sameMutation(sentRecord, record)
+    })
+    if (!response.has_more && unchanged) {
       break
     }
   }
@@ -288,33 +299,26 @@ export async function applySyncResponse(
               solvesToPut.set(solve.id, { ...solve, version: outcome.version })
             }
           }
-        } else if (outcome.status === 'rejected') {
-          if (changedWhileSending && pending) {
-            await rebasePendingMutation(pending, outcome.version)
-          } else {
-            removedIds.push(outcome.mutation_id)
-            rejected += 1
-            rejectionsToPut.push({
-              id: outcome.mutation_id,
-              ownerId,
-              entity: local.entity,
-              entityId: local.entityId,
-              operation: local.operation,
-              code: outcome.code,
-              message: outcome.message,
-              data: local.data,
-              createdAt: nowIso(),
-            })
-          }
-        } else if (outcome.status === 'conflict' && outcome.current) {
+          continue
+        }
+
+        const previous =
+          local.entity === 'session'
+            ? (sessionsToPut.get(local.entityId) ?? (await db.sessions.get(local.entityId)))
+            : (solvesToPut.get(local.entityId) ?? (await db.solves.get(local.entityId)))
+        // Without `current`, a conflict is only resolvable when we know the server version and
+        // still have the local entity to show; otherwise it falls through to a rejection.
+        const rawCurrent: Record<string, unknown> | undefined =
+          outcome.current !== undefined
+            ? (outcome.current as Record<string, unknown>)
+            : previous && outcome.version !== undefined
+              ? { id: local.entityId, version: outcome.version }
+              : undefined
+
+        if (outcome.status === 'conflict' && rawCurrent) {
           removedIds.push(outcome.mutation_id)
           conflicts += 1
-          const rawCurrent = outcome.current as Record<string, unknown>
           const isConflictStub = rawCurrent.name === undefined && rawCurrent.duration_ms === undefined
-          const previous =
-            local.entity === 'session'
-              ? (sessionsToPut.get(local.entityId) ?? (await db.sessions.get(local.entityId)))
-              : (solvesToPut.get(local.entityId) ?? (await db.solves.get(local.entityId)))
 
           let current: CubeSession | Solve
           if (isConflictStub && previous) {
@@ -340,6 +344,24 @@ export async function applySyncResponse(
             message: outcome.message ?? 'Remote version differs',
             current,
             local: previous ?? current,
+            createdAt: nowIso(),
+          })
+        } else if (changedWhileSending && pending) {
+          await rebasePendingMutation(pending, outcome.version)
+        } else {
+          // Rejections, unresolvable conflicts and unknown statuses must leave the outbox,
+          // otherwise the same mutation is resent on every sync.
+          removedIds.push(outcome.mutation_id)
+          rejected += 1
+          rejectionsToPut.push({
+            id: outcome.mutation_id,
+            ownerId,
+            entity: local.entity,
+            entityId: local.entityId,
+            operation: local.operation,
+            code: outcome.code ?? (outcome.status === 'rejected' ? undefined : `unresolved_${String(outcome.status)}`),
+            message: outcome.message,
+            data: local.data,
             createdAt: nowIso(),
           })
         }

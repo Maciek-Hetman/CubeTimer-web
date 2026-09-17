@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   type ReactNode,
 } from 'react'
@@ -23,7 +24,13 @@ import {
   computeSolveStats,
   EMPTY_SOLVE_STATS,
 } from '../data/repositories/solveStats'
-import { nowIso, type CubeSession, type Penalty, type Solve } from '../domain/models'
+import {
+  nowIso,
+  type CubeEvent,
+  type CubeSession,
+  type Penalty,
+  type Solve,
+} from '../domain/models'
 import {
   findOpenAutomaticSession,
   shouldReuseAutomaticSession,
@@ -36,6 +43,23 @@ import { SolvesContext, type SolvesContextValue } from './SolvesContext'
 
 const EMPTY_SESSIONS: CubeSession[] = []
 const EMPTY_SOLVES: Solve[] = []
+
+function isUsableSession(
+  session: CubeSession | undefined,
+  ownerId: string,
+  event: CubeEvent,
+): session is CubeSession {
+  return Boolean(session && session.ownerId === ownerId && session.event === event && !session.deletedAt)
+}
+
+function uniqueManualSessionName(existingNames: Iterable<string>): string {
+  const taken = new Set(existingNames)
+  let n = 1
+  while (taken.has(`Session ${n}`)) {
+    n += 1
+  }
+  return `Session ${n}`
+}
 
 export function SolvesProvider({ children }: { children: ReactNode }) {
   const { ownerId, enqueueWrites } = useAuth()
@@ -68,6 +92,31 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
     return sessions.find((session) => session.id === id) ?? null
   }, [sessions, settings])
 
+  const staleSessionId =
+    ownerId && sessionsQuery && settings.currentSessionIds[settings.event] && !currentSession
+      ? settings.currentSessionIds[settings.event]
+      : undefined
+
+  useEffect(() => {
+    if (!ownerId || !staleSessionId) {
+      return
+    }
+    // Drop ids tombstoned via sync; re-check the DB since the live query can lag settings.
+    void db.transaction('rw', db.settings, db.sessions, async () => {
+      const current = await getOrCreateSettings(ownerId)
+      if (current.currentSessionIds[current.event] !== staleSessionId) {
+        return
+      }
+      const session = await db.sessions.get(staleSessionId)
+      if (isUsableSession(session, ownerId, current.event)) {
+        return
+      }
+      const next = { ...current.currentSessionIds }
+      delete next[current.event]
+      await db.settings.put({ ...current, currentSessionIds: next })
+    })
+  }, [ownerId, staleSessionId])
+
   const saveSolve = useCallback(
     async (input: { durationMs: number; penalty: Penalty; scramble: string }) => {
       if (!ownerId) {
@@ -75,7 +124,8 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
       }
       const current = await getOrCreateSettings(ownerId)
       const now = Date.now()
-      let sessionId = current.currentSessionIds[current.event] ?? null
+      const storedId = current.currentSessionIds[current.event] ?? null
+      let sessionId: string | null = null
       if (current.sessionMode === 'automatic') {
         const allSessions = await listSessions(ownerId, current.event)
         const open = findOpenAutomaticSession(allSessions, current.event)
@@ -89,6 +139,11 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
         })
         if (reuse && open) {
           sessionId = open.id
+          if (storedId !== open.id) {
+            await updateSettings({
+              currentSessionIds: { ...current.currentSessionIds, [current.event]: open.id },
+            })
+          }
         } else {
           if (open) {
             await putSession(
@@ -112,10 +167,17 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
             currentSessionIds: { ...current.currentSessionIds, [current.event]: created.id },
           })
         }
-      } else if (!sessionId) {
+      } else {
+        const stored = storedId ? await db.sessions.get(storedId) : undefined
+        if (isUsableSession(stored, ownerId, current.event)) {
+          sessionId = stored.id
+        }
+      }
+      if (!sessionId) {
+        const existing = await listSessions(ownerId, current.event)
         const created = newSession({
           ownerId,
-          name: 'Session 1',
+          name: uniqueManualSessionName(existing.map((session) => session.name)),
           event: current.event,
           kind: 'manual',
         })

@@ -183,6 +183,94 @@ describe('syncEngine', () => {
       expect(stored?.name).toBe('Existing Session')
     })
 
+    it('records a conflict without current using the outcome version and the local entity', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Local Edit', event: '3x3', kind: 'manual' })
+      session.version = 1
+      await putSession(session, { enqueue: true, baseVersion: 1 })
+      const mutation = (await listOutbox('account-1'))[0]
+
+      mockedSync.mockResolvedValue({
+        outcomes: [{ mutation_id: mutation.id, status: 'conflict', version: 4 }],
+        changes: [],
+        next_cursor: 3,
+        has_more: false,
+      } satisfies SyncResponse)
+
+      const result = await runSync(options)
+
+      expect(mockedSync).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({ status: 'conflict', conflicts: 1, rejected: 0 })
+      expect(await listOutbox('account-1')).toHaveLength(0)
+      const conflict = await db.conflicts.get(mutation.id)
+      expect(conflict?.current.version).toBe(4)
+      expect(conflict?.current.id).toBe(session.id)
+      expect((conflict?.local as { name: string } | undefined)?.name).toBe('Local Edit')
+      expect(await db.rejections.count()).toBe(0)
+
+      mockedSync.mockResolvedValue({ outcomes: [], changes: [], next_cursor: 3, has_more: false } satisfies SyncResponse)
+      const next = await runSync(options)
+      expect(next.status).toBe('idle')
+      expect(mockedSync).toHaveBeenCalledTimes(2)
+      expect(mockedSync.mock.calls[1][1].mutations).toHaveLength(0)
+    })
+
+    it('records a conflict without current, version or local entity as a rejection', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Gone', event: '3x3', kind: 'manual' })
+      await putSession(session, { enqueue: true, baseVersion: 2 })
+      await db.sessions.delete(session.id)
+      const mutation = (await listOutbox('account-1'))[0]
+
+      mockedSync.mockResolvedValue({
+        outcomes: [{ mutation_id: mutation.id, status: 'conflict', message: 'Conflict' }],
+        changes: [],
+        next_cursor: 4,
+        has_more: false,
+      } satisfies SyncResponse)
+
+      const result = await runSync(options)
+
+      expect(mockedSync).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({ status: 'idle', conflicts: 0, rejected: 1 })
+      expect(await listOutbox('account-1')).toHaveLength(0)
+      expect(await db.conflicts.count()).toBe(0)
+      const rejection = await db.rejections.get(mutation.id)
+      expect(rejection?.code).toBe('unresolved_conflict')
+      expect(rejection?.message).toBe('Conflict')
+    })
+
+    it('treats unknown outcome statuses as rejections instead of resending', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Local', event: '3x3', kind: 'manual' })
+      await putSession(session, { enqueue: true, baseVersion: 0 })
+      const mutation = (await listOutbox('account-1'))[0]
+
+      mockedSync.mockResolvedValue({
+        outcomes: [{ mutation_id: mutation.id, status: 'deferred' as 'rejected' }],
+        changes: [],
+        next_cursor: 1,
+        has_more: false,
+      } satisfies SyncResponse)
+
+      const result = await runSync(options)
+
+      expect(mockedSync).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({ status: 'idle', conflicts: 0, rejected: 1 })
+      expect(await listOutbox('account-1')).toHaveLength(0)
+      expect((await db.rejections.get(mutation.id))?.code).toBe('unresolved_deferred')
+    })
+
+    it('stops resending within a run when the server returns no outcome for a mutation', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Local', event: '3x3', kind: 'manual' })
+      await putSession(session, { enqueue: true, baseVersion: 0 })
+
+      mockedSync.mockResolvedValue({ outcomes: [], changes: [], next_cursor: 1, has_more: false } satisfies SyncResponse)
+
+      const result = await runSync(options)
+
+      expect(mockedSync).toHaveBeenCalledTimes(1)
+      expect(result.status).toBe('pending')
+      expect(await listOutbox('account-1')).toHaveLength(1)
+    })
+
     it('handles Protocol v2 DeleteStub in remote changes', async () => {
       const session = newSession({ ownerId: 'account-1', name: 'To Be Deleted', event: '3x3', kind: 'manual' })
       session.version = 1
