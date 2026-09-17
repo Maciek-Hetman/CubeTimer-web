@@ -16,11 +16,10 @@ import {
 import { averageFromValues } from '../../domain/stats/averages'
 import { formatAverage, formatDuration, formatSolveTime } from '../../domain/stats/formatTime'
 import { Button } from '../../ui/Button'
-import { ListIcon, RefreshIcon } from '../../ui/NavIcons'
+import { RefreshIcon } from '../../ui/NavIcons'
 import { Panel } from '../../ui/Panel'
 import { Toast } from '../../ui/StatGrid'
 import { Select } from '../../ui/Select'
-import { SessionManager } from '../sessions/SessionManager'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot, type TimerEngine } from './timerMachine'
 import { getAccentColor } from '../../styles/accents'
 import { loadTimerFont } from '../../styles/timerFonts'
@@ -244,7 +243,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   }, [engine, settings.timerStartDelayMs])
 
   const [snapshot, setSnapshot] = useState<TimerSnapshot>(IDLE_TIMER)
-  const [sessionOpen, setSessionOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [runningSeconds, setRunningSeconds] = useState(0)
   const autoSavedRef = useRef(false)
@@ -516,18 +514,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             scramble
           )}
         </span>
-        {settings.sessionMode === 'manual' ? (
-          <Button
-            type="button"
-            className="icon"
-            disabled={isSolvingOrPreparing}
-            aria-label="Sessions"
-            title="Sessions"
-            onClick={() => setSessionOpen(true)}
-          >
-            <ListIcon />
-          </Button>
-        ) : null}
         {!hideScramble ? (
           <Button
             type="button"
@@ -578,7 +564,6 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         </div>
       ) : null}
 
-      {sessionOpen ? <SessionManager onClose={() => setSessionOpen(false)} /> : null}
       {notice ? <Toast>{notice}</Toast> : null}
     </div>
   )

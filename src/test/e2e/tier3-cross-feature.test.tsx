@@ -46,30 +46,14 @@ describe('Tier 3: Cross-Feature Interactions E2E Tests', () => {
   })
 
   describe('1. Session Switching & Scramble / Solve Isolation', () => {
-    it('associates new solve with switched session and maintains scramble validity', async () => {
-      const user = userEvent.setup()
+    it('associates new solves with an automatic session and maintains scramble validity', async () => {
       const ownerId = await ensureGuestOwner()
-      const sessionA = newSession({ ownerId, name: 'Warmup', event: '3x3', kind: 'manual' })
-      const sessionB = newSession({ ownerId, name: 'Comp Practice', event: '3x3', kind: 'manual' })
-      await putSession(sessionA, { enqueue: false, baseVersion: 0 })
-      await putSession(sessionB, { enqueue: false, baseVersion: 0 })
-
       const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({
-        ...settings,
-        sessionMode: 'manual',
-        currentSessionIds: { '3x3': sessionA.id },
-      })
+      await db.settings.put({ ...settings, timerStartDelayMs: 0 })
 
       renderWithApp(<TimerPage variant="mobile" />)
       await screen.findByRole('button', { name: 'Timer' })
 
-      // Open SessionManager and switch to sessionB
-      await user.click(await screen.findByRole('button', { name: /sessions/i }))
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      await user.click(within(dialog).getByRole('button', { name: 'Comp Practice' }))
-
-      // Complete a solve
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
       await waitFor(() => {
         expect(document.querySelector('.timer-hint')).toHaveTextContent(/Release to start/i)
@@ -84,7 +68,9 @@ describe('Tier 3: Cross-Feature Interactions E2E Tests', () => {
       await waitFor(async () => {
         const solves = await db.solves.where('ownerId').equals(ownerId).toArray()
         expect(solves.length).toBe(1)
-        expect(solves[0].sessionId).toBe(sessionB.id)
+        expect(solves[0].sessionId).toBeTruthy()
+        const session = await db.sessions.get(solves[0].sessionId!)
+        expect(session?.kind).toBe('automatic')
       })
     })
 
@@ -240,7 +226,6 @@ describe('Tier 3: Cross-Feature Interactions E2E Tests', () => {
       await db.settings.put({
         ...settings,
         event: '3x3',
-        sessionMode: 'manual',
         currentSessionIds: { '3x3': s333.id, '2x2': s222.id },
       })
 
@@ -324,7 +309,6 @@ describe('Tier 3: Cross-Feature Interactions E2E Tests', () => {
       const settings = await getOrCreateSettings(ownerId)
       await db.settings.put({
         ...settings,
-        sessionMode: 'manual',
         currentSessionIds: { '3x3': session.id },
       })
 

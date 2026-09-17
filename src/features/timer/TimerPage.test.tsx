@@ -64,17 +64,13 @@ describe('TimerPage', () => {
     expect(await screen.findByRole('button', { name: 'New scramble' })).toBeInTheDocument()
   })
 
-  it('shows scramble and opens the session manager in manual mode', async () => {
-    const user = userEvent.setup()
+  it('shows scramble without a sessions manager button', async () => {
     renderTimer()
     await waitFor(() => {
       expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
     })
     expect((await screen.findAllByText(/R U R' U'/))[0]).toBeInTheDocument()
-    const settings = (await db.settings.toArray())[0] ?? (await getOrCreateSettings('test'))
-    await db.settings.put({ ...settings, sessionMode: 'manual' })
-    await user.click(await screen.findByRole('button', { name: /sessions/i }))
-    expect(await screen.findByRole('dialog', { name: /sessions/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /sessions/i })).not.toBeInTheDocument()
   })
 
   it('returns to idle when a hold is cancelled', async () => {

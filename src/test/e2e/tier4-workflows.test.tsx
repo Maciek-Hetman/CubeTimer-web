@@ -178,7 +178,6 @@ describe('Tier 4: Real-World Workload Scenarios E2E Tests', () => {
     const settings = await getOrCreateSettings(ownerId)
     await db.settings.put({
       ...settings,
-      sessionMode: 'manual',
       currentSessionIds: { '3x3': session.id },
     })
 
@@ -228,7 +227,6 @@ describe('Tier 4: Real-World Workload Scenarios E2E Tests', () => {
       timerStartDelayMs: 300,
       timerFont: 'fira',
       accentColor: 'blue',
-      sessionMode: 'manual',
     })
 
     // 2. Create session and 7 solves

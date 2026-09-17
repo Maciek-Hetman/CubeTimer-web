@@ -1,11 +1,13 @@
 /** @vitest-environment jsdom */
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AppProviders } from '../../app/AppProviders'
 import { ensureGuestOwner } from '../../app/profile'
+import { useAuth } from '../../contexts/AuthContext'
+import { useSolves } from '../../contexts/SolvesContext'
 import { db, getOrCreateSettings } from '../../data/db'
 import { newSession, putSession } from '../../data/repositories/sessions'
 import { newSolve, putSolve } from '../../data/repositories/solves'
@@ -207,29 +209,45 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
       })
     })
 
-    it('handles rapid session switching without race conditions', async () => {
-      const user = userEvent.setup()
+    it('associates successive saves with the same automatic session', async () => {
       const ownerId = await ensureGuestOwner()
-      const session1 = newSession({ ownerId, name: 'S1', event: '3x3', kind: 'manual' })
-      const session2 = newSession({ ownerId, name: 'S2', event: '3x3', kind: 'manual' })
-      const session3 = newSession({ ownerId, name: 'S3', event: '3x3', kind: 'manual' })
-      await putSession(session1, { enqueue: false, baseVersion: 0 })
-      await putSession(session2, { enqueue: false, baseVersion: 0 })
-      await putSession(session3, { enqueue: false, baseVersion: 0 })
-
       const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({ ...settings, sessionMode: 'manual', currentSessionIds: { '3x3': session1.id } })
+      await db.settings.put({ ...settings, inactivityGapMinutes: 60 })
 
-      renderWithApp(<TimerPage variant="mobile" />)
-      await user.click(await screen.findByRole('button', { name: /sessions/i }))
+      const { result } = renderHook(
+        () => {
+          const auth = useAuth()
+          const solves = useSolves()
+          return { auth, solves }
+        },
+        {
+          wrapper: ({ children }) => (
+            <AppProviders>{children}</AppProviders>
+          ),
+        },
+      )
 
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      await user.click(within(dialog).getByRole('button', { name: 'S2' }))
-
-      await waitFor(async () => {
-        const updated = await db.settings.get(ownerId)
-        expect(updated?.currentSessionIds['3x3']).toBe(session2.id)
+      await waitFor(() => {
+        expect(result.current.auth.ready).toBe(true)
+        expect(result.current.auth.ownerId).toBeTruthy()
       })
+
+      for (let i = 0; i < 3; i++) {
+        await act(async () => {
+          await result.current.solves.saveSolve({
+            durationMs: 10000 + i * 100,
+            penalty: 'none',
+            scramble: 'R U',
+          })
+        })
+      }
+
+      const solves = await db.solves.where('ownerId').equals(ownerId).filter((s) => !s.deletedAt).toArray()
+      expect(solves.length).toBe(3)
+      const sessionIds = new Set(solves.map((s) => s.sessionId))
+      expect(sessionIds.size).toBe(1)
+      const session = await db.sessions.get([...sessionIds][0]!)
+      expect(session?.kind).toBe('automatic')
     })
 
     it('handles multiple solve deletes in quick succession properly', async () => {
@@ -382,45 +400,54 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
   })
 
   describe('5. Character & Input Robustness in Sessions', () => {
-    it('handles session names with emojis properly', async () => {
+    it('handles session names with emojis properly via History rename', async () => {
       const user = userEvent.setup()
       const ownerId = await ensureGuestOwner()
-      const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({ ...settings, sessionMode: 'manual' })
+      const session = newSession({ ownerId, name: 'Initial', event: '3x3', kind: 'automatic' })
+      await putSession(session, { enqueue: false, baseVersion: 0 })
+      await putSolve(
+        newSolve({ ownerId, sessionId: session.id, durationMs: 10000, penalty: 'none', scramble: '', event: '3x3' }),
+        { enqueue: false, baseVersion: 0 },
+      )
 
-      renderWithApp(<TimerPage variant="mobile" />)
-      await user.click(await screen.findByRole('button', { name: /sessions/i }))
+      renderWithApp(<HistoryPage />)
+      expect(await screen.findByText('Initial')).toBeInTheDocument()
 
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      const input = within(dialog).getByLabelText('New session name')
-      await user.type(input, '🔥 Sub-10 Grinding 🧩 ⏱️')
-      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      await user.click(screen.getByRole('button', { name: 'Rename session Initial' }))
+      const dialog = screen.getByRole('dialog')
+      const input = within(dialog).getByLabelText('Session name')
+      await user.clear(input)
+      await user.type(input, '🔥 Sub-10 Grinding 🧩')
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
 
       await waitFor(async () => {
-        const sessions = await db.sessions.where('ownerId').equals(ownerId).toArray()
-        const emojiSession = sessions.find((s) => s.name === '🔥 Sub-10 Grinding 🧩 ⏱️')
-        expect(emojiSession).toBeDefined()
+        const updated = await db.sessions.get(session.id)
+        expect(updated?.name).toBe('🔥 Sub-10 Grinding 🧩')
       })
+      expect(await screen.findByText('🔥 Sub-10 Grinding 🧩')).toBeInTheDocument()
     })
 
-    it('handles session names with Unicode and international characters', async () => {
+    it('handles session names with Unicode and international characters via History rename', async () => {
       const user = userEvent.setup()
       const ownerId = await ensureGuestOwner()
-      const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({ ...settings, sessionMode: 'manual' })
+      const session = newSession({ ownerId, name: 'Initial', event: '3x3', kind: 'automatic' })
+      await putSession(session, { enqueue: false, baseVersion: 0 })
+      await putSolve(
+        newSolve({ ownerId, sessionId: session.id, durationMs: 10000, penalty: 'none', scramble: '', event: '3x3' }),
+        { enqueue: false, baseVersion: 0 },
+      )
 
-      renderWithApp(<TimerPage variant="mobile" />)
-      await user.click(await screen.findByRole('button', { name: /sessions/i }))
-
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      const input = within(dialog).getByLabelText('New session name')
-      await user.type(input, 'Session de entraînement 練習 🏆')
-      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      renderWithApp(<HistoryPage />)
+      await user.click(await screen.findByRole('button', { name: 'Rename session Initial' }))
+      const dialog = screen.getByRole('dialog')
+      const input = within(dialog).getByLabelText('Session name')
+      await user.clear(input)
+      await user.type(input, 'Session de entraînement 練習')
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
 
       await waitFor(async () => {
-        const sessions = await db.sessions.where('ownerId').equals(ownerId).toArray()
-        const unicodeSession = sessions.find((s) => s.name === 'Session de entraînement 練習 🏆')
-        expect(unicodeSession).toBeDefined()
+        const updated = await db.sessions.get(session.id)
+        expect(updated?.name).toBe('Session de entraînement 練習')
       })
     })
 
@@ -440,43 +467,50 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
       expect(document.querySelector('script[src*="xss"]')).toBeNull()
     })
 
-    it('trims leading and trailing whitespace from session names', async () => {
+    it('trims leading and trailing whitespace from session names on rename', async () => {
       const user = userEvent.setup()
       const ownerId = await ensureGuestOwner()
-      const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({ ...settings, sessionMode: 'manual' })
+      const session = newSession({ ownerId, name: 'Initial', event: '3x3', kind: 'automatic' })
+      await putSession(session, { enqueue: false, baseVersion: 0 })
+      await putSolve(
+        newSolve({ ownerId, sessionId: session.id, durationMs: 10000, penalty: 'none', scramble: '', event: '3x3' }),
+        { enqueue: false, baseVersion: 0 },
+      )
 
-      renderWithApp(<TimerPage variant="mobile" />)
-      await user.click(await screen.findByRole('button', { name: /sessions/i }))
-
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      const input = within(dialog).getByLabelText('New session name')
+      renderWithApp(<HistoryPage />)
+      await user.click(await screen.findByRole('button', { name: 'Rename session Initial' }))
+      const dialog = screen.getByRole('dialog')
+      const input = within(dialog).getByLabelText('Session name')
+      await user.clear(input)
       await user.type(input, '   Padded Session Name   ')
-      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
 
       await waitFor(async () => {
-        const sessions = await db.sessions.where('ownerId').equals(ownerId).toArray()
-        const trimmedSession = sessions.find((s) => s.name === 'Padded Session Name')
-        expect(trimmedSession).toBeDefined()
+        const updated = await db.sessions.get(session.id)
+        expect(updated?.name).toBe('Padded Session Name')
       })
     })
 
-    it('rejects empty or whitespace-only session name submission', async () => {
+    it('rejects empty or whitespace-only session name on rename', async () => {
       const user = userEvent.setup()
       const ownerId = await ensureGuestOwner()
-      const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({ ...settings, sessionMode: 'manual' })
+      const session = newSession({ ownerId, name: 'Keep Name', event: '3x3', kind: 'automatic' })
+      await putSession(session, { enqueue: false, baseVersion: 0 })
+      await putSolve(
+        newSolve({ ownerId, sessionId: session.id, durationMs: 10000, penalty: 'none', scramble: '', event: '3x3' }),
+        { enqueue: false, baseVersion: 0 },
+      )
 
-      renderWithApp(<TimerPage variant="mobile" />)
-      await user.click(await screen.findByRole('button', { name: /sessions/i }))
-
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      const input = within(dialog).getByLabelText('New session name')
+      renderWithApp(<HistoryPage />)
+      await user.click(await screen.findByRole('button', { name: 'Rename session Keep Name' }))
+      const dialog = screen.getByRole('dialog')
+      const input = within(dialog).getByLabelText('Session name')
+      await user.clear(input)
       await user.type(input, '    ')
-      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
 
-      const sessions = await db.sessions.where('ownerId').equals(ownerId).toArray()
-      expect(sessions.length).toBe(0)
+      const updated = await db.sessions.get(session.id)
+      expect(updated?.name).toBe('Keep Name')
     })
   })
 })

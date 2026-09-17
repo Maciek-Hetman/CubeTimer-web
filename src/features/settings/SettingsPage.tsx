@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from 'react'
 import { useApp } from '../../app/AppContext'
-import type { AppSettings, SessionMode, TimerDisplayMode, TimerFont } from '../../domain/models'
+import type { AppSettings, TimerDisplayMode, TimerFont } from '../../domain/models'
 import { WIDGET_SCALE_MAX, WIDGET_SCALE_MIN, WIDGET_SCALE_PRESETS, WIDGET_SCALE_STEP } from '../../domain/models'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
@@ -8,7 +8,6 @@ import { Select } from '../../ui/Select'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
-import { SessionManager } from '../sessions/SessionManager'
 import { ACCENT_COLORS } from '../../styles/accents'
 
 interface SettingsSection {
@@ -73,7 +72,6 @@ function getInitialSection(): string {
 
 export function SettingsPage() {
   const { settings, updateSettings } = useApp()
-  const [sessionOpen, setSessionOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string>(getInitialSection)
 
   useEffect(() => {
@@ -159,16 +157,6 @@ export function SettingsPage() {
         <div className="settings-content">
           <Panel id="sessions" className="stack settings-section">
             <h2>Sessions</h2>
-            <Field label="Session management">
-              <Select
-                value={settings.sessionMode}
-                onChange={(val) => void updateSettings({ sessionMode: val as SessionMode })}
-                options={[
-                  { value: 'automatic', label: 'Automatic' },
-                  { value: 'manual', label: 'Manual' },
-                ]}
-              />
-            </Field>
             <Field label={`Inactivity gap (${settings.inactivityGapMinutes} min)`}>
               <input
                 type="range"
@@ -180,11 +168,6 @@ export function SettingsPage() {
                 onChange={(event) => void updateSettings({ inactivityGapMinutes: Number(event.target.value) })}
               />
             </Field>
-            {settings.sessionMode === 'manual' ? (
-              <Button type="button" variant="ghost" onClick={() => setSessionOpen(true)}>
-                Manage sessions
-              </Button>
-            ) : null}
           </Panel>
 
           <Panel id="timer" className="stack settings-section">
@@ -346,8 +329,6 @@ export function SettingsPage() {
           </Panel>
         </div>
       </div>
-
-      {sessionOpen ? <SessionManager onClose={() => setSessionOpen(false)} /> : null}
     </div>
   )
 }

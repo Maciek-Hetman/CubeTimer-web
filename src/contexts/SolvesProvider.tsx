@@ -52,15 +52,6 @@ function isUsableSession(
   return Boolean(session && session.ownerId === ownerId && session.event === event && !session.deletedAt)
 }
 
-function uniqueManualSessionName(existingNames: Iterable<string>): string {
-  const taken = new Set(existingNames)
-  let n = 1
-  while (taken.has(`Session ${n}`)) {
-    n += 1
-  }
-  return `Session ${n}`
-}
-
 export function SolvesProvider({ children }: { children: ReactNode }) {
   const { ownerId, enqueueWrites } = useAuth()
   const { settings, updateSettings } = useSettings()
@@ -125,61 +116,40 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
       const current = await getOrCreateSettings(ownerId)
       const now = Date.now()
       const storedId = current.currentSessionIds[current.event] ?? null
-      let sessionId: string | null = null
-      if (current.sessionMode === 'automatic') {
-        const allSessions = await listSessions(ownerId, current.event)
-        const open = findOpenAutomaticSession(allSessions, current.event)
-        const last = open ? await latestSolveInSession(ownerId, open.id) : undefined
-        const reuse = shouldReuseAutomaticSession({
-          session: open,
-          lastSolve: last,
-          nowMs: now,
-          gapMs: current.inactivityGapMinutes * 60_000,
-          event: current.event,
-        })
-        if (reuse && open) {
-          sessionId = open.id
-          if (storedId !== open.id) {
-            await updateSettings({
-              currentSessionIds: { ...current.currentSessionIds, [current.event]: open.id },
-            })
-          }
-        } else {
-          if (open) {
-            await putSession(
-              { ...open, endedAt: nowIso(new Date(now)) },
-              { enqueue: enqueueWrites, baseVersion: open.version },
-            )
-          }
-          const created = newSession({
-            ownerId,
-            name: uniqueAutomaticSessionName(
-              new Date(now),
-              allSessions.map((session) => session.name),
-            ),
-            event: current.event,
-            kind: 'automatic',
-            startedAt: nowIso(new Date(now)),
-          })
-          await putSession(created, { enqueue: enqueueWrites, baseVersion: 0 })
-          sessionId = created.id
+      const allSessions = await listSessions(ownerId, current.event)
+      const open = findOpenAutomaticSession(allSessions, current.event)
+      const last = open ? await latestSolveInSession(ownerId, open.id) : undefined
+      const reuse = shouldReuseAutomaticSession({
+        session: open,
+        lastSolve: last,
+        nowMs: now,
+        gapMs: current.inactivityGapMinutes * 60_000,
+        event: current.event,
+      })
+      let sessionId: string
+      if (reuse && open) {
+        sessionId = open.id
+        if (storedId !== open.id) {
           await updateSettings({
-            currentSessionIds: { ...current.currentSessionIds, [current.event]: created.id },
+            currentSessionIds: { ...current.currentSessionIds, [current.event]: open.id },
           })
         }
       } else {
-        const stored = storedId ? await db.sessions.get(storedId) : undefined
-        if (isUsableSession(stored, ownerId, current.event)) {
-          sessionId = stored.id
+        if (open) {
+          await putSession(
+            { ...open, endedAt: nowIso(new Date(now)) },
+            { enqueue: enqueueWrites, baseVersion: open.version },
+          )
         }
-      }
-      if (!sessionId) {
-        const existing = await listSessions(ownerId, current.event)
         const created = newSession({
           ownerId,
-          name: uniqueManualSessionName(existing.map((session) => session.name)),
+          name: uniqueAutomaticSessionName(
+            new Date(now),
+            allSessions.map((session) => session.name),
+          ),
           event: current.event,
-          kind: 'manual',
+          kind: 'automatic',
+          startedAt: nowIso(new Date(now)),
         })
         await putSession(created, { enqueue: enqueueWrites, baseVersion: 0 })
         sessionId = created.id
@@ -264,25 +234,6 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
     [enqueueWrites, ownerId, requestSync, removeSessionInternal],
   )
 
-  const createSession = useCallback(
-    async (name: string) => {
-      if (!ownerId) {
-        throw new Error('App not ready')
-      }
-      const current = await getOrCreateSettings(ownerId)
-      const session = newSession({ ownerId, name, event: current.event, kind: 'manual' })
-      await putSession(session, { enqueue: enqueueWrites, baseVersion: 0 })
-      await updateSettings({
-        currentSessionIds: { ...current.currentSessionIds, [current.event]: session.id },
-      })
-      if (enqueueWrites) {
-        requestSync()
-      }
-      return session
-    },
-    [enqueueWrites, ownerId, requestSync, updateSettings],
-  )
-
   const renameSession = useCallback(
     async (sessionId: string, name: string) => {
       const session = await db.sessions.get(sessionId)
@@ -295,28 +246,6 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
       }
     },
     [enqueueWrites, ownerId, requestSync],
-  )
-
-  const switchSession = useCallback(
-    async (sessionId: string) => {
-      if (!ownerId) {
-        return
-      }
-      const current = await getOrCreateSettings(ownerId)
-      const session = await db.sessions.get(sessionId)
-      if (
-        !session ||
-        session.ownerId !== ownerId ||
-        session.event !== current.event ||
-        session.deletedAt
-      ) {
-        return
-      }
-      await updateSettings({
-        currentSessionIds: { ...current.currentSessionIds, [current.event]: sessionId },
-      })
-    },
-    [ownerId, updateSettings],
   )
 
   const removeSession = useCallback(
@@ -343,10 +272,7 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
       updateSolve: updateSolvePenalty,
       updateSolvePenalty,
       deleteSolve,
-      createSession,
       renameSession,
-      changeSession: switchSession,
-      switchSession,
       deleteSession: removeSession,
       removeSession,
     }),
@@ -358,9 +284,7 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
       saveSolve,
       updateSolvePenalty,
       deleteSolve,
-      createSession,
       renameSession,
-      switchSession,
       removeSession,
     ],
   )

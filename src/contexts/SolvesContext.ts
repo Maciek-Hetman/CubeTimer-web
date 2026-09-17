@@ -13,10 +13,7 @@ export interface SolvesContextValue {
   updateSolve: (solveId: string, penalty: Penalty) => Promise<void>
   updateSolvePenalty: (solveId: string, penalty: Penalty) => Promise<void>
   deleteSolve: (solveId: string) => Promise<void>
-  createSession: (name: string) => Promise<CubeSession>
   renameSession: (sessionId: string, name: string) => Promise<void>
-  changeSession: (sessionId: string) => Promise<void>
-  switchSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<number>
   removeSession: (sessionId: string) => Promise<number>
 }

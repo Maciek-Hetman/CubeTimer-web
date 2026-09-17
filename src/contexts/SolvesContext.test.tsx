@@ -25,12 +25,14 @@ function renderSolves() {
   })
 }
 
-async function setupManualMode(result: { current: ReturnType<typeof useCombined> }, currentId?: string) {
+async function setCurrentSession(
+  result: { current: ReturnType<typeof useCombined> },
+  currentId?: string,
+) {
   const ownerId = result.current.auth.ownerId!
   const settings = await getOrCreateSettings(ownerId)
   await db.settings.put({
     ...settings,
-    sessionMode: 'manual',
     currentSessionIds: currentId ? { [settings.event]: currentId } : {},
   })
   return { ownerId, event: settings.event }
@@ -61,17 +63,7 @@ describe('SolvesContext & SolvesProvider', () => {
   })
 
   it('handles saving solves, updating penalties, and deleting solves', async () => {
-    const { result } = renderHook(() => useCombined(), {
-      wrapper: ({ children }) => (
-        <AuthProvider>
-          <SettingsProvider>
-            <SyncProvider>
-              <SolvesProvider>{children}</SolvesProvider>
-            </SyncProvider>
-          </SettingsProvider>
-        </AuthProvider>
-      ),
-    })
+    const { result } = renderSolves()
 
     await waitFor(() => {
       expect(result.current.auth.ready).toBe(true)
@@ -79,7 +71,7 @@ describe('SolvesContext & SolvesProvider', () => {
       expect(result.current.solves.solves).toBeDefined()
     })
 
-    let savedSolve: any
+    let savedSolve: Awaited<ReturnType<typeof result.current.solves.saveSolve>>
     await act(async () => {
       savedSolve = await result.current.solves.saveSolve({
         durationMs: 12500,
@@ -88,8 +80,9 @@ describe('SolvesContext & SolvesProvider', () => {
       })
     })
 
-    expect(savedSolve).toBeDefined()
-    expect(savedSolve.durationMs).toBe(12500)
+    expect(savedSolve!).toBeDefined()
+    expect(savedSolve!.durationMs).toBe(12500)
+    expect(savedSolve!.sessionId).toBeTruthy()
 
     await waitFor(() => {
       expect(result.current.solves.recentSolves.length).toBe(1)
@@ -97,7 +90,7 @@ describe('SolvesContext & SolvesProvider', () => {
     })
 
     await act(async () => {
-      await result.current.solves.updateSolvePenalty(savedSolve.id, 'plus_two')
+      await result.current.solves.updateSolvePenalty(savedSolve!.id, 'plus_two')
     })
 
     await waitFor(() => {
@@ -105,7 +98,7 @@ describe('SolvesContext & SolvesProvider', () => {
     })
 
     await act(async () => {
-      await result.current.solves.deleteSolve(savedSolve.id)
+      await result.current.solves.deleteSolve(savedSolve!.id)
     })
 
     await waitFor(() => {
@@ -113,18 +106,8 @@ describe('SolvesContext & SolvesProvider', () => {
     })
   })
 
-  it('handles session lifecycle: create, rename, switch, delete', async () => {
-    const { result } = renderHook(() => useCombined(), {
-      wrapper: ({ children }) => (
-        <AuthProvider>
-          <SettingsProvider>
-            <SyncProvider>
-              <SolvesProvider>{children}</SolvesProvider>
-            </SyncProvider>
-          </SettingsProvider>
-        </AuthProvider>
-      ),
-    })
+  it('handles session lifecycle: create via saveSolve, rename, delete', async () => {
+    const { result } = renderSolves()
 
     await waitFor(() => {
       expect(result.current.auth.ready).toBe(true)
@@ -132,42 +115,39 @@ describe('SolvesContext & SolvesProvider', () => {
       expect(result.current.solves.sessions).toBeDefined()
     })
 
-    let session: any
+    let savedSolve: Awaited<ReturnType<typeof result.current.solves.saveSolve>>
     await act(async () => {
-      session = await result.current.solves.createSession('OH Session')
+      savedSolve = await result.current.solves.saveSolve({
+        durationMs: 10000,
+        penalty: 'none',
+        scramble: 'R U',
+      })
     })
 
-    expect(session.name).toBe('OH Session')
-
+    const sessionId = savedSolve!.sessionId!
     await waitFor(() => {
-      expect(result.current.solves.sessions.some((s) => s.id === session.id)).toBe(true)
-    })
-
-    await act(async () => {
-      await result.current.solves.renameSession(session.id, 'One-Handed')
-    })
-
-    await waitFor(() => {
-      expect(result.current.solves.sessions.find((s) => s.id === session.id)?.name).toBe('One-Handed')
+      expect(result.current.solves.sessions.some((s) => s.id === sessionId)).toBe(true)
+      expect(result.current.solves.currentSession?.id).toBe(sessionId)
     })
 
     await act(async () => {
-      await result.current.solves.switchSession(session.id)
+      await result.current.solves.renameSession(sessionId, 'One-Handed')
     })
 
     await waitFor(() => {
-      expect(result.current.solves.currentSession?.id).toBe(session.id)
+      expect(result.current.solves.sessions.find((s) => s.id === sessionId)?.name).toBe('One-Handed')
     })
 
     await act(async () => {
-      await result.current.solves.removeSession(session.id)
+      await result.current.solves.removeSession(sessionId)
     })
 
     await waitFor(() => {
-      expect(result.current.solves.sessions.find((s) => s.id === session.id)).toBeUndefined()
+      expect(result.current.solves.sessions.find((s) => s.id === sessionId)).toBeUndefined()
     })
   })
-  describe('saveSolve in manual mode', () => {
+
+  describe('saveSolve automatic sessions', () => {
     async function ready() {
       const rendered = renderSolves()
       await waitFor(() => {
@@ -178,7 +158,7 @@ describe('SolvesContext & SolvesProvider', () => {
     }
 
     async function save(result: { current: ReturnType<typeof useCombined> }) {
-      let solve: any
+      let solve: Awaited<ReturnType<typeof result.current.solves.saveSolve>>
       await act(async () => {
         solve = await result.current.solves.saveSolve({
           durationMs: 10000,
@@ -186,16 +166,22 @@ describe('SolvesContext & SolvesProvider', () => {
           scramble: 'R U',
         })
       })
-      return solve
+      return solve!
     }
 
-    it('keeps using a valid current session', async () => {
+    it('reuses an open automatic session within the inactivity gap', async () => {
       const { result } = await ready()
       const ownerId = result.current.auth.ownerId!
-      const { event } = await setupManualMode(result)
-      const session = newSession({ ownerId, name: 'Main', event, kind: 'manual' })
+      const { event } = await setCurrentSession(result)
+      const session = newSession({
+        ownerId,
+        name: '22 aug 2026 evening',
+        event,
+        kind: 'automatic',
+        startedAt: new Date().toISOString(),
+      })
       await putSession(session, { enqueue: false })
-      await setupManualMode(result, session.id)
+      await setCurrentSession(result, session.id)
 
       const solve = await save(result)
 
@@ -208,23 +194,27 @@ describe('SolvesContext & SolvesProvider', () => {
     it('does not attach solves to a session tombstoned via sync', async () => {
       const { result } = await ready()
       const ownerId = result.current.auth.ownerId!
-      const { event } = await setupManualMode(result)
+      const { event } = await setCurrentSession(result)
       const deleted = {
-        ...newSession({ ownerId, name: 'Session 1', event, kind: 'manual' }),
+        ...newSession({
+          ownerId,
+          name: '22 aug 2026 evening',
+          event,
+          kind: 'automatic',
+          startedAt: new Date().toISOString(),
+        }),
         deletedAt: new Date().toISOString(),
       }
-      const other = newSession({ ownerId, name: 'Session 2', event, kind: 'manual' })
       await putSession(deleted, { enqueue: false })
-      await putSession(other, { enqueue: false })
-      await setupManualMode(result, deleted.id)
+      await setCurrentSession(result, deleted.id)
 
       const solve = await save(result)
 
       expect(solve.sessionId).not.toBe(deleted.id)
-      const target = await db.sessions.get(solve.sessionId)
+      const target = await db.sessions.get(solve.sessionId!)
       expect(target?.deletedAt).toBeNull()
       expect(target?.event).toBe(event)
-      expect(target?.name).toBe('Session 1')
+      expect(target?.kind).toBe('automatic')
       const settings = await getOrCreateSettings(ownerId)
       expect(settings.currentSessionIds[event]).toBe(solve.sessionId)
       await waitFor(() => {
@@ -232,21 +222,21 @@ describe('SolvesContext & SolvesProvider', () => {
       })
     })
 
-    it('creates a uniquely named session when the current id does not exist', async () => {
+    it('creates a new automatic session when no open automatic session exists', async () => {
       const { result } = await ready()
       const ownerId = result.current.auth.ownerId!
-      const { event } = await setupManualMode(result)
-      await putSession(newSession({ ownerId, name: 'Session 1', event, kind: 'manual' }), {
+      const { event } = await setCurrentSession(result)
+      await putSession(newSession({ ownerId, name: 'Legacy Manual', event, kind: 'manual' }), {
         enqueue: false,
       })
-      await setupManualMode(result, 'missing-session-id')
+      await setCurrentSession(result, 'missing-session-id')
 
       const solve = await save(result)
 
-      const target = await db.sessions.get(solve.sessionId)
+      const target = await db.sessions.get(solve.sessionId!)
       expect(target).toBeDefined()
       expect(target?.deletedAt).toBeNull()
-      expect(target?.name).toBe('Session 2')
+      expect(target?.kind).toBe('automatic')
       const settings = await getOrCreateSettings(ownerId)
       expect(settings.currentSessionIds[event]).toBe(solve.sessionId)
     })
@@ -254,10 +244,16 @@ describe('SolvesContext & SolvesProvider', () => {
     it('clears a current id once its session is tombstoned', async () => {
       const { result } = await ready()
       const ownerId = result.current.auth.ownerId!
-      const { event } = await setupManualMode(result)
-      const session = newSession({ ownerId, name: 'Main', event, kind: 'manual' })
+      const { event } = await setCurrentSession(result)
+      const session = newSession({
+        ownerId,
+        name: 'Main',
+        event,
+        kind: 'automatic',
+        startedAt: new Date().toISOString(),
+      })
       await putSession(session, { enqueue: false })
-      await setupManualMode(result, session.id)
+      await setCurrentSession(result, session.id)
       await waitFor(() => {
         expect(result.current.solves.currentSession?.id).toBe(session.id)
       })

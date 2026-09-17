@@ -32,9 +32,7 @@ export interface AppContextValue {
   saveSolve: (input: { durationMs: number; penalty: Penalty; scramble: string }) => Promise<Solve>
   updateSolvePenalty: (solveId: string, penalty: Penalty) => Promise<void>
   deleteSolve: (solveId: string) => Promise<void>
-  createSession: (name: string) => Promise<CubeSession>
   renameSession: (sessionId: string, name: string) => Promise<void>
-  switchSession: (sessionId: string) => Promise<void>
   removeSession: (sessionId: string) => Promise<number>
   isAdmin: boolean
   login: (email: string, password: string) => Promise<void>
@@ -105,9 +103,7 @@ export function useApp(): AppContextValue {
     saveSolve: solves.saveSolve,
     updateSolvePenalty: solves.updateSolvePenalty,
     deleteSolve: solves.deleteSolve,
-    createSession: solves.createSession,
     renameSession: solves.renameSession,
-    switchSession: solves.switchSession,
     removeSession: solves.removeSession,
   }
 }

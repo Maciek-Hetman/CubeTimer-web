@@ -7,8 +7,6 @@ export type Penalty = (typeof PENALTIES)[number]
 const SESSION_KINDS = ['manual', 'automatic'] as const
 type SessionKind = (typeof SESSION_KINDS)[number]
 
-export type SessionMode = SessionKind
-
 const TIMER_DISPLAY_MODES = ['show', 'hide_decimals', 'hide'] as const
 export type TimerDisplayMode = (typeof TIMER_DISPLAY_MODES)[number]
 
@@ -101,7 +99,6 @@ export interface SolveInput {
 export interface AppSettings {
   ownerId: string
   event: CubeEvent
-  sessionMode: SessionMode
   inactivityGapMinutes: number
   timerStartDelayMs: number
   timerDisplayMode: TimerDisplayMode
@@ -121,7 +118,6 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   event: '3x3',
-  sessionMode: 'automatic',
   inactivityGapMinutes: 60,
   timerStartDelayMs: 500,
   timerDisplayMode: 'show',

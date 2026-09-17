@@ -215,17 +215,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     if (ownerId) {
-      const current = await db.settings.get(ownerId)
-      if (current?.sessionMode === 'automatic') {
-        const openSessions = (await listSessions(ownerId)).filter(
-          (session) => session.kind === 'automatic' && !session.endedAt && !session.deletedAt,
+      const openSessions = (await listSessions(ownerId)).filter(
+        (session) => session.kind === 'automatic' && !session.endedAt && !session.deletedAt,
+      )
+      for (const session of openSessions) {
+        await putSession(
+          { ...session, endedAt: nowIso() },
+          { enqueue: enqueueWrites, baseVersion: session.version },
         )
-        for (const session of openSessions) {
-          await putSession(
-            { ...session, endedAt: nowIso() },
-            { enqueue: enqueueWrites, baseVersion: session.version },
-          )
-        }
       }
     }
     const token = refreshTokenRef.current

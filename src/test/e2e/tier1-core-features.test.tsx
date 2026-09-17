@@ -425,54 +425,31 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
   })
 
   describe('5. Session Management (Creation, Switching, Renaming, Deleting)', () => {
-    it('creates a new manual session and sets it as active in SessionManager', async () => {
-      const user = userEvent.setup()
+    it('creates an automatic session when a solve is saved', async () => {
       const ownerId = await ensureGuestOwner()
       const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({ ...settings, sessionMode: 'manual' })
+      await db.settings.put({ ...settings, timerStartDelayMs: 0 })
 
       renderWithApp(<TimerPage variant="mobile" />)
-      const sessionBtn = await screen.findByRole('button', { name: /sessions/i })
-      await user.click(sessionBtn)
+      await screen.findByRole('button', { name: 'Timer' })
 
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      const input = within(dialog).getByLabelText('New session name')
-      await user.type(input, 'Morning Practice')
-      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+      await waitFor(() => {
+        expect(document.querySelector('.timer-hint')).toHaveTextContent(/Release to start/i)
+      }, { timeout: 4000 })
+      fireEvent.keyUp(window, { code: 'Space', key: ' ' })
+      await waitFor(() => {
+        expect(document.querySelector('.timer-hint')).toHaveTextContent(/Tap or press Space to stop/i)
+      })
+      fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+      expect(await screen.findByText(/Saved /i)).toBeInTheDocument()
 
       await waitFor(async () => {
         const sessions = await db.sessions.where('ownerId').equals(ownerId).toArray()
-        const created = sessions.find((s) => s.name === 'Morning Practice')
-        expect(created).toBeDefined()
-        expect(created?.kind).toBe('manual')
-      })
-    })
-
-    it('switches active session when user selects a session', async () => {
-      const user = userEvent.setup()
-      const ownerId = await ensureGuestOwner()
-      const sessionA = newSession({ ownerId, name: 'Session A', event: '3x3', kind: 'manual' })
-      const sessionB = newSession({ ownerId, name: 'Session B', event: '3x3', kind: 'manual' })
-      await putSession(sessionA, { enqueue: false, baseVersion: 0 })
-      await putSession(sessionB, { enqueue: false, baseVersion: 0 })
-
-      const settings = await getOrCreateSettings(ownerId)
-      await db.settings.put({
-        ...settings,
-        sessionMode: 'manual',
-        currentSessionIds: { '3x3': sessionA.id },
-      })
-
-      renderWithApp(<TimerPage variant="mobile" />)
-      await user.click(await screen.findByRole('button', { name: /sessions/i }))
-
-      const dialog = await screen.findByRole('dialog', { name: /sessions/i })
-      const sessionBButton = within(dialog).getByRole('button', { name: 'Session B' })
-      await user.click(sessionBButton)
-
-      await waitFor(async () => {
-        const updated = await db.settings.get(ownerId)
-        expect(updated?.currentSessionIds['3x3']).toBe(sessionB.id)
+        expect(sessions.length).toBe(1)
+        expect(sessions[0].kind).toBe('automatic')
+        const settings = await db.settings.get(ownerId)
+        expect(settings?.currentSessionIds['3x3']).toBe(sessions[0].id)
       })
     })
 

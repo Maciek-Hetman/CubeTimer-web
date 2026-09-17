@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   settings: {
     ownerId: 'u1',
     event: '3x3',
-    sessionMode: 'automatic',
     inactivityGapMinutes: 60,
     timerStartDelayMs: 500,
     timerDisplayMode: 'show',
