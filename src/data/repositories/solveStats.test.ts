@@ -13,6 +13,8 @@ import {
   collectChartSeries,
   computeSolveStats,
   DEFAULT_CHART_POINTS,
+  downsampleChartPoints,
+  type ChartPoint,
 } from './solveStats'
 import {
   averageOfN,
@@ -267,6 +269,36 @@ describe('collectChartSeries', () => {
     expect(series250[series250.length - 1].index).toBe(250)
   }, 15_000)
 
+  it('spreads downsampled points across the entire history', async () => {
+    const owner = 'user-1'
+    await seedDataset(owner, 'session-1', 800)
+    const solves = await listSolves(owner, '3x3')
+    const best = bestSingle(solves) as number
+    const series = await collectChartSeries(owner, '3x3', 'all', 40)
+
+    expect(series.length).toBeLessThanOrEqual(40)
+    expect(series.length).toBeGreaterThan(20)
+    expect(series[0].index).toBe(1)
+    expect(series[series.length - 1].index).toBe(800)
+    for (let i = 1; i < series.length; i += 1) {
+      expect(series[i].index).toBeGreaterThan(series[i - 1].index)
+    }
+    for (let q = 0; q < 4; q += 1) {
+      const inQuarter = series.filter((p) => p.index > q * 200 && p.index <= (q + 1) * 200)
+      expect(inQuarter.length).toBeGreaterThan(5)
+    }
+    expect(series.some((p) => p.time === best / 1000)).toBe(true)
+  }, 15_000)
+
+  it('keeps the numeric scale as the last N points without downsampling', async () => {
+    const owner = 'user-1'
+    await seedDataset(owner, 'session-1', 300)
+    const series = await collectChartSeries(owner, '3x3', '250', 10)
+    expect(series).toHaveLength(250)
+    expect(series[0].index).toBe(51)
+    expect(series[series.length - 1].index).toBe(300)
+  }, 15_000)
+
   it('returns all points if total solves are fewer than the selected scale', async () => {
     const owner = 'user-1'
     seedDataset(owner, 'session-1', 40)
@@ -280,5 +312,48 @@ describe('collectChartSeries', () => {
     expect(series1000).toHaveLength(40)
     expect(series1000[0].index).toBe(1)
     expect(series1000[series1000.length - 1].index).toBe(40)
+  })
+})
+describe('downsampleChartPoints', () => {
+  const point = (index: number, time: number | null): ChartPoint => ({ index, time, ao5: null, ao12: null })
+  const series = (times: Array<number | null>) => times.map((time, i) => point(i + 1, time))
+
+  it('returns histories within the cap unchanged', () => {
+    const input = series([3, 1, 2])
+    expect(downsampleChartPoints(input, 3)).toBe(input)
+  })
+
+  it('keeps extremes in chronological order', () => {
+    const times = Array.from({ length: 1000 }, (_, i) => 10 + ((i * 37) % 11))
+    times[613] = 1
+    times[27] = 99
+    const out = downsampleChartPoints(series(times), 50)
+    expect(out.length).toBeLessThanOrEqual(50)
+    expect(out[0].index).toBe(1)
+    expect(out[out.length - 1].index).toBe(1000)
+    expect(out.some((p) => p.index === 614)).toBe(true)
+    expect(out.some((p) => p.index === 28)).toBe(true)
+    for (let i = 1; i < out.length; i += 1) {
+      expect(out[i].index).toBeGreaterThan(out[i - 1].index)
+    }
+  })
+
+  it('emits one point per all-DNF bucket without duplicates', () => {
+    const times = Array.from({ length: 1000 }, (_, i) => (i >= 200 && i < 600 ? null : 10 + (i % 5)))
+    const out = downsampleChartPoints(series(times), 40)
+    const indices = out.map((p) => p.index)
+    expect(new Set(indices).size).toBe(indices.length)
+    const dnfPoints = out.filter((p) => p.time === null)
+    expect(dnfPoints.length).toBeGreaterThan(5)
+    for (let i = 1; i < out.length; i += 1) {
+      expect(out[i].index).toBeGreaterThan(out[i - 1].index)
+    }
+  })
+
+  it('handles an entirely DNF history', () => {
+    const out = downsampleChartPoints(series(Array.from({ length: 500 }, () => null)), 20)
+    expect(out.length).toBeLessThanOrEqual(20)
+    expect(new Set(out.map((p) => p.index)).size).toBe(out.length)
+    expect(out[out.length - 1].index).toBe(500)
   })
 })

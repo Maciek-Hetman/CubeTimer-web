@@ -85,7 +85,6 @@ export function averageFromValues(values: Array<number | null>, n: number): numb
   if (n <= 0 || values.length < n) {
     return null
   }
-  const dnfCount = values.filter((value) => value === null).length
   if (n < 3) {
     const valid = values.filter((value): value is number => value !== null)
     if (valid.length === 0) {
@@ -93,28 +92,30 @@ export function averageFromValues(values: Array<number | null>, n: number): numb
     }
     return valid.reduce((sum, value) => sum + value, 0) / valid.length
   }
-  if (dnfCount > 1) {
+  const trim = trimCount(n)
+  const valid = new Float64Array(n)
+  let validCount = 0
+  for (let i = 0; i < n; i += 1) {
+    const value = values[i]
+    if (value !== null) {
+      valid[validCount] = value
+      validCount += 1
+    }
+  }
+  // DNFs rank slowest, so the average survives only while they fit in the trimmed worst slots
+  if (n - validCount > trim) {
     return null
   }
-  const ranked = [...values]
-  ranked.sort((a, b) => {
-    if (a === null && b === null) {
-      return 0
-    }
-    if (a === null) {
-      return 1
-    }
-    if (b === null) {
-      return -1
-    }
-    return a - b
-  })
-  const trimmed = ranked.slice(1, -1)
-  if (trimmed.some((value) => value === null)) {
-    return null
+  const sorted = valid.subarray(0, validCount).sort()
+  let sum = 0
+  for (let i = trim; i < n - trim; i += 1) {
+    sum += sorted[i]
   }
-  const numbers = trimmed as number[]
-  return numbers.reduce((sum, value) => sum + value, 0) / numbers.length
+  return sum / (n - 2 * trim)
+}
+
+export function trimCount(n: number): number {
+  return Math.ceil(n / 20)
 }
 
 function averageWindow(window: Solve[], n: number): number | null {

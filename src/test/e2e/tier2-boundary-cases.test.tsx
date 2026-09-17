@@ -315,8 +315,8 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
 
   describe('4. Volume, Sizing & Session Boundaries', () => {
     it('computes Ao50 accurately on 50 solve volume dataset', () => {
-      // 50 solves of 10.0s (10000ms) with one 5.0s (min) and one 20.0s (max)
-      const times = [5000, ...Array(48).fill(10000), 20000]
+      // Ao50 trims 3 from each end: 44 solves of 10.0s plus 3 fast and 3 slow outliers
+      const times = [5000, 6000, 7000, ...Array(44).fill(10000), 20000, 30000, 40000]
       const solves = times.map((durationMs) =>
         newSolve({ ownerId: '1', sessionId: null, durationMs, penalty: 'none', scramble: '', event: '3x3' }),
       )

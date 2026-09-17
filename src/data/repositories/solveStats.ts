@@ -50,7 +50,7 @@ const CURRENT_WINDOW_CAP = 100
 
 export const DEFAULT_CHART_POINTS = 500
 
-interface ChartPoint {
+export interface ChartPoint {
   index: number
   time: number | null
   ao5: number | null
@@ -156,8 +156,7 @@ export async function collectChartSeries(
   scale: StatsChartScale = 'all',
   maxPoints = DEFAULT_CHART_POINTS,
 ): Promise<ChartPoint[]> {
-  type RawPoint = { pos: number; time: number | null; ao5: number | null; ao12: number | null }
-  const pts: RawPoint[] = []
+  const pts: ChartPoint[] = []
   const aoWindows: Array<{ n: number; deque: Array<number | null> }> = [
     { n: 5, deque: [] },
     { n: 12, deque: [] },
@@ -170,7 +169,7 @@ export async function collectChartSeries(
     pos += 1
     const effective = effectiveTimeMs(solve)
     const time = effective === null ? null : effective / 1000
-    const point: RawPoint = { pos, time, ao5: null, ao12: null }
+    const point: ChartPoint = { index: pos, time, ao5: null, ao12: null }
     for (const window of aoWindows) {
       window.deque.push(effective)
       if (window.deque.length > window.n) {
@@ -186,29 +185,55 @@ export async function collectChartSeries(
       }
     }
     pts.push(point)
-    if (limit === null && pts.length > maxPoints) {
-      const len = pts.length
-      const p1 = pts[len - 4]
-      const p2 = pts[len - 3]
-      const p3 = pts[len - 2]
-      const p4 = pts[len - 1]
-      const tail = [p1, p2, p3, p4]
-      const min = tail.reduce((a, b) =>
-        b.time !== null && (a.time === null || b.time < a.time) ? b : a,
-      )
-      const max = tail.reduce((a, b) =>
-        b.time !== null && (a.time === null || b.time > a.time) ? b : a,
-      )
-      pts.splice(len - 4, 4, min, max)
-    }
   }
 
-  const finalPts = limit !== null && pts.length > limit ? pts.slice(-limit) : pts
+  if (limit !== null) {
+    return pts.length > limit ? pts.slice(-limit) : pts
+  }
+  return downsampleChartPoints(pts, maxPoints)
+}
 
-  return finalPts.map((point) => ({
-    index: point.pos,
-    time: point.time,
-    ao5: point.ao5,
-    ao12: point.ao12,
-  }))
+/**
+ * Min/max-per-bucket downsampling over the whole series. Keeps the first and last
+ * point, emits each bucket's extremes in chronological order, and one point for
+ * buckets without any timed solve.
+ */
+export function downsampleChartPoints(points: ChartPoint[], maxPoints: number): ChartPoint[] {
+  const n = points.length
+  if (n <= maxPoints) {
+    return points
+  }
+  if (maxPoints < 2) {
+    return maxPoints < 1 ? [] : [points[n - 1]]
+  }
+  const buckets = Math.floor((maxPoints - 2) / 2)
+  const out: ChartPoint[] = [points[0]]
+  const middle = n - 2
+  for (let b = 0; b < buckets; b += 1) {
+    const start = 1 + Math.floor((b * middle) / buckets)
+    const end = 1 + Math.floor(((b + 1) * middle) / buckets)
+    let minAt = -1
+    let maxAt = -1
+    for (let i = start; i < end; i += 1) {
+      const time = points[i].time
+      if (time === null) {
+        continue
+      }
+      if (minAt === -1 || time < (points[minAt].time as number)) {
+        minAt = i
+      }
+      if (maxAt === -1 || time > (points[maxAt].time as number)) {
+        maxAt = i
+      }
+    }
+    if (minAt === -1) {
+      out.push(points[Math.floor((start + end - 1) / 2)])
+    } else if (minAt === maxAt) {
+      out.push(points[minAt])
+    } else {
+      out.push(points[Math.min(minAt, maxAt)], points[Math.max(minAt, maxAt)])
+    }
+  }
+  out.push(points[n - 1])
+  return out
 }
