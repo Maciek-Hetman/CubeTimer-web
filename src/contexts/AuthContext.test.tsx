@@ -3,8 +3,9 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../api/auth'
-import type { AuthSession } from '../api/types'
-import { db } from '../data/db'
+import { ApiError, type AuthSession, type User } from '../api/types'
+import { saveAuth, setCurrentOwnerId } from '../app/profile'
+import { db, getMeta } from '../data/db'
 import { AuthProvider } from './AuthProvider'
 import { useAuth } from './AuthContext'
 
@@ -33,6 +34,18 @@ function TestConsumer() {
       <span data-testid="role">{role ?? 'none'}</span>
     </div>
   )
+}
+
+const storedUser: User = {
+  id: 'u-stored',
+  email: 'stored@example.com',
+  email_verified: true,
+  user_role: 'user',
+}
+
+async function seedStoredSession() {
+  await saveAuth('ref-stored', storedUser)
+  await setCurrentOwnerId(storedUser.id)
 }
 
 describe('AuthContext & AuthProvider', () => {
@@ -161,5 +174,59 @@ describe('AuthContext & AuthProvider', () => {
     expect(result.current.user).toBeNull()
     expect(result.current.token).toBeNull()
     expect(result.current.isAdmin).toBe(false)
+  })
+
+  it('keeps the stored account signed in when startup refresh fails offline', async () => {
+    await seedStoredSession()
+    vi.mocked(authApi.refresh).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    })
+
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    expect(authApi.refresh).toHaveBeenCalledWith('ref-stored')
+    expect(result.current.ownerId).toBe('u-stored')
+    expect(result.current.user).toEqual(storedUser)
+    expect(result.current.token).toBeNull()
+    expect(result.current.enqueueWrites).toBe(true)
+    expect(await getMeta('auth.refresh', null)).toBe('ref-stored')
+    expect(await getMeta('owner.current', null)).toBe('u-stored')
+
+    vi.mocked(authApi.refresh).mockResolvedValueOnce({
+      access_token: 'acc-recovered',
+      refresh_token: 'ref-recovered',
+      token_type: 'Bearer',
+      expires_in: 3600,
+      user: storedUser,
+    })
+
+    await act(async () => {
+      await result.current.refreshAccessToken()
+    })
+
+    expect(authApi.refresh).toHaveBeenLastCalledWith('ref-stored')
+    expect(result.current.token).toBe('acc-recovered')
+    expect(result.current.ownerId).toBe('u-stored')
+  })
+
+  it('transitions to guest when startup refresh is rejected', async () => {
+    await seedStoredSession()
+    vi.mocked(authApi.refresh).mockRejectedValueOnce(
+      new ApiError(401, 'invalid_refresh_token', 'Refresh token revoked'),
+    )
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    })
+
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    expect(result.current.user).toBeNull()
+    expect(result.current.token).toBeNull()
+    expect(result.current.ownerId).toMatch(/^guest:/)
+    expect(await getMeta('auth.refresh', null)).toBeNull()
+    expect(await getMeta('auth.user', null)).toBeNull()
   })
 })

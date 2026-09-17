@@ -26,7 +26,8 @@ import { SyncContext, type SyncContextValue } from './SyncContext'
 const SYNC_MIN_INTERVAL_MS = 30_000
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const { ownerId, user, ready, refreshAccessToken } = useAuth()
+  const { ownerId, user, token, ready, refreshAccessToken } = useAuth()
+  const emailVerified = user?.email_verified ?? false
 
   const [rawSyncStatus, setRawSyncStatus] = useState<SyncStatus>('idle')
   const [isOnline, setIsOnline] = useState(
@@ -35,6 +36,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const syncTimer = useRef<number | null>(null)
   const syncingRef = useRef(false)
+  const rerunRef = useRef(false)
+  const tokenRef = useRef(token)
+  const conflictCountRef = useRef(0)
+  const requestSyncRef = useRef<() => void>(() => {})
 
   const pendingMutations =
     useLiveQuery(
@@ -61,58 +66,84 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const lastSyncedAt =
     useLiveQuery(async () => (ownerId ? getLastSyncedAt(ownerId) : null), [ownerId]) ?? null
 
+  useEffect(() => {
+    tokenRef.current = token
+  }, [token])
+
+  useEffect(() => {
+    conflictCountRef.current = conflictCount
+  }, [conflictCount])
+
   const doSync = useCallback(async () => {
-    if (!user?.email_verified || !ownerId || isGuestOwner(ownerId) || syncingRef.current) {
+    if (!emailVerified || !ownerId || isGuestOwner(ownerId)) {
       return
     }
-    const [pendingCount, lastSynced] = await Promise.all([
-      db.outbox.where('ownerId').equals(ownerId).count(),
-      getLastSyncedAt(ownerId),
-    ])
-    if (
-      shouldSkipSync({
-        pendingMutations: pendingCount,
-        lastSyncedAt: lastSynced,
-        nowMs: Date.now(),
-        minIntervalMs: SYNC_MIN_INTERVAL_MS,
-      })
-    ) {
-      return
-    }
-    let token: string
-    try {
-      token = await refreshAccessToken()
-    } catch {
-      setRawSyncStatus('error')
-      setError('Authentication failed for sync')
+    if (syncingRef.current) {
+      rerunRef.current = true
       return
     }
     syncingRef.current = true
-    setRawSyncStatus('syncing')
-    setError(null)
     try {
-      const devId = await getDeviceId()
-      const devName = await getDeviceName()
-      const result = await withBackoff(
-        () =>
-          runSync({
-            ownerId,
-            accessToken: token,
-            device: { id: devId, name: devName, platform: 'web' },
-            getAccessToken: refreshAccessToken,
-          }),
-        0,
-      )
-      setRawSyncStatus(result.conflicts > 0 || conflictCount > 0 ? 'conflict' : result.status)
+      const [pendingCount, lastSynced] = await Promise.all([
+        db.outbox.where('ownerId').equals(ownerId).count(),
+        getLastSyncedAt(ownerId),
+      ])
+      if (
+        shouldSkipSync({
+          pendingMutations: pendingCount,
+          lastSyncedAt: lastSynced,
+          nowMs: Date.now(),
+          minIntervalMs: SYNC_MIN_INTERVAL_MS,
+        })
+      ) {
+        return
+      }
+      // Refreshing on every sync rotates the refresh token and logs out other tabs;
+      // an expired access token is handled by runSync's single retry on 401.
+      let accessToken: string
+      try {
+        accessToken = tokenRef.current ?? (await refreshAccessToken())
+      } catch {
+        if (navigator.onLine) {
+          setRawSyncStatus('error')
+          setError('Authentication failed for sync')
+        } else {
+          setRawSyncStatus('offline')
+        }
+        return
+      }
+      setRawSyncStatus('syncing')
       setError(null)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Sync failed'
-      setError(msg)
-      setRawSyncStatus(navigator.onLine ? 'error' : 'offline')
+      try {
+        const devId = await getDeviceId()
+        const devName = await getDeviceName()
+        const result = await withBackoff(
+          () =>
+            runSync({
+              ownerId,
+              accessToken,
+              device: { id: devId, name: devName, platform: 'web' },
+              getAccessToken: refreshAccessToken,
+            }),
+          0,
+        )
+        setRawSyncStatus(
+          result.conflicts > 0 || conflictCountRef.current > 0 ? 'conflict' : result.status,
+        )
+        setError(null)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Sync failed'
+        setError(msg)
+        setRawSyncStatus(navigator.onLine ? 'error' : 'offline')
+      }
     } finally {
       syncingRef.current = false
+      if (rerunRef.current) {
+        rerunRef.current = false
+        requestSyncRef.current()
+      }
     }
-  }, [conflictCount, ownerId, refreshAccessToken, user])
+  }, [emailVerified, ownerId, refreshAccessToken])
 
   const requestSync = useCallback(() => {
     if (syncTimer.current) {
@@ -125,7 +156,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [doSync])
 
   useEffect(() => {
-    if (!ready || !user?.email_verified || isGuestOwner(ownerId)) {
+    requestSyncRef.current = requestSync
+  }, [requestSync])
+
+  useEffect(() => {
+    if (!ready || !emailVerified || isGuestOwner(ownerId)) {
       return
     }
     requestSync()
@@ -152,7 +187,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [ownerId, ready, requestSync, user])
+  }, [emailVerified, ownerId, ready, requestSync])
 
   useEffect(() => {
     return () => {

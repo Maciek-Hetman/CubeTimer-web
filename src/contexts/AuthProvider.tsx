@@ -29,6 +29,10 @@ import {
 } from '../app/profile'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 
+function isRefreshRejected(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 401 || error.status === 409)
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [ownerId, setOwnerId] = useState('')
@@ -118,8 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             void persistSession(session, false)
           }
-        } catch {
-          await transitionToGuest()
+        } catch (error) {
+          if (isRefreshRejected(error)) {
+            await transitionToGuest()
+          }
         }
       }
 
@@ -154,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userRef.current = session.user
         return session.access_token
       } catch (error) {
-        if (error instanceof ApiError && (error.status === 401 || error.status === 409)) {
+        if (isRefreshRejected(error)) {
           await transitionToGuest()
         }
         throw error
