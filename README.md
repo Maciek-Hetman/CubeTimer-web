@@ -14,6 +14,7 @@ Responsive, offline-first cube timer. Mobile layout follows the Android CubeTime
 
 - [User guide](docs/user-guide.md) — timer, sessions, stats, sync, and admin access
 - [Development](docs/development.md) — architecture, setup, API, tests, and troubleshooting
+- [Deployment](docs/deployment.md) — production build, VPS static root, and GitHub Actions
 - [CubeSync OpenAPI](openapi/cubesync.yaml) — backend contract used by this client
 
 ## Quick start
@@ -58,4 +59,6 @@ Playwright browsers: `npx playwright install chromium`
 
 ## Deployment
 
-Build static files with `npm run build` and serve `dist/` over HTTPS. Point `VITE_CUBESYNC_URL` at the public CubeSync URL, and keep CubeSync CORS / `CLIENT_URL` in sync with the deployed origin. Authenticated API traffic is not cached by the service worker.
+See [docs/deployment.md](docs/deployment.md) for production URLs, Caddy/VPS layout, and the GitHub Actions deploy pipeline.
+
+Build static files with `VITE_CUBESYNC_URL` set to the public CubeSync origin, then serve `dist/` over HTTPS. Keep CubeSync `ALLOWED_ORIGINS` / `CLIENT_URL` in sync with the deployed web origin. Authenticated API traffic is not cached by the service worker.

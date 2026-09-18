@@ -1,0 +1,53 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_CUBESYNC_URL: ${{ vars.VITE_CUBESYNC_URL }}
+        run: |
+          set -euo pipefail
+          : "${VITE_CUBESYNC_URL:?Set repository variable VITE_CUBESYNC_URL (e.g. https://api.cubetimer.cc)}"
+          npm run build
+
+      - name: Deploy static site
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?DEPLOY_HOST secret required}"
+          : "${DEPLOY_USER:?DEPLOY_USER secret required}"
+          : "${DEPLOY_SSH_KEY:?DEPLOY_SSH_KEY secret required}"
+          DEST_PATH="${DEPLOY_PATH:-/var/www/cubetimer}"
+          mkdir -p "${HOME}/.ssh"
+          install -m 600 /dev/null "${HOME}/.ssh/deploy_key"
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > "${HOME}/.ssh/deploy_key"
+          printf 'Host %s\n  StrictHostKeyChecking accept-new\n' "${DEPLOY_HOST}" >> "${HOME}/.ssh/config"
+          rsync -az --delete \
+            -e "ssh -i ${HOME}/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            dist/ \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${DEST_PATH}/"
+          curl -fsSI "https://cubetimer.cc/" >/dev/null
