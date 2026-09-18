@@ -14,7 +14,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useSync } from '../contexts/SyncContext'
 import { useScramble } from '../contexts/ScrambleContext'
-import { useSolves } from '../contexts/SolvesContext'
+import { useSolves, type SaveSolveInput } from '../contexts/SolvesContext'
 
 export interface AppContextValue {
   ready: boolean
@@ -29,7 +29,7 @@ export interface AppContextValue {
   currentSession: CubeSession | null
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
   setEvent: (event: CubeEvent) => Promise<void>
-  saveSolve: (input: { durationMs: number; penalty: Penalty; scramble: string }) => Promise<Solve>
+  saveSolve: (input: SaveSolveInput) => Promise<Solve>
   updateSolvePenalty: (solveId: string, penalty: Penalty) => Promise<void>
   deleteSolve: (solveId: string) => Promise<void>
   renameSession: (sessionId: string, name: string) => Promise<void>

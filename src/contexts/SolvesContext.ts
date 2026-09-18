@@ -1,5 +1,12 @@
 import { createContext, useContext } from 'react'
-import type { CubeSession, Penalty, Solve, SolveStats } from '../domain/models'
+import type { CubeSession, Penalty, Solve, SolveStats, TimingDevice } from '../domain/models'
+
+export interface SaveSolveInput {
+  durationMs: number
+  penalty: Penalty
+  scramble: string
+  timingDevice?: TimingDevice
+}
 
 export interface SolvesContextValue {
   solves: Solve[]
@@ -8,8 +15,8 @@ export interface SolvesContextValue {
   activeSession: CubeSession | null
   currentSession: CubeSession | null
   solveStats: SolveStats
-  addSolve: (input: { durationMs: number; penalty: Penalty; scramble: string }) => Promise<Solve>
-  saveSolve: (input: { durationMs: number; penalty: Penalty; scramble: string }) => Promise<Solve>
+  addSolve: (input: SaveSolveInput) => Promise<Solve>
+  saveSolve: (input: SaveSolveInput) => Promise<Solve>
   updateSolve: (solveId: string, penalty: Penalty) => Promise<void>
   updateSolvePenalty: (solveId: string, penalty: Penalty) => Promise<void>
   deleteSolve: (solveId: string) => Promise<void>

@@ -8,6 +8,10 @@ Open **Timer** (home). Hold the timer surface or **Space** until the hold delay 
 
 Hold delay is configurable in Settings (200–1000 ms, with presets 300 / 500 / 550 / 1000). Releasing early or cancelling the hold returns to idle without starting a solve.
 
+### Bluetooth timer
+
+In the timer toolbar, next to the event selector, switch the timing device to **Bluetooth**, then press **Connect timer** and pick your device. Supported devices are the QiYi Smart Timer, the QiYi timer Bluetooth adapter (`QY-Adapter-…`), and GAN Smart Timers. Solves start and stop on the physical timer. The saved time is the one the timer reports, and the solve is tagged as `external_timer`. Keyboard and touch input are turned off in this mode. This needs a browser with Web Bluetooth, such as Chrome or Edge on desktop or Android. Safari and Firefox don't support it. You have to reconnect after reloading the page.
+
 Supported events: 2x2, 3x3, 4x4, 5x5, Megaminx, and Pyraminx. Switch events from the timer. Each event keeps its own current session.
 
 You can hide the scramble, averages, or last results during a solve, and enable focus mode to hide chrome while the timer is running. On viewports narrower than 1200px the timer uses a compact mobile layout; at 1200px and above the desktop widget dashboard appears.

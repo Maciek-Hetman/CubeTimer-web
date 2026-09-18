@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,18 @@ import { AppProviders } from '../../app/AppProviders'
 import { ensureGuestOwner } from '../../app/profile'
 import { db, getOrCreateSettings } from '../../data/db'
 import { generateScramble } from '../scramble/scrambleService'
+import type { SmartTimerListener } from './bluetooth/types'
 import { TimerPage } from './TimerPage'
+
+const bluetoothMock = vi.hoisted(() => ({ emit: null as SmartTimerListener | null }))
+
+vi.mock('./bluetooth/bluetoothTimer', () => ({
+  isWebBluetoothSupported: () => true,
+  connectBluetoothTimer: vi.fn(async (onEvent: SmartTimerListener) => {
+    bluetoothMock.emit = onEvent
+    return { deviceName: 'QY-Adapter-1A2B', disconnect: vi.fn(async () => undefined) }
+  }),
+}))
 
 vi.mock('../scramble/scrambleService', () => ({
   generateScramble: vi.fn(async () => "R U R' U'"),
@@ -49,6 +60,40 @@ describe('TimerPage', () => {
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('records solves from a connected Bluetooth timer', async () => {
+    const ownerId = await ensureGuestOwner()
+    const user = userEvent.setup()
+    renderTimer()
+
+    await screen.findByRole('button', { name: 'Timer' })
+    await user.selectOptions(screen.getByLabelText('Timing device'), 'external_timer')
+    await waitFor(async () => {
+      expect((await db.settings.get(ownerId))?.timingDevice).toBe('external_timer')
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
+    expect(await screen.findByText('QY-Adapter-1A2B')).toBeInTheDocument()
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Place your hands on the timer/i))
+
+    // Keyboard input is ignored while the Bluetooth timer is in charge.
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+    fireEvent.keyUp(window, { code: 'Space', key: ' ' })
+    expect(screen.getByRole('button', { name: 'Timer' })).toHaveClass('timer-idle')
+
+    act(() => bluetoothMock.emit!({ state: 'ready' }))
+    expect(screen.getByRole('button', { name: 'Timer' })).toHaveClass('timer-ready')
+    act(() => bluetoothMock.emit!({ state: 'running' }))
+    expect(screen.getByRole('button', { name: 'Timer' })).toHaveClass('timer-running')
+    act(() => bluetoothMock.emit!({ state: 'stopped', timeMs: 12_345 }))
+    act(() => bluetoothMock.emit!({ state: 'stopped', timeMs: 12_345 }))
+
+    await waitFor(async () => {
+      const solves = await db.solves.toArray()
+      expect(solves).toHaveLength(1)
+      expect(solves[0]).toMatchObject({ durationMs: 12_345, timingDevice: 'external_timer' })
+    })
   })
 
   it('regenerates scramble from the compact action', async () => {

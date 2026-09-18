@@ -1,6 +1,7 @@
 import confetti from 'canvas-confetti'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../../contexts/SettingsContext'
+import { useBluetoothTimer } from '../../contexts/BluetoothTimerContext'
 import { useSolves } from '../../contexts/SolvesContext'
 import { useScramble } from '../../contexts/ScrambleContext'
 import {
@@ -11,6 +12,7 @@ import {
   type Solve,
   type TimerDisplayMode,
   type TimerFont,
+  type TimerInputDevice,
   type TimerSize,
 } from '../../domain/models'
 import { averageFromValues } from '../../domain/stats/averages'
@@ -22,6 +24,7 @@ import { Toast } from '../../ui/StatGrid'
 import { Select } from '../../ui/Select'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot, type TimerEngine } from './timerMachine'
 import { getAccentColor } from '../../styles/accents'
+import { BluetoothTimerControls } from './BluetoothTimerControls'
 import { loadTimerFont } from '../../styles/timerFonts'
 
 function isFormTarget(target: EventTarget | null): boolean {
@@ -232,9 +235,12 @@ const TimerDisplay = React.memo(function TimerDisplay({
 })
 
 export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'desktop' }) {
-  const { settings, setEvent } = useSettings()
+  const { settings, setEvent, updateSettings } = useSettings()
   const { recentSolves, solveStats, saveSolve } = useSolves()
   const { scramble, scrambleState, loadScramble } = useScramble()
+  const bluetoothTimer = useBluetoothTimer()
+  const subscribeToBluetoothTimer = bluetoothTimer.subscribe
+  const useExternalTimer = settings.timingDevice === 'external_timer'
 
   const [engine] = useState(() => createTimerEngine())
 
@@ -265,6 +271,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         durationMs,
         penalty: 'none',
         scramble: scramble || '—',
+        timingDevice: useExternalTimer ? 'external_timer' : 'keyboard',
       })
 
       const newSingle = bestWithNew(prevSingle, savedSolve)
@@ -303,7 +310,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
       await loadScramble()
     },
-    [loadScramble, recentSolves, saveSolve, scramble, solveStats, settings.accentColor],
+    [loadScramble, recentSolves, saveSolve, scramble, solveStats, settings.accentColor, useExternalTimer],
   )
 
   useEffect(() => {
@@ -343,6 +350,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   }, [snapshot.phase])
 
   const liveMessage = useMemo(() => {
+    if (useExternalTimer && snapshot.phase === 'idle') {
+      return bluetoothTimer.status === 'connected'
+        ? 'Timer ready. Start the solve on your Bluetooth timer.'
+        : 'Bluetooth timer not connected.'
+    }
     if (snapshot.phase === 'idle') {
       return variant === 'desktop'
         ? 'Timer ready. Hold any key to start.'
@@ -361,9 +373,40 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       return `Running ${formatDuration(runningSeconds * 1000)}`
     }
     return 'Timer ready'
-  }, [snapshot.phase, snapshot.finishedMs, variant, runningSeconds])
+  }, [snapshot.phase, snapshot.finishedMs, variant, runningSeconds, useExternalTimer, bluetoothTimer.status])
 
   useEffect(() => {
+    if (!useExternalTimer) {
+      return
+    }
+    return subscribeToBluetoothTimer((event) => {
+      switch (event.state) {
+        case 'ready':
+          setSnapshot((prev) => (prev.phase === 'running' ? prev : { ...IDLE_TIMER, phase: 'ready', holdProgress: 1 }))
+          return
+        case 'running':
+          setSnapshot(engine.start(performance.now()))
+          return
+        case 'stopped':
+          setSnapshot(engine.complete(event.timeMs))
+          return
+        case 'disconnected':
+          if (engine.getSnapshot().phase === 'running') {
+            engine.reset()
+          }
+          setSnapshot(engine.getSnapshot())
+          return
+        default:
+          // Hands lifted early or timer reset: drop the "ready" state but keep the last time.
+          setSnapshot((prev) => (prev.phase === 'ready' ? engine.getSnapshot() : prev))
+      }
+    })
+  }, [subscribeToBluetoothTimer, engine, useExternalTimer])
+
+  useEffect(() => {
+    if (useExternalTimer) {
+      return
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (isFormTarget(event.target) || isSystemKey(event)) {
         return
@@ -403,7 +446,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [engine, variant])
+  }, [engine, variant, useExternalTimer])
 
   const ao5 = useMemo(() => solveStats.ao5, [solveStats])
   const ao12 = useMemo(() => solveStats.ao12, [solveStats])
@@ -431,8 +474,18 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             ? 'timer-finished'
             : 'timer-idle'
 
-  const hint =
-    snapshot.phase === 'idle'
+  const externalHint =
+    bluetoothTimer.status !== 'connected' && snapshot.phase !== 'running'
+      ? 'Connect your Bluetooth timer to start'
+      : snapshot.phase === 'ready'
+        ? 'Release to start!'
+        : snapshot.phase === 'running'
+          ? 'Stop the timer to finish'
+          : 'Place your hands on the timer'
+
+  const hint = useExternalTimer
+    ? externalHint
+    : snapshot.phase === 'idle'
       ? variant === 'desktop'
         ? 'Hold any key to start'
         : 'Hold Space or tap and hold to start'
@@ -460,7 +513,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0 || activePointerRef.current !== null) {
+      if (useExternalTimer || event.button !== 0 || activePointerRef.current !== null) {
         return
       }
       event.preventDefault()
@@ -469,7 +522,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       const now = getEventTimestamp(event)
       setSnapshot(engine.press(now))
     },
-    [engine],
+    [engine, useExternalTimer],
   )
 
   const handlePointerUp = useCallback(
@@ -495,38 +548,56 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {liveMessage}
       </div>
 
-      <div className="row wrap timer-toolbar">
-        <Select
-          size="small"
-          aria-label="Event"
-          value={settings.event}
-          disabled={isSolvingOrPreparing}
-          onChange={(val) => void setEvent(val as CubeEvent)}
-          style={{ width: 92 }}
-          options={EVENTS.map((item) => ({ value: item, label: eventLabel(item) }))}
-        />
-        <span className="scramble">
-          {hideScramble ? null : scrambleState === 'loading' ? (
-            <span className="muted">Generating scramble…</span>
-          ) : scrambleState === 'error' ? (
-            <span role="alert">Could not generate scramble</span>
-          ) : (
-            scramble
-          )}
-        </span>
-        {!hideScramble ? (
-          <Button
-            type="button"
-            className="icon"
-            disabled={isSolvingOrPreparing}
-            aria-label={scrambleState === 'error' ? 'Retry' : 'New scramble'}
-            title={scrambleState === 'error' ? 'Retry' : 'New scramble'}
-            onClick={() => void loadScramble()}
-          >
-            <RefreshIcon />
-          </Button>
-        ) : null}
+      <div className="timer-toolbar-wrap">
+        <div className="timer-toolbar">
+          <div className="row timer-toolbar-controls">
+            <Select
+              size="small"
+              aria-label="Event"
+              value={settings.event}
+              disabled={isSolvingOrPreparing}
+              onChange={(val) => void setEvent(val as CubeEvent)}
+              style={{ width: 'var(--event-select-width)' }}
+              options={EVENTS.map((item) => ({ value: item, label: eventLabel(item) }))}
+            />
+            <Select
+              size="small"
+              aria-label="Timing device"
+              value={settings.timingDevice ?? 'keyboard'}
+              disabled={isSolvingOrPreparing}
+              onChange={(val) => void updateSettings({ timingDevice: val as TimerInputDevice })}
+              style={{ width: 'var(--device-select-width)' }}
+              options={[
+                { value: 'keyboard', label: variant === 'desktop' ? 'Keyboard' : 'Touch' },
+                { value: 'external_timer', label: 'Bluetooth' },
+              ]}
+            />
+          </div>
+          <span className="scramble">
+            {hideScramble ? null : scrambleState === 'loading' ? (
+              <span className="muted">Generating scramble…</span>
+            ) : scrambleState === 'error' ? (
+              <span role="alert">Could not generate scramble</span>
+            ) : (
+              scramble
+            )}
+          </span>
+          {!hideScramble ? (
+            <Button
+              type="button"
+              className="icon timer-toolbar-refresh"
+              disabled={isSolvingOrPreparing}
+              aria-label={scrambleState === 'error' ? 'Retry' : 'New scramble'}
+              title={scrambleState === 'error' ? 'Retry' : 'New scramble'}
+              onClick={() => void loadScramble()}
+            >
+              <RefreshIcon />
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      {useExternalTimer && !isSolvingOrPreparing ? <BluetoothTimerControls compact /> : null}
 
       <TimerDisplay
         engine={engine}
