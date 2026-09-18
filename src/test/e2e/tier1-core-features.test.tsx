@@ -292,7 +292,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
       expect(await screen.findByText('Penalty Test')).toBeInTheDocument()
 
       await user.click(screen.getByText('Penalty Test'))
-      expect(await screen.findByText('8.50')).toBeInTheDocument()
+      expect(await screen.findByText('8.50', { selector: '.history-time' })).toBeInTheDocument()
 
       const plusTwoBtn = screen.getByRole('button', { name: '+2' })
       await user.click(plusTwoBtn)
@@ -324,7 +324,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
       expect(await screen.findByText('DNF Toggle Test')).toBeInTheDocument()
 
       await user.click(screen.getByText('DNF Toggle Test'))
-      expect(await screen.findByText('9.20')).toBeInTheDocument()
+      expect(await screen.findByText('9.20', { selector: '.history-time' })).toBeInTheDocument()
 
       const dnfBtn = screen.getByRole('button', { name: 'DNF' })
       await user.click(dnfBtn)
@@ -364,7 +364,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
         const updated = await db.solves.get(solve.id)
         expect(updated?.penalty).toBe('none')
       })
-      expect(await screen.findByText('7.40')).toBeInTheDocument()
+      expect(await screen.findByText('7.40', { selector: '.history-time' })).toBeInTheDocument()
     })
   })
 

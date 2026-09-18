@@ -363,7 +363,7 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
       }
 
       renderWithApp(<HistoryPage />)
-      expect(await screen.findByText(/25 sessions stored/)).toBeInTheDocument()
+      expect(await screen.findByText(/25 sessions · 25 solves/)).toBeInTheDocument()
       expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument()
 
       // Click Next
@@ -381,7 +381,8 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
 
       renderWithApp(<HistoryPage />)
       expect(await screen.findByText('Uncategorized Solves')).toBeInTheDocument()
-      expect(screen.getByText(/No session · 1 solve · Avg: 13\.50/)).toBeInTheDocument()
+      expect(screen.getByText('No session')).toBeInTheDocument()
+      expect(await screen.findByLabelText('1 solve, mean 13.50')).toBeInTheDocument()
     })
 
     it('formats large duration values (>1 hour) correctly in duration and total time', () => {
