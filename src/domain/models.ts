@@ -7,6 +7,9 @@ export type Penalty = (typeof PENALTIES)[number]
 export const TIMING_DEVICES = ['keyboard', 'external_timer', 'smart_cube'] as const
 export type TimingDevice = (typeof TIMING_DEVICES)[number]
 
+/** Timing devices the user can pick for the timer screen. */
+export type TimerInputDevice = Extract<TimingDevice, 'keyboard' | 'external_timer'>
+
 export function normalizeTimingDevice(value: unknown): TimingDevice {
   if (value === 'keyboard' || value === 'external_timer' || value === 'smart_cube') {
     return value
@@ -126,6 +129,7 @@ export interface AppSettings {
   timerSize: TimerSize
   widgetScale: number
   statsChartScale: StatsChartScale
+  timingDevice: TimerInputDevice
 }
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
@@ -145,6 +149,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   timerSize: 'medium',
   widgetScale: 100,
   statsChartScale: 'all',
+  timingDevice: 'keyboard',
 }
 
 export function createId(): string {

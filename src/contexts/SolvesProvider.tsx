@@ -39,7 +39,7 @@ import {
 import { useAuth } from './AuthContext'
 import { useSettings } from './SettingsContext'
 import { useSync } from './SyncContext'
-import { SolvesContext, type SolvesContextValue } from './SolvesContext'
+import { SolvesContext, type SaveSolveInput, type SolvesContextValue } from './SolvesContext'
 
 const EMPTY_SESSIONS: CubeSession[] = []
 const EMPTY_SOLVES: Solve[] = []
@@ -109,7 +109,7 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
   }, [ownerId, staleSessionId])
 
   const saveSolve = useCallback(
-    async (input: { durationMs: number; penalty: Penalty; scramble: string }) => {
+    async (input: SaveSolveInput) => {
       if (!ownerId) {
         throw new Error('App not ready')
       }
@@ -164,6 +164,7 @@ export function SolvesProvider({ children }: { children: ReactNode }) {
         penalty: input.penalty,
         scramble: input.scramble,
         event: current.event,
+        timingDevice: input.timingDevice,
       })
       await putSolve(solve, { enqueue: enqueueWrites, baseVersion: 0 })
       if (enqueueWrites) {

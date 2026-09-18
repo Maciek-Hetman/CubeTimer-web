@@ -788,9 +788,47 @@ input[type='range']::-moz-range-thumb {
   animation: ready-pulse 1s var(--ease) infinite;
 }
 
+.timer-toolbar-wrap {
+  container-type: inline-size;
+}
+
 .timer-toolbar {
+  --event-select-width: 92px;
+  --device-select-width: 128px;
+  /* Width of the selector group; both side columns use it so the scramble stays centered. */
+  --toolbar-side-width: calc(var(--event-select-width) + var(--device-select-width) + var(--space-2));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'controls refresh'
+    'scramble scramble';
   gap: var(--space-2);
   align-items: stretch;
+}
+
+/* Wide enough for one row: equal side columns keep the scramble centered. */
+@container (min-width: 1000px) {
+  .timer-toolbar {
+    grid-template-columns: var(--toolbar-side-width) minmax(0, 1fr) var(--toolbar-side-width);
+    grid-template-areas: 'controls scramble refresh';
+  }
+}
+
+.timer-toolbar-controls {
+  grid-area: controls;
+  justify-self: start;
+  align-items: stretch;
+}
+
+.timer-toolbar .scramble {
+  grid-area: scramble;
+  justify-self: center;
+  margin-inline: 0;
+}
+
+.timer-toolbar-refresh {
+  grid-area: refresh;
+  justify-self: end;
 }
 
 .timer-toolbar .btn.icon {
@@ -1334,3 +1372,19 @@ input[type='range']::-moz-range-thumb {
 }
 
 
+
+.bt-timer-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.bt-timer-error {
+  flex-basis: 100%;
+  text-align: center;
+  color: var(--danger);
+}

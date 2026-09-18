@@ -172,29 +172,33 @@ export function SettingsPage() {
 
           <Panel id="timer" className="stack settings-section">
             <h2>Timer</h2>
-            <Field label={`Hold delay (${settings.timerStartDelayMs} ms)`}>
-              <input
-                type="range"
-                min={0}
-                max={1000}
-                step={50}
-                value={settings.timerStartDelayMs}
-                style={rangeFill(settings.timerStartDelayMs, 0, 1000)}
-                onChange={(event) => void updateSettings({ timerStartDelayMs: Number(event.target.value) })}
-              />
-            </Field>
-            <div className="row wrap">
-              {HOLD_PRESETS.map((preset) => (
-                <Button
-                  key={preset}
-                  type="button"
-                  variant={settings.timerStartDelayMs === preset ? 'primary' : 'ghost'}
-                  onClick={() => void updateSettings({ timerStartDelayMs: preset })}
-                >
-                  {preset} ms
-                </Button>
-              ))}
-            </div>
+            {settings.timingDevice !== 'external_timer' ? (
+              <>
+                <Field label={`Hold delay (${settings.timerStartDelayMs} ms)`}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1000}
+                    step={50}
+                    value={settings.timerStartDelayMs}
+                    style={rangeFill(settings.timerStartDelayMs, 0, 1000)}
+                    onChange={(event) => void updateSettings({ timerStartDelayMs: Number(event.target.value) })}
+                  />
+                </Field>
+                <div className="row wrap">
+                  {HOLD_PRESETS.map((preset) => (
+                    <Button
+                      key={preset}
+                      type="button"
+                      variant={settings.timerStartDelayMs === preset ? 'primary' : 'ghost'}
+                      onClick={() => void updateSettings({ timerStartDelayMs: preset })}
+                    >
+                      {preset} ms
+                    </Button>
+                  ))}
+                </div>
+              </>
+            ) : null}
             <Field label="Timer display during solve">
               <Select
                 value={settings.timerDisplayMode ?? 'show'}

@@ -18,6 +18,8 @@ export interface TimerEngine {
   getSnapshot(): TimerSnapshot
   start(now: number): TimerSnapshot
   stop(now: number): TimerSnapshot
+  /** Finishes a running solve with a duration measured by an external timer. */
+  complete(durationMs: number): TimerSnapshot
   press(now: number): TimerSnapshot
   release(now: number): TimerSnapshot
   cancel(): TimerSnapshot
@@ -88,6 +90,14 @@ export function createTimerEngine(getHoldMs?: () => number): TimerEngine {
     stop(now) {
       if (phase === 'running') {
         finishRun(now)
+      }
+      return snapshot()
+    },
+    complete(durationMs) {
+      if (phase === 'running' && Number.isFinite(durationMs) && durationMs > 0) {
+        phase = 'finished'
+        finishedMs = Math.round(durationMs)
+        elapsedMs = finishedMs
       }
       return snapshot()
     },
