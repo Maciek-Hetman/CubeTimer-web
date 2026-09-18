@@ -46,8 +46,12 @@ jobs:
           install -m 600 /dev/null "${HOME}/.ssh/deploy_key"
           printf '%s\n' "${DEPLOY_SSH_KEY}" > "${HOME}/.ssh/deploy_key"
           printf 'Host %s\n  StrictHostKeyChecking accept-new\n' "${DEPLOY_HOST}" >> "${HOME}/.ssh/config"
+          SSH=(ssh -i "${HOME}/.ssh/deploy_key" -o IdentitiesOnly=yes)
           rsync -az --delete \
-            -e "ssh -i ${HOME}/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            -e "${SSH[*]}" \
             dist/ \
             "${DEPLOY_USER}@${DEPLOY_HOST}:${DEST_PATH}/"
+          # Caddy runs as a non-root user inside Docker and must be able to read the bind mount.
+          "${SSH[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "chmod -R a+rX '${DEST_PATH}' && test -f '${DEST_PATH}/index.html'"
           curl -fsSI "https://cubetimer.cc/" >/dev/null

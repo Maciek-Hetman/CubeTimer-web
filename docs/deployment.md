@@ -48,6 +48,18 @@ Workflow: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs
 
 Create a deploy-only SSH key on the VPS, add the public key to `~/.ssh/authorized_keys`, and restrict that user to rsync into `/var/www/cubetimer` when possible.
 
+Install `rsync` on the VPS (required by the deploy job):
+
+```bash
+sudo apt update && sudo apt install -y rsync
+```
+
+Ensure the static root is readable by the Caddy container (non-root):
+
+```bash
+sudo chmod -R a+rX /var/www/cubetimer
+```
+
 ### First deploy checklist
 
 1. CubeSync is healthy: `curl -fsS https://api.cubetimer.cc/health/ready`
