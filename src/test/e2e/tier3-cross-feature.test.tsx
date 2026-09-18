@@ -135,7 +135,7 @@ describe('Tier 3: Cross-Feature Interactions E2E Tests', () => {
       renderWithApp(<HistoryPage />)
       await user.click(await screen.findByText('Live Ao5 Session'))
       await waitFor(() => {
-        expect(screen.getByText(/5 solves · Avg: 10\.00/)).toBeInTheDocument()
+        expect(screen.getByLabelText('5 solves, mean 10.00')).toBeInTheDocument()
       })
 
       // Add +2 to the first and second solves
@@ -152,7 +152,7 @@ describe('Tier 3: Cross-Feature Interactions E2E Tests', () => {
       })
 
       await waitFor(() => {
-        expect(screen.getByText(/5 solves · Avg: 10\.80/)).toBeInTheDocument()
+        expect(screen.getByLabelText('5 solves, mean 10.80')).toBeInTheDocument()
       })
 
       const stats = await computeSolveStats(ownerId, '3x3', session.id)

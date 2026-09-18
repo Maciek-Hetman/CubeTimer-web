@@ -15,6 +15,9 @@ interface SolvesBySessionSummary {
   averages: Map<string, number | null>
   orphanCount: number
   orphanAvgTime: number | null
+  /** Timing devices used per session, in first-seen order. */
+  devices: Map<string, TimingDevice[]>
+  orphanDevices: TimingDevice[]
 }
 
 export async function listSolves(
@@ -141,6 +144,8 @@ export async function countSolvesBySession(
   let orphanCount = 0
   let orphanValidCount = 0
   let orphanTotalMs = 0
+  const deviceSets = new Map<string, Set<TimingDevice>>()
+  const orphanDeviceSet = new Set<TimingDevice>()
 
   await db.solves
     .where('[ownerId+event]')
@@ -150,7 +155,14 @@ export async function countSolvesBySession(
         return
       }
       const effective = effectiveTimeMs(solve)
+      const device = normalizeTimingDevice(solve.timingDevice)
       if (solve.sessionId) {
+        let devices = deviceSets.get(solve.sessionId)
+        if (!devices) {
+          devices = new Set()
+          deviceSets.set(solve.sessionId, devices)
+        }
+        devices.add(device)
         let acc = sessionAcc.get(solve.sessionId)
         if (!acc) {
           acc = { count: 0, validCount: 0, totalMs: 0 }
@@ -163,6 +175,7 @@ export async function countSolvesBySession(
         }
       } else {
         orphanCount += 1
+        orphanDeviceSet.add(device)
         if (effective !== null) {
           orphanValidCount += 1
           orphanTotalMs += effective
@@ -179,7 +192,12 @@ export async function countSolvesBySession(
 
   const orphanAvgTime = orphanValidCount > 0 ? orphanTotalMs / orphanValidCount : null
 
-  return { counts, averages, orphanCount, orphanAvgTime }
+  const devices = new Map<string, TimingDevice[]>()
+  for (const [sessionId, set] of deviceSets.entries()) {
+    devices.set(sessionId, [...set])
+  }
+
+  return { counts, averages, orphanCount, orphanAvgTime, devices, orphanDevices: [...orphanDeviceSet] }
 }
 
 export async function putSolve(

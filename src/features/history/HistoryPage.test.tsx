@@ -86,7 +86,7 @@ describe('HistoryPage', () => {
 
     expect(await screen.findByText('Afternoon Practice')).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText(/2 solves · Avg: 12\.00/)).toBeInTheDocument()
+      expect(screen.getByLabelText('2 solves, mean 12.00')).toBeInTheDocument()
     })
   })
 
@@ -118,8 +118,69 @@ describe('HistoryPage', () => {
 
     expect(await screen.findByText('DNF Session')).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText(/1 solve · Avg: DNF/)).toBeInTheDocument()
+      expect(screen.getByLabelText('1 solve, mean DNF')).toBeInTheDocument()
     })
+  })
+
+  it('shows the timing device for each solve', async () => {
+    const user = userEvent.setup()
+    const ownerId = await ensureGuestOwner()
+
+    const session = newSession({
+      ownerId,
+      name: 'Device Session',
+      event: '3x3',
+      kind: 'manual',
+    })
+    await putSession(session, { enqueue: false, baseVersion: 0 })
+
+    await putSolve(
+      newSolve({
+        ownerId,
+        sessionId: session.id,
+        durationMs: 9000,
+        penalty: 'none',
+        scramble: 'R U',
+        event: '3x3',
+        solvedAt: '2026-01-01T12:00:00.000Z',
+        timingDevice: 'external_timer',
+      }),
+      { enqueue: false, baseVersion: 0 },
+    )
+    await putSolve(
+      newSolve({
+        ownerId,
+        sessionId: session.id,
+        durationMs: 11000,
+        penalty: 'none',
+        scramble: 'R U2',
+        event: '3x3',
+        solvedAt: '2026-01-01T12:01:00.000Z',
+        timingDevice: 'keyboard',
+      }),
+      { enqueue: false, baseVersion: 0 },
+    )
+
+    renderHistory()
+
+    const heading = await screen.findByRole('heading', { name: 'Device Session' })
+    const group = heading.closest('section') as HTMLElement
+    await waitFor(() => {
+      expect(within(group).getByTitle('Timed with a Bluetooth timer')).toBeInTheDocument()
+      expect(within(group).getByTitle('Timed with keyboard or touch')).toBeInTheDocument()
+    })
+
+    await user.click(within(group).getByRole('button', { name: 'Expand session' }))
+
+    const list = await within(group).findByRole('list')
+    await waitFor(() => {
+      expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+    })
+    const [newest, oldest] = within(list).getAllByRole('listitem')
+    expect(newest).toHaveTextContent('11.00')
+    expect(newest).toHaveTextContent('Keyboard')
+    expect(oldest).toHaveTextContent('9.00')
+    expect(oldest).toHaveTextContent('Bluetooth')
   })
 
   it('renames a session from history', async () => {
