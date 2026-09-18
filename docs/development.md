@@ -38,7 +38,7 @@ npm install
 npm run dev
 ```
 
-Dev server: `http://127.0.0.1:43210`. Environment: `VITE_CUBESYNC_URL` (default `http://127.0.0.1:43781`).
+Dev server: `http://127.0.0.1:43210`. Environment: `VITE_CUBESYNC_URL` (default `http://127.0.0.1:43781`), `VITE_GOOGLE_CLIENT_ID` (optional; enables Google sign-in — see [deployment](deployment.md#google-sign-in)).
 
 CubeSync must list that origin in `ALLOWED_ORIGINS` and set `CLIENT_URL` to the web origin so email links hit `/verify-email` and `/reset-password`.
 

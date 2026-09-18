@@ -9,7 +9,13 @@ import {
 import type { Table } from 'dexie'
 import * as authApi from '../api/auth'
 import { apiRequest, type RequestOptions } from '../api/client'
-import { ApiError, type AuthenticatedRequest, type AuthSession, type User } from '../api/types'
+import {
+  ApiError,
+  type AuthenticatedRequest,
+  type AuthSession,
+  type FederatedInput,
+  type User,
+} from '../api/types'
 import { db, getMeta, getOrCreateSettings } from '../data/db'
 import { listSessions, putSession } from '../data/repositories/sessions'
 import { nowIso } from '../domain/models'
@@ -207,6 +213,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applyAuthSession],
   )
 
+  const loginWithGoogle = useCallback(
+    async (input: FederatedInput) => {
+      const session = await authApi.federatedLogin('google', input)
+      await applyAuthSession(session, { mergeGuest: true })
+    },
+    [applyAuthSession],
+  )
+
+  const linkGoogle = useCallback(
+    async (input: FederatedInput) => {
+      await authApi.linkFederatedIdentity(authenticatedRequest, 'google', input)
+    },
+    [authenticatedRequest],
+  )
+
   const register = useCallback(async (email: string, password: string) => {
     await authApi.register(email, password)
   }, [])
@@ -308,6 +329,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin,
       enqueueWrites,
       login,
+      loginWithGoogle,
+      linkGoogle,
       register,
       logout,
       requestPasswordReset,
@@ -329,6 +352,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin,
       enqueueWrites,
       login,
+      loginWithGoogle,
+      linkGoogle,
       register,
       logout,
       requestPasswordReset,
