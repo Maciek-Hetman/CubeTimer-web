@@ -2,8 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { changePassword, resendVerification } from '../../api/auth'
 import { useApp } from '../../app/AppContext'
-import { ApiError } from '../../api/types'
-import { getApiBaseUrl } from '../../config/env'
+import { ApiError, type FederatedInput } from '../../api/types'
+import { getApiBaseUrl, getGoogleClientId } from '../../config/env'
+import { GoogleSignInButton } from '../auth/GoogleSignInButton'
 import { SYNC_HINTS, SYNC_LABELS, syncTone } from '../sync/syncStatus'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -35,6 +36,7 @@ export function AccountPage() {
     logout,
     deleteAccount,
     authenticatedRequest,
+    linkGoogle,
     syncStatus,
     pendingMutations,
     conflicts,
@@ -53,6 +55,8 @@ export function AccountPage() {
   const [passwordMessage, setPasswordMessage] = useState('')
   const [passwordError, setPasswordError] = useState('')
   const [passwordSubmitting, setPasswordSubmitting] = useState(false)
+  const [googleMessage, setGoogleMessage] = useState('')
+  const [googleError, setGoogleError] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [deleteError, setDeleteError] = useState('')
@@ -99,6 +103,21 @@ export function AccountPage() {
       setPasswordError(err instanceof ApiError ? err.message : 'Could not change password')
     } finally {
       setPasswordSubmitting(false)
+    }
+  }
+
+  async function onGoogleLink(input: FederatedInput) {
+    setGoogleError('')
+    setGoogleMessage('')
+    try {
+      await linkGoogle(input)
+      setGoogleMessage('Google account linked. You can now sign in with Google.')
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setGoogleError('This Google account is already linked to an account.')
+      } else {
+        setGoogleError(err instanceof ApiError ? err.message : 'Could not link Google account')
+      }
     }
   }
 
@@ -197,6 +216,18 @@ export function AccountPage() {
               </Button>
             </form>
           </Panel>
+
+          {getGoogleClientId() ? (
+            <Panel className="stack">
+              <h2>Google sign-in</h2>
+              <p className="muted" style={{ margin: 0 }}>
+                Link a Google account to sign in without your password.
+              </p>
+              {googleError ? <Alert tone="error">{googleError}</Alert> : null}
+              {googleMessage ? <Alert tone="success" role="status">{googleMessage}</Alert> : null}
+              <GoogleSignInButton text="continue_with" onCredential={onGoogleLink} />
+            </Panel>
+          ) : null}
 
           <Panel className="stack">
             <h2>Server & sync</h2>

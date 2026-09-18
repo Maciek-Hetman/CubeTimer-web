@@ -3,6 +3,7 @@ import * as React from 'react'
 
 interface ImportMetaEnv {
   readonly VITE_CUBESYNC_URL?: string
+  readonly VITE_GOOGLE_CLIENT_ID?: string
 }
 
 declare module 'react' {

@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { AuthenticatedRequest, User } from '../api/types'
+import type { AuthenticatedRequest, FederatedInput, User } from '../api/types'
 import type {
   AppSettings,
   AuthSession,
@@ -36,6 +36,8 @@ export interface AppContextValue {
   removeSession: (sessionId: string) => Promise<number>
   isAdmin: boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithGoogle: (input: FederatedInput) => Promise<void>
+  linkGoogle: (input: FederatedInput) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   deleteAccount: () => Promise<void>
@@ -70,6 +72,8 @@ export function useApp(): AppContextValue {
     user: auth.user,
     isAdmin: auth.isAdmin,
     login: auth.login,
+    loginWithGoogle: auth.loginWithGoogle,
+    linkGoogle: auth.linkGoogle,
     register: auth.register,
     logout: auth.logout,
     deleteAccount: auth.deleteAccount,

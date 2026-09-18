@@ -25,6 +25,7 @@ jobs:
       - name: Build
         env:
           VITE_CUBESYNC_URL: ${{ vars.VITE_CUBESYNC_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
         run: |
           set -euo pipefail
           : "${VITE_CUBESYNC_URL:?Set repository variable VITE_CUBESYNC_URL (e.g. https://api.cubetimer.cc)}"

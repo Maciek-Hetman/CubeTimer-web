@@ -27,6 +27,14 @@ VITE_CUBESYNC_URL=https://api.cubetimer.cc npm run build
 
 Publish `dist/` to the VPS static root (default `/var/www/cubetimer`), which Caddy mounts at `/srv/web`.
 
+## Google sign-in
+
+1. In Google Cloud Console → APIs & Services → Credentials, create an **OAuth client ID** of type **Web application**.
+2. Add `https://cubetimer.cc` (and `http://127.0.0.1:43210` / `http://localhost:43210` for development) under **Authorized JavaScript origins**. No redirect URI is needed — the web app uses the Google Identity Services popup and sends the ID token to CubeSync.
+3. Set the client ID as `VITE_GOOGLE_CLIENT_ID` at build time and add the same ID to CubeSync's `GOOGLE_CLIENT_IDS`.
+
+When `VITE_GOOGLE_CLIENT_ID` is unset the Google buttons are hidden.
+
 ## GitHub Actions deploy
 
 Workflow: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs when you push a `v*` tag (same pattern as CubeSync).
@@ -36,6 +44,7 @@ Workflow: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs
 | Name | Example |
 | --- | --- |
 | `VITE_CUBESYNC_URL` | `https://api.cubetimer.cc` |
+| `VITE_GOOGLE_CLIENT_ID` | `1234-abc.apps.googleusercontent.com` (optional; enables Google sign-in) |
 | `DEPLOY_PATH` | `/var/www/cubetimer` (optional; this is the default) |
 
 ### Repository secrets

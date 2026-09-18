@@ -1,19 +1,38 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { ApiError } from '../../api/types'
+import { ApiError, type FederatedInput } from '../../api/types'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
 import { AuthLayout } from './AuthLayout'
+import { GoogleSignInButton } from './GoogleSignInButton'
+import { googleAuthErrorMessage } from './googleIdentity'
 
 export function RegisterPage() {
-  const { register } = useAuth()
+  const { register, loginWithGoogle } = useAuth()
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  async function onGoogleCredential(input: FederatedInput) {
+    if (submitting) {
+      return
+    }
+    setError('')
+    setSubmitting(true)
+    try {
+      await loginWithGoogle(input)
+      navigate('/')
+    } catch (err) {
+      setError(googleAuthErrorMessage(err, 'Could not sign up with Google'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -37,6 +56,7 @@ export function RegisterPage() {
       <form className="stack" onSubmit={(event) => void onSubmit(event)}>
         {error ? <Alert tone="error">{error}</Alert> : null}
         {message ? <Alert tone="success" role="status">{message}</Alert> : null}
+        <GoogleSignInButton divider text="signup_with" onCredential={onGoogleCredential} />
         <Field label="Email">
           <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         </Field>

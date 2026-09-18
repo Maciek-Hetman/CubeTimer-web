@@ -20,6 +20,8 @@ vi.mock('../api/auth', () => ({
   resendVerification: vi.fn(),
   changePassword: vi.fn(),
   deleteAccount: vi.fn(),
+  federatedLogin: vi.fn(),
+  linkFederatedIdentity: vi.fn(),
 }))
 
 function TestConsumer() {
@@ -114,6 +116,40 @@ describe('AuthContext & AuthProvider', () => {
     expect(result.current.isAdmin).toBe(true)
     expect(result.current.role).toBe('admin')
     expect(result.current.ownerId).toBe('u-123')
+  })
+
+  it('signs in with Google and adopts the session', async () => {
+    const mockUser = {
+      id: 'u-google',
+      email: 'google@example.com',
+      email_verified: true,
+      user_role: 'user' as const,
+      created_at: '2026-01-01T00:00:00Z',
+    }
+    vi.mocked(authApi.federatedLogin).mockResolvedValueOnce({
+      access_token: 'acc-google',
+      refresh_token: 'ref-google',
+      token_type: 'Bearer',
+      expires_in: 3600,
+      user: mockUser,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    })
+    await waitFor(() => {
+      expect(result.current.ready).toBe(true)
+    })
+
+    const input = { client_id: 'cid', nonce: 'n1', id_token: 'jwt' }
+    await act(async () => {
+      await result.current.loginWithGoogle(input)
+    })
+
+    expect(authApi.federatedLogin).toHaveBeenCalledWith('google', input)
+    expect(result.current.user).toEqual(mockUser)
+    expect(result.current.token).toBe('acc-google')
+    expect(result.current.ownerId).toBe('u-google')
   })
 
   it('executes register, forgotPassword, resetPassword, and verifyEmail', async () => {

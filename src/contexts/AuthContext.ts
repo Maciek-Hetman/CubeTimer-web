@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { AuthenticatedRequest, AuthSession, User } from '../api/types'
+import type { AuthenticatedRequest, AuthSession, FederatedInput, User } from '../api/types'
 
 export interface AuthContextValue {
   ready: boolean
@@ -10,6 +10,8 @@ export interface AuthContextValue {
   isAdmin: boolean
   enqueueWrites: boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithGoogle: (input: FederatedInput) => Promise<void>
+  linkGoogle: (input: FederatedInput) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   requestPasswordReset: (email: string) => Promise<void>

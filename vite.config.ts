@@ -43,7 +43,7 @@ export default defineConfig({
           return html.replace(
             '<meta charset="UTF-8" />',
             `<meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' http://127.0.0.1:43781 http://localhost:43781 https:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob: data:; font-src 'self' data:;" />`,
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' http://127.0.0.1:43781 http://localhost:43781 https:; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; script-src 'self' https://accounts.google.com/gsi/client; frame-src https://accounts.google.com/gsi/; worker-src 'self' blob: data:; font-src 'self' data:;" />`,
           )
         }
         return html
