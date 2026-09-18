@@ -78,6 +78,8 @@ export interface ApiSession {
   deleted_at?: string | null
 }
 
+export type TimingDevice = 'keyboard' | 'external_timer' | 'smart_cube'
+
 export interface ApiSolve {
   id: string
   session_id?: string | null
@@ -86,6 +88,7 @@ export interface ApiSolve {
   solved_at: string
   scramble: string
   event: string
+  timing_device: TimingDevice
   version: number
   updated_at: string
   deleted_at?: string | null

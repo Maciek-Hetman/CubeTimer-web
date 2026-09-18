@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
-import type { CubeEvent, Solve, SolveInput } from '../../domain/models'
-import { createId, effectiveTimeMs, nowIso } from '../../domain/models'
+import type { CubeEvent, Solve, SolveInput, TimingDevice } from '../../domain/models'
+import { createId, effectiveTimeMs, normalizeTimingDevice, nowIso } from '../../domain/models'
 import { db } from '../db'
 import { enqueueMutation } from './outbox'
 
@@ -186,7 +186,11 @@ export async function putSolve(
   solve: Solve,
   options: { enqueue: boolean; baseVersion?: number },
 ): Promise<void> {
-  const updated: Solve = { ...solve, updatedAt: nowIso() }
+  const updated: Solve = {
+    ...solve,
+    timingDevice: normalizeTimingDevice(solve.timingDevice),
+    updatedAt: nowIso(),
+  }
   await db.transaction('rw', db.solves, db.outbox, async () => {
     await db.solves.put(updated)
     if (options.enqueue) {
@@ -209,6 +213,7 @@ export function newSolve(input: {
   penalty: Solve['penalty']
   scramble: string
   event: CubeEvent
+  timingDevice?: TimingDevice
   solvedAt?: string
 }): Solve {
   const solvedAt = input.solvedAt ?? nowIso()
@@ -221,6 +226,7 @@ export function newSolve(input: {
     solvedAt,
     scramble: input.scramble,
     event: input.event,
+    timingDevice: input.timingDevice ?? 'keyboard',
     version: 0,
     updatedAt: solvedAt,
     deletedAt: null,
@@ -236,5 +242,6 @@ export function toSolveInput(solve: Solve): SolveInput {
     solved_at: solve.solvedAt,
     scramble: solve.scramble,
     event: solve.event,
+    timing_device: normalizeTimingDevice(solve.timingDevice),
   }
 }

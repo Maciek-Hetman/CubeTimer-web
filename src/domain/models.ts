@@ -4,6 +4,16 @@ export type CubeEvent = (typeof EVENTS)[number]
 const PENALTIES = ['none', 'plus_two', 'dnf'] as const
 export type Penalty = (typeof PENALTIES)[number]
 
+export const TIMING_DEVICES = ['keyboard', 'external_timer', 'smart_cube'] as const
+export type TimingDevice = (typeof TIMING_DEVICES)[number]
+
+export function normalizeTimingDevice(value: unknown): TimingDevice {
+  if (value === 'keyboard' || value === 'external_timer' || value === 'smart_cube') {
+    return value
+  }
+  return 'keyboard'
+}
+
 const SESSION_KINDS = ['manual', 'automatic'] as const
 type SessionKind = (typeof SESSION_KINDS)[number]
 
@@ -60,6 +70,7 @@ export interface Solve {
   solvedAt: string
   scramble: string
   event: CubeEvent
+  timingDevice: TimingDevice
   version: number
   updatedAt: string
   deletedAt: string | null
@@ -94,6 +105,7 @@ export interface SolveInput {
   solved_at: string
   scramble: string
   event: CubeEvent
+  timing_device?: TimingDevice
 }
 
 export interface AppSettings {

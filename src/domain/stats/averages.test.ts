@@ -12,6 +12,7 @@ function solve(durationMs: number, penalty: Solve['penalty'] = 'none'): Solve {
     solvedAt: new Date().toISOString(),
     scramble: 'R U',
     event: '3x3',
+    timingDevice: 'keyboard',
     version: 0,
     updatedAt: new Date().toISOString(),
     deletedAt: null,

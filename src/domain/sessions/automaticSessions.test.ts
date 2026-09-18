@@ -34,6 +34,7 @@ function solve(solvedAt: string): Solve {
     solvedAt,
     scramble: 'R U',
     event: '3x3',
+    timingDevice: 'keyboard',
     version: 0,
     updatedAt: solvedAt,
     deletedAt: null,

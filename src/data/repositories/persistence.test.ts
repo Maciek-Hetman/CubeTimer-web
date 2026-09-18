@@ -130,6 +130,7 @@ describe('sync outcomes', () => {
             solved_at: '2026-08-22T18:00:00.000Z',
             scramble: 'U R',
             event: '3x3',
+            timing_device: 'keyboard',
             version: 1,
             updated_at: '2026-08-22T18:00:00.000Z',
           },

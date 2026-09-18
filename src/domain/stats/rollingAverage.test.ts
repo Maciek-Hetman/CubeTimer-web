@@ -51,6 +51,7 @@ function makeSolves(rand: () => number, count: number, profile: Profile): Solve[
       solvedAt: new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString(),
       scramble: '',
       event: '3x3',
+      timingDevice: 'keyboard',
       version: 0,
       updatedAt: '2026-01-01T00:00:00.000Z',
       deletedAt: null,

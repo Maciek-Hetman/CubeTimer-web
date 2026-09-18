@@ -58,6 +58,7 @@ describe('history API clients', () => {
           solved_at: '2026-08-29T08:05:00Z',
           scramble: "R U R' U'",
           event: '3x3',
+          timing_device: 'keyboard',
           version: 1,
           updated_at: '2026-08-29T08:05:00Z',
         },

@@ -15,7 +15,7 @@ import { listOutbox, removeOutbox } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
 import type { CubeSession, MutationRecord, Solve } from '../domain/models'
-import { createId, nowIso } from '../domain/models'
+import { createId, normalizeTimingDevice, nowIso } from '../domain/models'
 
 export type SyncStatus = 'idle' | 'syncing' | 'pending' | 'offline' | 'error' | 'conflict'
 
@@ -166,6 +166,7 @@ export async function applySnapshotData(
         solvedAt: sl.solved_at,
         scramble: sl.scramble ?? '',
         event: sl.event as Solve['event'],
+        timingDevice: normalizeTimingDevice(sl.timing_device),
         version: sl.version,
         updatedAt: sl.updated_at ?? nowIso(),
         deletedAt: sl.deleted_at ?? null,
@@ -486,6 +487,7 @@ export async function applySyncResponse(
                 solvedAt: String(rawData.solved_at ?? change.changed_at ?? nowIso()),
                 scramble: '',
                 event: '3x3',
+                timingDevice: 'keyboard',
                 version: change.version,
                 updatedAt: String(rawData.updated_at ?? change.changed_at ?? nowIso()),
                 deletedAt: String(rawData.deleted_at ?? change.changed_at ?? nowIso()),
@@ -609,6 +611,7 @@ function mapChangeData(
     solvedAt: String(d.solved_at ?? nowIso()),
     scramble: String(d.scramble ?? ''),
     event: (d.event as Solve['event']) ?? '3x3',
+    timingDevice: normalizeTimingDevice(d.timing_device),
     version: Number(d.version ?? 0),
     updatedAt: String(d.updated_at ?? nowIso()),
     deletedAt: (d.deleted_at as string | null) ?? null,

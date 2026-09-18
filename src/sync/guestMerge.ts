@@ -3,6 +3,7 @@ import { enqueueMutation } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
 import type { CubeSession, Solve } from '../domain/models'
+import { normalizeTimingDevice } from '../domain/models'
 
 export async function adoptGuestData(guestOwnerId: string, accountOwnerId: string): Promise<{
   sessions: number
@@ -33,7 +34,12 @@ export async function adoptGuestData(guestOwnerId: string, accountOwnerId: strin
       }
     }
     for (const solve of solves) {
-      const updated: Solve = { ...solve, ownerId: accountOwnerId, version: 0 }
+      const updated: Solve = {
+        ...solve,
+        ownerId: accountOwnerId,
+        version: 0,
+        timingDevice: normalizeTimingDevice(solve.timingDevice),
+      }
       await db.solves.put(updated)
       if (!updated.deletedAt) {
         await enqueueMutation({
