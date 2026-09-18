@@ -29,7 +29,7 @@ Publish `dist/` to the VPS static root (default `/var/www/cubetimer`), which Cad
 
 ## GitHub Actions deploy
 
-Workflow: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs on every push to `main`.
+Workflow: [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs when you push a `v*` tag (same pattern as CubeSync).
 
 ### Repository variables
 
@@ -52,7 +52,7 @@ Create a deploy-only SSH key on the VPS, add the public key to `~/.ssh/authorize
 
 1. CubeSync is healthy: `curl -fsS https://api.cubetimer.cc/health/ready`
 2. Variables and secrets above are set
-3. Push to `main` (or run the workflow manually)
+3. Create and push a version tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`)
 4. Open `https://cubetimer.cc` and confirm sign-in / sync against the API
 
 Authenticated API traffic is not cached by the service worker. See also [CubeSync deployment](https://github.com/Maciek-Hetman/cubesync/blob/main/docs/deployment.md).
