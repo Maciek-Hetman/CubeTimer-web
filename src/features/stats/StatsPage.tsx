@@ -1,52 +1,155 @@
-import { useMemo, useState } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppContext'
 import { eventLabel, STATS_CHART_SCALES, STATS_CHART_SCALE_LABELS, type StatsChartScale } from '../../domain/models'
-import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
-import { collectChartSeries, computeSolveStats } from '../../data/repositories/solveStats'
-import { Button } from '../../ui/Button'
+import { formatAverage, formatSolveTime, formatTotalTime } from '../../domain/stats/formatTime'
+import { collectChartSeries, computeSolveStats, type SolveStats } from '../../data/repositories/solveStats'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
-import { StatGrid } from '../../ui/StatGrid'
+import { ProgressChart } from './ProgressChart'
+import './StatsPage.css'
 
-const CHART_SERIES = [
-  { key: 'time', label: 'Time', color: 'var(--accent)', strokeWidth: 1 },
-  { key: 'ao5', label: 'Ao5', color: 'var(--chart-ao5)', strokeWidth: 2 },
-  { key: 'ao12', label: 'Ao12', color: 'var(--chart-ao12)', strokeWidth: 2 },
-] as const
+type TimeStatKey = 'best' | 'worst' | 'mean' | 'stdDev' | 'ao5' | 'ao12' | 'ao50' | 'ao100'
 
-function DeltaBadge({ delta }: { delta: number | null }) {
-  if (delta === null || isNaN(delta)) return null
-  const isImprovement = delta < 0
-  const color = isImprovement ? 'var(--ready)' : 'var(--danger)'
-  const sign = isImprovement ? '-' : '+'
-  const absDelta = Math.abs(delta)
+interface TimeStat {
+  key: TimeStatKey
+  label: string
+  /** Solves needed before the stat can exist; below that it reads as "—" rather than DNF. */
+  needs: number
+}
+
+type AverageKey = 'ao5' | 'ao12' | 'ao50' | 'ao100'
+
+const PB_STATS: Array<{ label: string; best: keyof SolveStats; current: AverageKey | null; needs: number }> = [
+  { label: 'Single', best: 'best', current: null, needs: 1 },
+  { label: 'Ao5', best: 'bestAo5', current: 'ao5', needs: 5 },
+  { label: 'Ao12', best: 'bestAo12', current: 'ao12', needs: 12 },
+  { label: 'Ao50', best: 'bestAo50', current: 'ao50', needs: 50 },
+  { label: 'Ao100', best: 'bestAo100', current: 'ao100', needs: 100 },
+]
+
+const SESSION_GROUPS: Array<{ title: string; stats: TimeStat[] }> = [
+  {
+    title: 'Singles',
+    stats: [
+      { key: 'best', label: 'Best', needs: 1 },
+      { key: 'worst', label: 'Worst', needs: 1 },
+      { key: 'mean', label: 'Mean', needs: 1 },
+      { key: 'stdDev', label: 'Std dev', needs: 1 },
+    ],
+  },
+  {
+    title: 'Averages',
+    stats: [
+      { key: 'ao5', label: 'Ao5', needs: 5 },
+      { key: 'ao12', label: 'Ao12', needs: 12 },
+      { key: 'ao50', label: 'Ao50', needs: 50 },
+      { key: 'ao100', label: 'Ao100', needs: 100 },
+    ],
+  },
+]
+
+const SCALE_SHORT_LABELS: Record<StatsChartScale, string> = {
+  all: 'All',
+  '1000': '1000',
+  '500': '500',
+  '250': '250',
+  '100': '100',
+}
+
+function formatStat(value: number | null, needs: number, count: number): string {
+  if (value !== null) return formatAverage(value)
+  return count < needs ? '—' : 'DNF'
+}
+
+function formatTimeStat(stats: SolveStats, stat: TimeStat): string {
+  // A spread has no DNF form: with no timed solves there is simply nothing to measure.
+  if (stat.key === 'stdDev' && stats.stdDev === null) return '—'
+  return formatStat(stats[stat.key], stat.needs, stats.count)
+}
+
+function formatPercent(part: number, whole: number): string {
+  if (whole === 0) return '0%'
+  const pct = (part / whole) * 100
+  return `${pct < 10 && pct > 0 ? pct.toFixed(1) : Math.round(pct)}%`
+}
+
+function Section({
+  title,
+  description,
+  actions,
+  children,
+}: {
+  title: string
+  description?: ReactNode
+  actions?: ReactNode
+  children: ReactNode
+}) {
   return (
-    <span style={{ color, fontSize: '0.85em', marginLeft: 8, fontWeight: 600 }}>
-      {sign}{formatAverage(absDelta)}
+    <section className="stats-section" aria-label={title}>
+      <header className="stats-section-head">
+        <div className="stats-section-titles">
+          <h2>{title}</h2>
+          {description ? <p className="muted">{description}</p> : null}
+        </div>
+        {actions}
+      </header>
+      {children}
+    </section>
+  )
+}
+
+function Delta({ current, previous, against }: { current: number | null; previous: number | null; against: string }) {
+  if (current === null || previous === null) return null
+  const diff = current - previous
+  const magnitude = formatAverage(Math.abs(diff))
+  if (Math.abs(diff) < 10) {
+    return (
+      <span className="stats-delta" title={`Same as ${against}`}>
+        ±{magnitude}
+      </span>
+    )
+  }
+  // Every compared stat is a time or a spread, so lower is always better.
+  const better = diff < 0
+  return (
+    <span
+      className={`stats-delta ${better ? 'better' : 'worse'}`}
+      title={`${magnitude} ${better ? 'better' : 'worse'} than ${against}`}
+    >
+      <span aria-hidden="true">{better ? '↓' : '↑'}</span>
+      {better ? '−' : '+'}
+      {magnitude}
     </span>
   )
 }
 
+function KeyValueList({ items }: { items: Array<[string, ReactNode]> }) {
+  return (
+    <dl className="stats-list">
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 export function StatsPage() {
-  const { solveStats, sessions, settings, updateSettings, currentSession, ownerId } = useApp()
-  const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({})
+  const { solveStats, sessions, settings, updateSettings, currentSession, ownerId, recentSolves } = useApp()
 
   const chartScale: StatsChartScale = settings.statsChartScale ?? 'all'
+  const event = eventLabel(settings.event)
 
-  const toggleSeries = (key: string) =>
-    setHiddenSeries((prev) => ({ ...prev, [key]: !prev[key] }))
-
+  // Sessions are listed newest-first, so the session before the current one is the next entry.
   const previousSession = useMemo(() => {
     if (!currentSession) return null
     const currentIndex = sessions.findIndex((s) => s.id === currentSession.id)
-    if (currentIndex > 0) {
-      return sessions[currentIndex - 1]
-    }
-    return null
+    return currentIndex >= 0 ? (sessions[currentIndex + 1] ?? null) : null
   }, [sessions, currentSession])
 
   const sessionStats = useLiveQuery(
@@ -66,42 +169,31 @@ export function StatsPage() {
     [ownerId, settings.event, chartScale],
   )
 
-  const sessionSummary = useMemo(
-    () => ({
-      count: sessionStats?.count ?? 0,
-      best: sessionStats?.best ?? null,
-      mean: sessionStats?.mean ?? null,
-      stdDev: sessionStats?.stdDev ?? null,
-      totalTime: sessionStats?.totalTime ?? 0,
-      ao5: sessionStats?.ao5 ?? null,
-      ao50: sessionStats?.ao50 ?? null,
-      ao100: sessionStats?.ao100 ?? null,
-    }),
-    [sessionStats],
-  )
+  const latestSolve = recentSolves[0]
+  const comparison: SolveStats | null =
+    previousSession && previousSessionStats && previousSessionStats.count > 0 ? previousSessionStats : null
 
-  const previousSessionSummary = useMemo(
-    () => ({
-      best: previousSessionStats?.best ?? null,
-      mean: previousSessionStats?.mean ?? null,
-      stdDev: previousSessionStats?.stdDev ?? null,
-      ao5: previousSessionStats?.ao5 ?? null,
-      ao50: previousSessionStats?.ao50 ?? null,
-      ao100: previousSessionStats?.ao100 ?? null,
-    }),
-    [previousSessionStats],
+  const rangeControl = (
+    <div className="stats-range" role="group" aria-label="Graph scale">
+      {STATS_CHART_SCALES.map((scale) => (
+        <button
+          key={scale}
+          type="button"
+          aria-label={STATS_CHART_SCALE_LABELS[scale]}
+          aria-pressed={chartScale === scale}
+          onClick={() => void updateSettings({ statsChartScale: scale })}
+        >
+          {SCALE_SHORT_LABELS[scale]}
+        </button>
+      ))}
+    </div>
   )
-
-  const getDelta = (current: number | null, previous: number | null) => {
-    if (current === null || previous === null) return null
-    return current - previous
-  }
 
   return (
-    <div className="stack">
+    <div className="stats-page">
       <PageHeader
         title="Stats"
-        subtitle={`${eventLabel(settings.event)}${currentSession ? ` · ${currentSession.name}` : ''}`}
+        subtitle={`${event}${currentSession ? ` · ${currentSession.name}` : ''}`}
       />
 
       {solveStats.count === 0 ? (
@@ -115,202 +207,126 @@ export function StatsPage() {
         />
       ) : (
         <>
-          <div className="row wrap" style={{ gap: '16px' }}>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Time</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.best)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao5</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo5)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao12</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo12)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao50</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo50)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao100</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo100)}
-              </div>
-            </Panel>
-          </div>
-
-          <Panel className="stack">
-            <div className="row wrap" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <h2 style={{ margin: 0 }}>Times Graph</h2>
-              <div className="segmented" role="group" aria-label="Graph scale">
-                {STATS_CHART_SCALES.map((scale) => (
-                  <Button
-                    key={scale}
-                    type="button"
-                    className="compact"
-                    variant={chartScale === scale ? 'primary' : 'default'}
-                    aria-pressed={chartScale === scale}
-                    onClick={() => void updateSettings({ statsChartScale: scale })}
-                  >
-                    {STATS_CHART_SCALE_LABELS[scale]}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div style={{ width: '100%', height: 250 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData ?? []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  {CHART_SERIES.map(
-                    (series) =>
-                      !hiddenSeries[series.key] && (
-                        <Line
-                          key={series.key}
-                          type="monotone"
-                          dataKey={series.key}
-                          name={series.label}
-                          stroke={series.color}
-                          strokeWidth={series.strokeWidth}
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                      ),
-                  )}
-                  <XAxis
-                    dataKey="index"
-                    stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                  />
-                  <YAxis
-                    stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                    width={40}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--surface)',
-                      borderColor: 'var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      boxShadow: 'var(--shadow-md)',
-                      color: 'var(--text)',
-                    }}
-                    itemStyle={{ color: 'var(--text)' }}
-                    labelStyle={{ color: 'var(--text-muted)', fontWeight: 600 }}
-                    labelFormatter={(label) => `Solve ${label}`}
-                    formatter={(value, name) => [`${Number(value).toFixed(2)}s`, String(name)]}
-                  />
-                  <Legend wrapperStyle={{ color: 'var(--text-muted)' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="segmented" role="group" aria-label="Chart series visibility">
-              {CHART_SERIES.map((series) => {
-                const hidden = Boolean(hiddenSeries[series.key])
+          <Section title="Personal bests" description={`Fastest results across all ${event} solves`}>
+            <div className="stats-pb-grid">
+              {PB_STATS.map((pb) => {
+                const hasEnough = solveStats.count >= pb.needs
+                let current: ReactNode
+                if (!hasEnough) {
+                  current = `Needs ${pb.needs} solves`
+                } else if (pb.current === null) {
+                  current = (
+                    <>
+                      Latest <strong>{latestSolve ? formatSolveTime(latestSolve) : '—'}</strong>
+                    </>
+                  )
+                } else {
+                  current = (
+                    <>
+                      Current <strong>{formatStat(solveStats[pb.current], pb.needs, solveStats.count)}</strong>
+                    </>
+                  )
+                }
                 return (
-                  <Button
-                    key={series.key}
-                    type="button"
-                    variant={hidden ? 'default' : 'primary'}
-                    aria-pressed={!hidden}
-                    onClick={() => toggleSeries(series.key)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        display: 'inline-block',
-                        width: 10,
-                        height: 10,
-                        marginRight: 6,
-                        borderRadius: '50%',
-                        backgroundColor: series.color,
-                        opacity: hidden ? 0.35 : 1,
-                      }}
-                    />
-                    {series.label}
-                  </Button>
+                  <Panel key={pb.label} className="stats-pb">
+                    <div className="stats-pb-label">{pb.label}</div>
+                    <div className="stats-pb-value">
+                      {formatStat(solveStats[pb.best], pb.needs, solveStats.count)}
+                    </div>
+                    <div className="stats-pb-current">{current}</div>
+                  </Panel>
                 )
               })}
             </div>
-          </Panel>
+          </Section>
 
-          <div className="row wrap" style={{ gap: 'var(--space-4)', alignItems: 'flex-start' }}>
-            <Panel className="stack" style={{ flex: 1, minWidth: '250px' }}>
-              <h2>All-time</h2>
-              <StatGrid
-                items={[
-                  ['Solves', String(solveStats.count)],
-                  ['Total Time', formatTotalTime(solveStats.totalTime)],
-                  ['Worst', formatAverage(solveStats.worst)],
-                  ['Mean', formatAverage(solveStats.mean)],
-                  ['Std Dev', formatAverage(solveStats.stdDev)],
-                  ['Ao5', formatAverage(solveStats.ao5)],
-                  ['Ao12', formatAverage(solveStats.ao12)],
-                  ['Ao50', formatAverage(solveStats.ao50)],
-                  ['Ao100', formatAverage(solveStats.ao100)],
-                ]}
-              />
-            </Panel>
+          <Section
+            title="Progress"
+            description="Every single, with rolling Ao5 and Ao12 on top"
+            actions={rangeControl}
+          >
+            <ProgressChart data={chartData ?? []} />
+          </Section>
 
-            <Panel className="stack" style={{ flex: 1, minWidth: '250px' }}>
-              <h2>Current session</h2>
-              <StatGrid
-                items={[
-                  ['Solves', String(sessionSummary.count)],
-                  ['Total Time', formatTotalTime(sessionSummary.totalTime)],
-                  [
-                    'Best',
-                    <span key="best">
-                      {formatAverage(sessionSummary.best)}
-                      {previousSessionSummary.best !== null && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
-                    </span>,
-                  ],
-                  [
-                    'Mean',
-                    <span key="mean">
-                      {formatAverage(sessionSummary.mean)}
-                      {previousSessionSummary.mean !== null && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
-                    </span>,
-                  ],
-                  [
-                    'Std Dev',
-                    <span key="stdDev">
-                      {formatAverage(sessionSummary.stdDev)}
-                      {previousSessionSummary.stdDev !== null && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao5',
-                    <span key="ao5">
-                      {formatAverage(sessionSummary.ao5)}
-                      {previousSessionSummary.ao5 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao50',
-                    <span key="ao50">
-                      {formatAverage(sessionSummary.ao50)}
-                      {previousSessionSummary.ao50 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao100',
-                    <span key="ao100">
-                      {formatAverage(sessionSummary.ao100)}
-                      {previousSessionSummary.ao100 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
-                    </span>,
-                  ],
-                ]}
-              />
-            </Panel>
-          </div>
+          {currentSession ? (
+            <Section
+              title="Current session"
+              description={
+                <>
+                  {currentSession.name} · {sessionStats?.count ?? 0} solves ·{' '}
+                  {formatTotalTime(sessionStats?.totalTime ?? 0)}
+                </>
+              }
+              actions={
+                comparison && previousSession ? (
+                  <p className="stats-compare-note">
+                    Changes vs <strong>{previousSession.name}</strong>
+                  </p>
+                ) : null
+              }
+            >
+              <Panel className="stats-session">
+                {!sessionStats || sessionStats.count === 0 ? (
+                  <p className="muted stats-session-empty">No solves in this session yet.</p>
+                ) : (
+                  SESSION_GROUPS.map((group) => (
+                    <div key={group.title} className="stats-group">
+                      <h3>{group.title}</h3>
+                      <div className="stats-tile-grid">
+                        {group.stats.map((stat) => (
+                          <div key={stat.key} className="stats-tile">
+                            <div className="stats-tile-label">{stat.label}</div>
+                            <div className="stats-tile-value">{formatTimeStat(sessionStats, stat)}</div>
+                            {comparison && previousSession ? (
+                              <Delta
+                                current={sessionStats[stat.key]}
+                                previous={comparison[stat.key]}
+                                against={previousSession.name}
+                              />
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </Panel>
+            </Section>
+          ) : null}
+
+          <Section title="All time" description={`Everything you've logged for ${event}`}>
+            <div className="stats-card-grid">
+              <Panel className="stats-card">
+                <h3>Consistency</h3>
+                <KeyValueList
+                  items={[
+                    ['Mean', formatTimeStat(solveStats, { key: 'mean', label: 'Mean', needs: 1 })],
+                    ['Std dev', formatTimeStat(solveStats, { key: 'stdDev', label: 'Std dev', needs: 1 })],
+                    ['Worst', formatTimeStat(solveStats, { key: 'worst', label: 'Worst', needs: 1 })],
+                    [
+                      'DNF rate',
+                      <>
+                        {formatPercent(solveStats.dnfCount, solveStats.count)}
+                        <span className="stats-list-aside">
+                          {solveStats.dnfCount} {solveStats.dnfCount === 1 ? 'DNF' : 'DNFs'}
+                        </span>
+                      </>,
+                    ],
+                  ]}
+                />
+              </Panel>
+              <Panel className="stats-card">
+                <h3>Volume</h3>
+                <KeyValueList
+                  items={[
+                    ['Solves', solveStats.count.toLocaleString()],
+                    ['Sessions', sessions.length.toLocaleString()],
+                    ['Total time', formatTotalTime(solveStats.totalTime)],
+                  ]}
+                />
+              </Panel>
+            </div>
+          </Section>
         </>
       )}
     </div>

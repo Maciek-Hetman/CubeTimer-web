@@ -210,10 +210,11 @@ describe('Tier 4: Real-World Workload Scenarios E2E Tests', () => {
     expect(stats.bestAo5).toBeDefined()
     expect(stats.count).toBe(5)
 
-    // Render StatsPage and verify top PB cards
+    // Render StatsPage and verify the personal best cards
     renderWithApp(<StatsPage />)
-    expect(await screen.findByText('PB Time')).toBeInTheDocument()
-    expect(await screen.findByText('10.50')).toBeInTheDocument()
+    const bests = await screen.findByRole('region', { name: 'Personal bests' })
+    const single = within(bests).getByText('Single').parentElement as HTMLElement
+    await waitFor(() => expect(single.querySelector('.stats-pb-value')).toHaveTextContent('10.50'))
   })
 
   it('4. Full Persistence & State Restoration (Simulated Page Reload)', async () => {

@@ -13,6 +13,8 @@
   --chart-ao12-dark: #fbbf24;
   --chart-ao12: light-dark(var(--chart-ao12-light), var(--chart-ao12-dark));
 
+  --chart-grid: color-mix(in srgb, var(--border) 65%, var(--surface));
+
   --bg: light-dark(#f3f5f8, #0e1117);
   --surface: light-dark(#ffffff, #161b24);
   --surface-muted: light-dark(#eef1f6, #1e2532);
