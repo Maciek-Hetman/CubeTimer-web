@@ -4,7 +4,8 @@ Responsive, offline-first cube timer. Mobile layout follows the Android CubeTime
 
 ## What you can do
 
-- Time solves with hold-to-start (tap or Space), scramble generation, and +2 / DNF penalties
+- Time solves with hold-to-start (Space, any key, or touch), scramble generation, and +2 / DNF penalties
+- Time with a Bluetooth timer (QiYi, GAN) or a wired timer plugged into an audio input (Stackmat-compatible or MoYu)
 - Track 2x2, 3x3, 4x4, 5x5, Megaminx, and Pyraminx
 - Use automatic or manual sessions, inspect stats, and customize desktop widgets
 - Time as a guest offline; sign in to sync verified accounts with CubeSync

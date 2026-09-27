@@ -57,7 +57,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await screen.findByRole('button', { name: 'Timer' })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
@@ -73,7 +73,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
     it('starts timing upon Space key release after reaching ready state', async () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
@@ -86,14 +86,14 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
 
       fireEvent.keyUp(window, { code: 'Space', key: ' ' })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
+        expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i)
       })
     })
 
     it('stops running timer when Space is pressed during active solve and records duration', async () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
@@ -105,20 +105,20 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
       )
       fireEvent.keyUp(window, { code: 'Space', key: ' ' })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
+        expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i)
       })
 
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
       expect(await screen.findByText(/Saved /i)).toBeInTheDocument()
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
     })
 
     it('automatically saves finished solve to IndexedDB with duration and scramble', async () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
@@ -130,7 +130,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
       )
       fireEvent.keyUp(window, { code: 'Space', key: ' ' })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
+        expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i)
       })
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
 
@@ -160,7 +160,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
     it('supports pointer touch / click hold-and-release to operate the timer', async () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       const timerBtn = screen.getByRole('button', { name: 'Timer' })
@@ -178,7 +178,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
 
       fireEvent.pointerUp(timerBtn, { button: 0, pointerId: 1 })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
+        expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i)
       })
 
       fireEvent.pointerDown(timerBtn, { button: 0, pointerId: 2 })
@@ -190,7 +190,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
     it('cancels hold and returns to idle when key is released prematurely', async () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
@@ -200,14 +200,14 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
 
       fireEvent.keyUp(window, { code: 'Space', key: ' ' })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
     })
 
     it('cancels hold on pointercancel or lost pointer capture', async () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       const timerBtn = screen.getByRole('button', { name: 'Timer' })
@@ -218,7 +218,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
 
       fireEvent.pointerCancel(timerBtn, { pointerId: 1 })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
     })
 
@@ -439,7 +439,7 @@ describe('Tier 1: Core Feature Isolation E2E Tests', () => {
       }, { timeout: 4000 })
       fireEvent.keyUp(window, { code: 'Space', key: ' ' })
       await waitFor(() => {
-        expect(document.querySelector('.timer-hint')).toHaveTextContent(/Tap or press Space to stop/i)
+        expect(document.querySelector('.timer-hint')).toHaveTextContent(/Tap or press any key to stop/i)
       })
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
       expect(await screen.findByText(/Saved /i)).toBeInTheDocument()

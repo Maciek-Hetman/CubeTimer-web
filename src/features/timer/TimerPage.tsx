@@ -2,6 +2,7 @@ import confetti from 'canvas-confetti'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useBluetoothTimer } from '../../contexts/BluetoothTimerContext'
+import { useWiredTimer } from '../../contexts/WiredTimerContext'
 import { useSolves } from '../../contexts/SolvesContext'
 import { useScramble } from '../../contexts/ScrambleContext'
 import {
@@ -9,10 +10,11 @@ import {
   effectiveTimeMs,
   eventLabel,
   type CubeEvent,
+  type ExternalTimerConnection,
   type Solve,
+  type TimerControls,
   type TimerDisplayMode,
   type TimerFont,
-  type TimerInputDevice,
   type TimerSize,
 } from '../../domain/models'
 import { averageFromValues } from '../../domain/stats/averages'
@@ -25,6 +27,7 @@ import { Select } from '../../ui/Select'
 import { createTimerEngine, isTimerBusy, IDLE_TIMER, type TimerSnapshot, type TimerEngine } from './timerMachine'
 import { getAccentColor } from '../../styles/accents'
 import { BluetoothTimerControls } from './BluetoothTimerControls'
+import { WiredTimerControls } from './WiredTimerControls'
 import { loadTimerFont } from '../../styles/timerFonts'
 
 function isFormTarget(target: EventTarget | null): boolean {
@@ -35,27 +38,46 @@ function isFormTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
 
+// Keys that never drive the timer: modifiers, and keys the browser needs (focus, Esc, F5, …).
 const SYSTEM_KEYS = new Set([
   'Alt',
   'AltGraph',
   'CapsLock',
+  'ContextMenu',
   'Control',
+  'Escape',
   'Fn',
   'Meta',
   'NumLock',
   'OS',
   'ScrollLock',
   'Shift',
+  'Tab',
 ])
 
 function isSystemKey(event: KeyboardEvent): boolean {
   return (
     SYSTEM_KEYS.has(event.key) ||
+    /^F\d{1,2}$/.test(event.key) ||
     event.altKey ||
     event.ctrlKey ||
     event.metaKey ||
     event.shiftKey
   )
+}
+
+function startHint(controls: TimerControls, variant: 'mobile' | 'desktop'): string {
+  if (controls === 'space') {
+    return 'Hold Space to start'
+  }
+  return controls === 'keys' || variant === 'desktop' ? 'Hold any key to start' : 'Hold any key or tap and hold to start'
+}
+
+function stopHint(controls: TimerControls, variant: 'mobile' | 'desktop'): string {
+  if (controls === 'space') {
+    return 'Press Space to stop'
+  }
+  return controls === 'keys' || variant === 'desktop' ? 'Press any key to stop' : 'Tap or press any key to stop'
 }
 
 function getEventTimestamp(event?: { timeStamp?: number }): number {
@@ -239,8 +261,13 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const { recentSolves, solveStats, saveSolve } = useSolves()
   const { scramble, scrambleState, loadScramble } = useScramble()
   const bluetoothTimer = useBluetoothTimer()
-  const subscribeToBluetoothTimer = bluetoothTimer.subscribe
+  const wiredTimer = useWiredTimer()
   const useExternalTimer = settings.timingDevice === 'external_timer'
+  const externalConnection = settings.externalTimer
+  const externalTimer = externalConnection === 'wired' ? wiredTimer : bluetoothTimer
+  const subscribeToExternalTimer = externalTimer.subscribe
+  const controls = settings.timerControls
+  const pointerEnabled = controls === 'keys_and_pointer'
 
   const [engine] = useState(() => createTimerEngine())
 
@@ -351,14 +378,17 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   const liveMessage = useMemo(() => {
     if (useExternalTimer && snapshot.phase === 'idle') {
-      return bluetoothTimer.status === 'connected'
-        ? 'Timer ready. Start the solve on your Bluetooth timer.'
-        : 'Bluetooth timer not connected.'
+      const wired = externalConnection === 'wired'
+      if (externalTimer.status === 'connected') {
+        return `Timer ready. Start the solve on your ${wired ? 'wired' : 'Bluetooth'} timer.`
+      }
+      if (externalTimer.status === 'listening') {
+        return 'No signal from the wired timer. Turn it on and check the cable.'
+      }
+      return wired ? 'Wired timer not connected.' : 'Bluetooth timer not connected.'
     }
     if (snapshot.phase === 'idle') {
-      return variant === 'desktop'
-        ? 'Timer ready. Hold any key to start.'
-        : 'Timer ready. Hold Space or tap and hold to start.'
+      return `Timer ready. ${startHint(controls, variant)}.`
     }
     if (snapshot.phase === 'holding') {
       return 'Holding to start'
@@ -373,19 +403,29 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       return `Running ${formatDuration(runningSeconds * 1000)}`
     }
     return 'Timer ready'
-  }, [snapshot.phase, snapshot.finishedMs, variant, runningSeconds, useExternalTimer, bluetoothTimer.status])
+  }, [
+    snapshot.phase,
+    snapshot.finishedMs,
+    variant,
+    runningSeconds,
+    useExternalTimer,
+    externalConnection,
+    externalTimer.status,
+    controls,
+  ])
 
   useEffect(() => {
     if (!useExternalTimer) {
       return
     }
-    return subscribeToBluetoothTimer((event) => {
+    return subscribeToExternalTimer((event) => {
       switch (event.state) {
         case 'ready':
           setSnapshot((prev) => (prev.phase === 'running' ? prev : { ...IDLE_TIMER, phase: 'ready', holdProgress: 1 }))
           return
         case 'running':
-          setSnapshot(engine.start(performance.now()))
+          // Wired timers are noticed a little after they start; count from their own reading.
+          setSnapshot(engine.start(Math.max(0, performance.now() - (event.elapsedMs ?? 0))))
           return
         case 'stopped':
           setSnapshot(engine.complete(event.timeMs))
@@ -397,11 +437,16 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           setSnapshot(engine.getSnapshot())
           return
         default:
+          if (event.state === 'idle' && engine.getSnapshot().phase === 'running') {
+            // Reset mid-solve: no final time is coming, so drop the solve.
+            setSnapshot(engine.reset())
+            return
+          }
           // Hands lifted early or timer reset: drop the "ready" state but keep the last time.
           setSnapshot((prev) => (prev.phase === 'ready' ? engine.getSnapshot() : prev))
       }
     })
-  }, [subscribeToBluetoothTimer, engine, useExternalTimer])
+  }, [subscribeToExternalTimer, engine, useExternalTimer])
 
   useEffect(() => {
     if (useExternalTimer) {
@@ -411,7 +456,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       if (isFormTarget(event.target) || isSystemKey(event)) {
         return
       }
-      if (variant !== 'desktop' && event.code !== 'Space') {
+      if (controls === 'space' && event.code !== 'Space') {
         return
       }
       event.preventDefault()
@@ -426,10 +471,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       setSnapshot(engine.press(now))
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (isFormTarget(event.target) || (variant !== 'desktop' && event.code !== 'Space')) {
-        return
-      }
-      if (activeKeyRef.current !== event.code) {
+      if (isFormTarget(event.target) || activeKeyRef.current !== event.code) {
         return
       }
       activeKeyRef.current = null
@@ -446,7 +488,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [engine, variant, useExternalTimer])
+  }, [engine, controls, useExternalTimer])
 
   const ao5 = useMemo(() => solveStats.ao5, [solveStats])
   const ao12 = useMemo(() => solveStats.ao12, [solveStats])
@@ -475,8 +517,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             : 'timer-idle'
 
   const externalHint =
-    bluetoothTimer.status !== 'connected' && snapshot.phase !== 'running'
-      ? 'Connect your Bluetooth timer to start'
+    externalTimer.status !== 'connected' && snapshot.phase !== 'running'
+      ? externalTimer.status === 'listening'
+        ? 'Turn on your timer to start'
+        : `Connect your ${externalConnection === 'wired' ? 'wired' : 'Bluetooth'} timer to start`
       : snapshot.phase === 'ready'
         ? 'Release to start!'
         : snapshot.phase === 'running'
@@ -485,21 +529,13 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   const hint = useExternalTimer
     ? externalHint
-    : snapshot.phase === 'idle'
-      ? variant === 'desktop'
-        ? 'Hold any key to start'
-        : 'Hold Space or tap and hold to start'
-      : snapshot.phase === 'holding'
-        ? 'Hold…'
-        : snapshot.phase === 'ready'
-          ? 'Release to start!'
-          : snapshot.phase === 'running'
-            ? variant === 'desktop'
-              ? 'Press any key to stop'
-              : 'Tap or press Space to stop'
-            : variant === 'desktop'
-              ? 'Hold any key to start'
-              : 'Hold Space or tap and hold to start'
+    : snapshot.phase === 'holding'
+      ? 'Hold…'
+      : snapshot.phase === 'ready'
+        ? 'Release to start!'
+        : snapshot.phase === 'running'
+          ? stopHint(controls, variant)
+          : startHint(controls, variant)
 
   const cancelHold = useCallback(() => {
     activePointerRef.current = null
@@ -513,7 +549,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (useExternalTimer || event.button !== 0 || activePointerRef.current !== null) {
+      if (useExternalTimer || !pointerEnabled || event.button !== 0 || activePointerRef.current !== null) {
         return
       }
       event.preventDefault()
@@ -522,7 +558,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       const now = getEventTimestamp(event)
       setSnapshot(engine.press(now))
     },
-    [engine, useExternalTimer],
+    [engine, pointerEnabled, useExternalTimer],
   )
 
   const handlePointerUp = useCallback(
@@ -563,13 +599,20 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             <Select
               size="small"
               aria-label="Timing device"
-              value={settings.timingDevice ?? 'keyboard'}
+              value={useExternalTimer ? externalConnection : 'keyboard'}
               disabled={isSolvingOrPreparing}
-              onChange={(val) => void updateSettings({ timingDevice: val as TimerInputDevice })}
+              onChange={(val) =>
+                void updateSettings(
+                  val === 'keyboard'
+                    ? { timingDevice: 'keyboard' }
+                    : { timingDevice: 'external_timer', externalTimer: val as ExternalTimerConnection },
+                )
+              }
               style={{ width: 'var(--device-select-width)' }}
               options={[
                 { value: 'keyboard', label: variant === 'desktop' ? 'Keyboard' : 'Touch' },
-                { value: 'external_timer', label: 'Bluetooth' },
+                { value: 'bluetooth', label: 'Bluetooth' },
+                { value: 'wired', label: 'Wired' },
               ]}
             />
           </div>
@@ -597,7 +640,9 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         </div>
       </div>
 
-      {useExternalTimer && !isSolvingOrPreparing ? <BluetoothTimerControls compact /> : null}
+      {useExternalTimer && !isSolvingOrPreparing ? (
+        externalConnection === 'wired' ? <WiredTimerControls /> : <BluetoothTimerControls compact />
+      ) : null}
 
       <TimerDisplay
         engine={engine}

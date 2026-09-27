@@ -143,14 +143,6 @@ export function KeyboardIcon() {
   )
 }
 
-export function BluetoothIcon() {
-  return (
-    <svg className="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m7 7 10 10-5 4V3l5 4L7 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 export function CubeIcon() {
   return (
     <svg className="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">

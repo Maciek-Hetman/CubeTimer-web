@@ -45,6 +45,31 @@ vi.mock('../../app/AppContext', () => ({
   }),
 }))
 
+vi.mock('../../contexts/SettingsContext', () => ({
+  useSettings: () => ({
+    settings: mocks.settings,
+    updateSettings: mocks.updateSettings,
+  }),
+}))
+
+vi.mock('../../contexts/WiredTimerContext', () => ({
+  useWiredTimer: () => ({
+    status: 'connected',
+    inputLabel: 'USB Audio Device',
+    error: null,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    subscribe: vi.fn(),
+  }),
+}))
+
+vi.mock('../timer/wired/wiredTimer', () => ({
+  listAudioInputs: async () => [
+    { deviceId: 'mic-1', label: 'Built-in Microphone' },
+    { deviceId: 'usb-1', label: 'USB Audio Device' },
+  ],
+}))
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -131,5 +156,43 @@ describe('SettingsPage', () => {
     expect(showHintsSwitch).toBeChecked()
     await user.click(showHintsSwitch)
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showTimerHints: false })
+  })
+
+  it('chooses which inputs start and stop the keyboard timer', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    const controls = screen.getByLabelText('Start and stop with')
+    expect(controls).toHaveValue('keys_and_pointer')
+    await user.selectOptions(controls, 'space')
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ timerControls: 'space' })
+  })
+
+  it('switches the timing device', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.selectOptions(screen.getByLabelText('Timing device'), 'wired')
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ timingDevice: 'external_timer', externalTimer: 'wired' })
+    await user.selectOptions(screen.getByLabelText('Timing device'), 'keyboard')
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ timingDevice: 'keyboard' })
+  })
+
+  it('shows wired timer options instead of keyboard ones for a wired timer', async () => {
+    mocks.settings = { ...mocks.settings, timingDevice: 'external_timer', externalTimer: 'wired' }
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(screen.queryByLabelText('Start and stop with')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '300 ms' })).not.toBeInTheDocument()
+    expect(screen.getByText('Timer connected')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Wired timer type'), 'moyu')
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ wiredTimerProtocol: 'moyu' })
+
+    const input = screen.getByLabelText('Audio input')
+    await screen.findByRole('option', { name: 'USB Audio Device' })
+    await user.selectOptions(input, 'usb-1')
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ wiredTimerInputId: 'usb-1' })
   })
 })

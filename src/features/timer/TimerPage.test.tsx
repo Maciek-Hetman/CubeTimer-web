@@ -10,14 +10,26 @@ import { db, getOrCreateSettings } from '../../data/db'
 import { generateScramble } from '../scramble/scrambleService'
 import type { SmartTimerListener } from './bluetooth/types'
 import { TimerPage } from './TimerPage'
+import type { WiredTimerOptions } from './wired/wiredTimer'
 
 const bluetoothMock = vi.hoisted(() => ({ emit: null as SmartTimerListener | null }))
+const wiredMock = vi.hoisted(() => ({ options: null as WiredTimerOptions | null }))
 
 vi.mock('./bluetooth/bluetoothTimer', () => ({
   isWebBluetoothSupported: () => true,
   connectBluetoothTimer: vi.fn(async (onEvent: SmartTimerListener) => {
     bluetoothMock.emit = onEvent
     return { deviceName: 'QY-Adapter-1A2B', disconnect: vi.fn(async () => undefined) }
+  }),
+}))
+
+vi.mock('./wired/wiredTimer', () => ({
+  isWiredTimerSupported: () => true,
+  hasMicrophonePermission: async () => false,
+  listAudioInputs: async () => [],
+  connectWiredTimer: vi.fn(async (options: WiredTimerOptions) => {
+    wiredMock.options = options
+    return { inputLabel: 'USB Audio Device', disconnect: vi.fn(async () => undefined) }
   }),
 }))
 
@@ -68,9 +80,9 @@ describe('TimerPage', () => {
     renderTimer()
 
     await screen.findByRole('button', { name: 'Timer' })
-    await user.selectOptions(screen.getByLabelText('Timing device'), 'external_timer')
+    await user.selectOptions(screen.getByLabelText('Timing device'), 'bluetooth')
     await waitFor(async () => {
-      expect((await db.settings.get(ownerId))?.timingDevice).toBe('external_timer')
+      expect((await db.settings.get(ownerId))).toMatchObject({ timingDevice: 'external_timer', externalTimer: 'bluetooth' })
     })
 
     await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
@@ -96,6 +108,111 @@ describe('TimerPage', () => {
     })
   })
 
+  it('records solves from a wired timer', async () => {
+    const ownerId = await ensureGuestOwner()
+    const user = userEvent.setup()
+    renderTimer()
+
+    const timer = await screen.findByRole('button', { name: 'Timer' })
+    await user.selectOptions(screen.getByLabelText('Timing device'), 'wired')
+    await waitFor(async () => {
+      expect((await db.settings.get(ownerId))).toMatchObject({ timingDevice: 'external_timer', externalTimer: 'wired' })
+    })
+    expect(timerHint()).toHaveTextContent(/Connect your wired timer to start/i)
+
+    await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
+    expect(wiredMock.options).toMatchObject({ protocol: 'stackmat', inputId: '' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Turn on your timer to start/i))
+    act(() => wiredMock.options!.onSignalChange(true))
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Place your hands on the timer/i))
+
+    // Keyboard and touch are ignored while the wired timer is in charge.
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+    fireEvent.pointerDown(timer, { pointerId: 1 })
+    expect(timer).toHaveClass('timer-idle')
+
+    act(() => wiredMock.options!.onEvent({ state: 'running', elapsedMs: 150 }))
+    expect(timer).toHaveClass('timer-running')
+    act(() => wiredMock.options!.onEvent({ state: 'stopped', timeMs: 9_870 }))
+
+    await waitFor(async () => {
+      const solves = await db.solves.toArray()
+      expect(solves).toHaveLength(1)
+      expect(solves[0]).toMatchObject({ durationMs: 9_870, timingDevice: 'external_timer' })
+    })
+  })
+
+  it('drops a solve when the external timer is reset mid-solve', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timingDevice: 'external_timer', externalTimer: 'wired' })
+    const user = userEvent.setup()
+    renderTimer()
+
+    await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
+    act(() => wiredMock.options!.onSignalChange(true))
+    const timer = screen.getByRole('button', { name: 'Timer' })
+    act(() => wiredMock.options!.onEvent({ state: 'running' }))
+    expect(timer).toHaveClass('timer-running')
+    act(() => wiredMock.options!.onEvent({ state: 'idle' }))
+    expect(timer).toHaveClass('timer-idle')
+    expect(await db.solves.count()).toBe(0)
+  })
+
+  it('only reacts to Space when controls are set to Space', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timerStartDelayMs: 0, timerControls: 'space' })
+    renderTimer('desktop')
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/^Hold Space to start$/))
+
+    const timer = screen.getByRole('button', { name: 'Timer' })
+    fireEvent.pointerDown(timer, { pointerId: 1 })
+    fireEvent.pointerUp(timer, { pointerId: 1 })
+    fireEvent.keyDown(window, { code: 'KeyA', key: 'a' })
+    fireEvent.keyUp(window, { code: 'KeyA', key: 'a' })
+    expect(timer).toHaveClass('timer-idle')
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Release to start/i))
+    fireEvent.keyUp(window, { code: 'Space', key: ' ' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/^Press Space to stop$/))
+  })
+
+  it('ignores touch and mouse when controls are set to keys only', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timerStartDelayMs: 0, timerControls: 'keys' })
+    renderTimer()
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/^Hold any key to start$/))
+
+    const timer = screen.getByRole('button', { name: 'Timer' })
+    fireEvent.pointerDown(timer, { pointerId: 1 })
+    fireEvent.pointerUp(timer, { pointerId: 1 })
+    expect(timer).toHaveClass('timer-idle')
+
+    fireEvent.keyDown(window, { code: 'KeyJ', key: 'j' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Release to start/i))
+    fireEvent.keyUp(window, { code: 'KeyJ', key: 'j' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/^Press any key to stop$/))
+  })
+
+  it('leaves Tab, Escape and function keys to the browser', async () => {
+    renderTimer('desktop')
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Hold any key to start/i))
+
+    for (const [code, key] of [
+      ['Tab', 'Tab'],
+      ['Escape', 'Escape'],
+      ['F5', 'F5'],
+    ]) {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code, key })
+      window.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(false)
+    }
+    expect(screen.getByRole('button', { name: 'Timer' })).toHaveClass('timer-idle')
+  })
+
   it('regenerates scramble from the compact action', async () => {
     const user = userEvent.setup()
     renderTimer()
@@ -112,7 +229,7 @@ describe('TimerPage', () => {
   it('shows scramble without a sessions manager button', async () => {
     renderTimer()
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+      expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
     })
     expect((await screen.findAllByText(/R U R' U'/))[0]).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /sessions/i })).not.toBeInTheDocument()
@@ -125,7 +242,7 @@ describe('TimerPage', () => {
 
     renderTimer()
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+      expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
     })
     const timer = screen.getByRole('button', { name: 'Timer' })
     fireEvent.pointerDown(timer, { pointerId: 1 })
@@ -134,14 +251,14 @@ describe('TimerPage', () => {
     })
     fireEvent.pointerCancel(timer, { pointerId: 1 })
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+      expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
     })
   })
 
   it('starts when the timer is held until ready', async () => {
     renderTimer()
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+      expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
     })
 
     const timer = screen.getByRole('button', { name: 'Timer' })
@@ -155,7 +272,7 @@ describe('TimerPage', () => {
     fireEvent.pointerUp(timer, { pointerId: 1 })
 
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
+      expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i)
     })
   })
 
@@ -199,7 +316,7 @@ describe('TimerPage', () => {
     renderTimer()
     expect((await screen.findAllByText(/R U R' U'/))[0]).toBeInTheDocument()
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+      expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
     })
 
     fireEvent.keyDown(window, { code: 'Space', key: ' ' })
@@ -211,12 +328,12 @@ describe('TimerPage', () => {
     )
     fireEvent.keyUp(window, { code: 'Space', key: ' ' })
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Tap or press Space to stop/i)
+      expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i)
     })
     fireEvent.keyDown(window, { code: 'Space', key: ' ' })
     expect(await screen.findByText(/Saved /i)).toBeInTheDocument()
     await waitFor(() => {
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+      expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
     })
     expect(screen.queryByRole('button', { name: 'Save time' })).not.toBeInTheDocument()
   })

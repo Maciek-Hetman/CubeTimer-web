@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import type { TimingDevice } from '../../domain/models'
-import { BluetoothIcon, CubeIcon, KeyboardIcon } from '../../ui/NavIcons'
+import { CubeIcon, KeyboardIcon, TimerIcon } from '../../ui/NavIcons'
 
 const DEVICES: Record<TimingDevice, { label: string; description: string; icon: ReactNode }> = {
   keyboard: { label: 'Keyboard', description: 'Timed with keyboard or touch', icon: <KeyboardIcon /> },
-  external_timer: { label: 'Bluetooth', description: 'Timed with a Bluetooth timer', icon: <BluetoothIcon /> },
+  // CubeSync has one value for Bluetooth and wired timers alike.
+  external_timer: { label: 'Timer', description: 'Timed with a Bluetooth or wired timer', icon: <TimerIcon /> },
   smart_cube: { label: 'Smart cube', description: 'Timed with a smart cube', icon: <CubeIcon /> },
 }
 

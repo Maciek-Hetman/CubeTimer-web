@@ -12,6 +12,14 @@ export {
 } from './BluetoothTimerContext'
 export { BluetoothTimerProvider } from './BluetoothTimerProvider'
 
+export {
+  WiredTimerContext,
+  useWiredTimer,
+  type WiredTimerContextValue,
+  type WiredTimerStatus,
+} from './WiredTimerContext'
+export { WiredTimerProvider } from './WiredTimerProvider'
+
 export { SyncContext, useSync, type SyncContextValue } from './SyncContext'
 export { SyncProvider } from './SyncProvider'
 

@@ -58,14 +58,14 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
       renderWithApp(<TimerPage variant="mobile" />)
       await screen.findByRole('button', { name: 'Timer' })
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
 
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
       fireEvent.keyUp(window, { code: 'Space', key: ' ' })
 
       await waitFor(() => {
-        expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+        expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
       })
       const solves = await db.solves.toArray()
       expect(solves.length).toBe(0)
@@ -125,7 +125,7 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
       input.focus()
 
       fireEvent.keyDown(input, { code: 'Space', key: ' ' })
-      expect(timerHint()).toHaveTextContent(/Hold Space or tap and hold to start/i)
+      expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i)
     })
   })
 

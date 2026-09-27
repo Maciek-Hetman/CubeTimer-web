@@ -85,11 +85,12 @@ export function BluetoothTimerProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const active = settings.timingDevice === 'external_timer' && settings.externalTimer !== 'wired'
   useEffect(() => {
-    if (settings.timingDevice !== 'external_timer' && connectionRef.current) {
+    if (!active && connectionRef.current) {
       void disconnect()
     }
-  }, [disconnect, settings.timingDevice])
+  }, [active, disconnect])
 
   useEffect(() => () => void connectionRef.current?.disconnect(), [])
 

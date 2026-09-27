@@ -10,6 +10,15 @@ export type TimingDevice = (typeof TIMING_DEVICES)[number]
 /** Timing devices the user can pick for the timer screen. */
 export type TimerInputDevice = Extract<TimingDevice, 'keyboard' | 'external_timer'>
 
+/** How an `external_timer` is attached: over Bluetooth, or by cable into an audio input. */
+export type ExternalTimerConnection = 'bluetooth' | 'wired'
+
+/** Signal format of a wired timer. Nearly every brand speaks the Stackmat protocol; MoYu timers don't. */
+export type WiredTimerProtocol = 'stackmat' | 'moyu'
+
+/** Which inputs start and stop the keyboard timer. */
+export type TimerControls = 'space' | 'keys' | 'keys_and_pointer'
+
 export function normalizeTimingDevice(value: unknown): TimingDevice {
   if (value === 'keyboard' || value === 'external_timer' || value === 'smart_cube') {
     return value
@@ -130,6 +139,11 @@ export interface AppSettings {
   widgetScale: number
   statsChartScale: StatsChartScale
   timingDevice: TimerInputDevice
+  externalTimer: ExternalTimerConnection
+  wiredTimerProtocol: WiredTimerProtocol
+  /** Audio input the wired timer is plugged into; empty for the system default. */
+  wiredTimerInputId: string
+  timerControls: TimerControls
 }
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
@@ -150,6 +164,10 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   widgetScale: 100,
   statsChartScale: 'all',
   timingDevice: 'keyboard',
+  externalTimer: 'bluetooth',
+  wiredTimerProtocol: 'stackmat',
+  wiredTimerInputId: '',
+  timerControls: 'keys_and_pointer',
 }
 
 export function createId(): string {
