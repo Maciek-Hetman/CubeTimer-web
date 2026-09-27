@@ -1,5 +1,5 @@
 import confetti from 'canvas-confetti'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useBluetoothTimer } from '../../contexts/BluetoothTimerContext'
 import { useWiredTimer } from '../../contexts/WiredTimerContext'
@@ -271,7 +271,9 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
   const [engine] = useState(() => createTimerEngine())
 
-  useEffect(() => {
+  // Input settings apply in the same commit as the hint that describes them. A passive effect
+  // lags the render, so a key pressed in between would be judged by the old controls and delay.
+  useLayoutEffect(() => {
     engine.setHoldDelay?.(settings.timerStartDelayMs)
   }, [engine, settings.timerStartDelayMs])
 
@@ -448,7 +450,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     })
   }, [subscribeToExternalTimer, engine, useExternalTimer])
 
-  useEffect(() => {
+  // A layout effect for the same reason as the hold delay: swap listeners in the hint's commit.
+  useLayoutEffect(() => {
     if (useExternalTimer) {
       return
     }
