@@ -25,7 +25,7 @@ describe('shareSolve', () => {
   it('formats time, event, device and scramble', () => {
     const text = formatSolveShareText(solve)
     expect(text).toContain('3x3 solve: 11.87+')
-    expect(text).toContain('Timed with Bluetooth timer')
+    expect(text).toContain('Timed with external timer')
     expect(text).toContain("Scramble: R U R' U'")
   })
 

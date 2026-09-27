@@ -1,11 +1,12 @@
-// Normalized events emitted by every Bluetooth timer driver.
+// Normalized events emitted by every external (Bluetooth or wired) timer driver.
 export type SmartTimerEvent =
   | { state: 'idle' }
   | { state: 'inspection' }
   | { state: 'hands_on' }
   | { state: 'hands_off' }
   | { state: 'ready' }
-  | { state: 'running' }
+  /** `elapsedMs` is set when the timer reports how long it has already been running. */
+  | { state: 'running'; elapsedMs?: number }
   | { state: 'stopped'; timeMs: number }
   | { state: 'disconnected' }
 

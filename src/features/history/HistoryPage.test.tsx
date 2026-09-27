@@ -166,7 +166,7 @@ describe('HistoryPage', () => {
     const heading = await screen.findByRole('heading', { name: 'Device Session' })
     const group = heading.closest('section') as HTMLElement
     await waitFor(() => {
-      expect(within(group).getByTitle('Timed with a Bluetooth timer')).toBeInTheDocument()
+      expect(within(group).getByTitle('Timed with a Bluetooth or wired timer')).toBeInTheDocument()
       expect(within(group).getByTitle('Timed with keyboard or touch')).toBeInTheDocument()
     })
 
@@ -180,7 +180,7 @@ describe('HistoryPage', () => {
     expect(newest).toHaveTextContent('11.00')
     expect(newest).toHaveTextContent('Keyboard')
     expect(oldest).toHaveTextContent('9.00')
-    expect(oldest).toHaveTextContent('Bluetooth')
+    expect(oldest).toHaveTextContent('Timer')
   })
 
   it('renames a session from history', async () => {

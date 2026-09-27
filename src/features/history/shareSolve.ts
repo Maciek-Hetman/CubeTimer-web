@@ -3,7 +3,7 @@ import { formatSolveTime } from '../../domain/stats/formatTime'
 
 const SHARE_DEVICE_LABELS = {
   keyboard: 'keyboard',
-  external_timer: 'Bluetooth timer',
+  external_timer: 'external timer',
   smart_cube: 'smart cube',
 } as const
 

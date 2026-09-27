@@ -60,7 +60,7 @@ describe('Tier 3: Cross-Feature Interactions E2E Tests', () => {
       }, { timeout: 4000 })
       fireEvent.keyUp(window, { code: 'Space', key: ' ' })
       await waitFor(() => {
-        expect(document.querySelector('.timer-hint')).toHaveTextContent(/Tap or press Space to stop/i)
+        expect(document.querySelector('.timer-hint')).toHaveTextContent(/Tap or press any key to stop/i)
       })
       fireEvent.keyDown(window, { code: 'Space', key: ' ' })
       expect(await screen.findByText(/Saved /i)).toBeInTheDocument()

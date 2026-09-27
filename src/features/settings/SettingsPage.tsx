@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from 'react'
 import { useApp } from '../../app/AppContext'
-import type { AppSettings, TimerDisplayMode, TimerFont } from '../../domain/models'
+import type { AppSettings, ExternalTimerConnection, TimerControls, TimerDisplayMode, TimerFont } from '../../domain/models'
 import { WIDGET_SCALE_MAX, WIDGET_SCALE_MIN, WIDGET_SCALE_PRESETS, WIDGET_SCALE_STEP } from '../../domain/models'
 import { Button } from '../../ui/Button'
 import { Field } from '../../ui/Field'
@@ -9,6 +9,7 @@ import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
 import { ACCENT_COLORS } from '../../styles/accents'
+import { WiredTimerSettings } from './WiredTimerSettings'
 
 interface SettingsSection {
   id: string
@@ -172,8 +173,39 @@ export function SettingsPage() {
 
           <Panel id="timer" className="stack settings-section">
             <h2>Timer</h2>
+            <Field label="Timing device">
+              <Select
+                value={settings.timingDevice === 'external_timer' ? settings.externalTimer : 'keyboard'}
+                onChange={(val) =>
+                  void updateSettings(
+                    val === 'keyboard'
+                      ? { timingDevice: 'keyboard' }
+                      : { timingDevice: 'external_timer', externalTimer: val as ExternalTimerConnection },
+                  )
+                }
+                options={[
+                  { value: 'keyboard', label: 'Keyboard or touch' },
+                  { value: 'bluetooth', label: 'Bluetooth timer' },
+                  { value: 'wired', label: 'Wired timer' },
+                ]}
+              />
+            </Field>
+            {settings.timingDevice === 'external_timer' && settings.externalTimer === 'wired' ? (
+              <WiredTimerSettings />
+            ) : null}
             {settings.timingDevice !== 'external_timer' ? (
               <>
+                <Field label="Start and stop with">
+                  <Select
+                    value={settings.timerControls}
+                    onChange={(val) => void updateSettings({ timerControls: val as TimerControls })}
+                    options={[
+                      { value: 'space', label: 'Spacebar only' },
+                      { value: 'keys', label: 'Any key' },
+                      { value: 'keys_and_pointer', label: 'Any key, touch and mouse' },
+                    ]}
+                  />
+                </Field>
                 <Field label={`Hold delay (${settings.timerStartDelayMs} ms)`}>
                   <input
                     type="range"
