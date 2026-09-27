@@ -118,7 +118,7 @@ describe('TimerPage', () => {
     await waitFor(async () => {
       expect((await db.settings.get(ownerId))).toMatchObject({ timingDevice: 'external_timer', externalTimer: 'wired' })
     })
-    expect(timerHint()).toHaveTextContent(/Connect your wired timer to start/i)
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Connect your wired timer to start/i))
 
     await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
     expect(wiredMock.options).toMatchObject({ protocol: 'stackmat', inputId: '' })
