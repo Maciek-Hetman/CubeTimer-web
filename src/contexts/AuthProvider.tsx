@@ -39,6 +39,17 @@ function isRefreshRejected(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 401 || error.status === 409)
 }
 
+const AUTH_LOCK = 'cubetimer:auth'
+
+/**
+ * Runs `task` under a lock shared by every tab. Refresh tokens are single-use, so reading
+ * the stored token and replacing it must not interleave with another tab doing the same.
+ */
+function withAuthLock<T>(task: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks
+  return locks ? (locks.request(AUTH_LOCK, task) as Promise<T>) : task()
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [ownerId, setOwnerId] = useState('')
@@ -47,7 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const accessTokenRef = useRef<string | null>(null)
   const accessTokenExpiresAtRef = useRef<number>(0)
   const userRef = useRef<User | null>(null)
-  const refreshTokenRef = useRef<string | null>(null)
 
   useEffect(() => {
     accessTokenRef.current = accessToken
@@ -57,28 +67,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     userRef.current = user
   }, [user])
 
-  const persistSession = useCallback(async (session: AuthSession, mergeGuest: boolean) => {
-    refreshTokenRef.current = session.refresh_token
-    await saveAuth(session.refresh_token, session.user)
+  const applyTokens = useCallback((session: AuthSession) => {
     setAccessToken(session.access_token)
     setUser(session.user)
     accessTokenRef.current = session.access_token
     accessTokenExpiresAtRef.current = Date.now() + session.expires_in * 1000
     userRef.current = session.user
-    if (mergeGuest) {
-      const guest = await ensureGuestOwner()
-      if (guest !== session.user.id) {
-        await adoptGuestData(guest, session.user.id)
-      }
-    }
-    await setCurrentOwnerId(session.user.id)
-    await getOrCreateSettings(session.user.id)
-    setOwnerId(session.user.id)
   }, [])
+
+  const activateOwner = useCallback(async (id: string) => {
+    await setCurrentOwnerId(id)
+    await getOrCreateSettings(id)
+    setOwnerId(id)
+  }, [])
+
+  const persistSession = useCallback(
+    async (session: AuthSession, mergeGuest: boolean) => {
+      await withAuthLock(() => saveAuth(session.refresh_token, session.user))
+      applyTokens(session)
+      if (mergeGuest) {
+        const guest = await ensureGuestOwner()
+        if (guest !== session.user.id) {
+          await adoptGuestData(guest, session.user.id)
+        }
+      }
+      await activateOwner(session.user.id)
+    },
+    [activateOwner, applyTokens],
+  )
 
   const transitionToGuest = useCallback(async () => {
     await clearAuth()
-    refreshTokenRef.current = null
     setAccessToken(null)
     setUser(null)
     accessTokenRef.current = null
@@ -91,6 +110,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await getOrCreateSettings(guest)
     setOwnerId(guest)
   }, [])
+
+  // Another tab signed in to a different account; show that one here too, as a reload would.
+  const followStoredAccount = useCallback(
+    async (storedUser: User) => {
+      setAccessToken(null)
+      setUser(storedUser)
+      accessTokenRef.current = null
+      accessTokenExpiresAtRef.current = 0
+      userRef.current = storedUser
+      await activateOwner(storedUser.id)
+    },
+    [activateOwner],
+  )
+
+  const refreshPromiseRef = useRef<Promise<AuthSession> | null>(null)
+
+  const refreshSession = useCallback((): Promise<AuthSession> => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current
+    }
+    const promise = withAuthLock(async () => {
+      // Read the token inside the lock: another tab may have rotated it since this tab's last refresh.
+      const [token, storedUser] = await Promise.all([getStoredRefreshToken(), getStoredUser<User>()])
+      const currentUserId = userRef.current?.id
+      if (!token) {
+        if (currentUserId) {
+          await transitionToGuest()
+        }
+        throw new ApiError(401, 'unauthenticated', 'Not signed in')
+      }
+      if (currentUserId && storedUser && storedUser.id !== currentUserId) {
+        // Never hand this tab's callers a token for another account; they'd write its data there.
+        await followStoredAccount(storedUser)
+        throw new ApiError(401, 'account_changed', 'Signed in to a different account in another tab')
+      }
+      try {
+        const session = await authApi.refresh(token)
+        await saveAuth(session.refresh_token, session.user)
+        applyTokens(session)
+        return session
+      } catch (error) {
+        // Sign out only if the rejected token is still current; if not, it was replaced meanwhile.
+        if (isRefreshRejected(error) && (await getStoredRefreshToken()) === token) {
+          await transitionToGuest()
+        }
+        throw error
+      }
+    }).finally(() => {
+      refreshPromiseRef.current = null
+    })
+    refreshPromiseRef.current = promise
+    return promise
+  }, [applyTokens, followStoredAccount, transitionToGuest])
+
+  const refreshAccessToken = useCallback(
+    async () => (await refreshSession()).access_token,
+    [refreshSession],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -120,18 +197,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await getOrCreateSettings(owner)
 
       if (refreshToken) {
-        refreshTokenRef.current = refreshToken
+        // Shared with StrictMode's second run of this effect, so the token is only spent once.
         try {
-          const session = await authApi.refresh(refreshToken)
+          const session = await refreshSession()
           if (!cancelled) {
-            await persistSession(session, false)
-          } else {
-            void persistSession(session, false)
+            await activateOwner(session.user.id)
           }
-        } catch (error) {
-          if (isRefreshRejected(error)) {
-            await transitionToGuest()
-          }
+        } catch {
+          // Offline keeps the stored account; a rejected token has already switched to guest.
         }
       }
 
@@ -142,41 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [persistSession, transitionToGuest])
-
-  const refreshPromiseRef = useRef<Promise<string> | null>(null)
-
-  const refreshAccessToken = useCallback(async () => {
-    if (refreshPromiseRef.current) {
-      return refreshPromiseRef.current
-    }
-    const promise = (async () => {
-      const token = refreshTokenRef.current ?? (await getStoredRefreshToken())
-      if (!token) {
-        throw new ApiError(401, 'unauthenticated', 'Not signed in')
-      }
-      try {
-        const session = await authApi.refresh(token)
-        refreshTokenRef.current = session.refresh_token
-        await saveAuth(session.refresh_token, session.user)
-        setAccessToken(session.access_token)
-        setUser(session.user)
-        accessTokenRef.current = session.access_token
-        accessTokenExpiresAtRef.current = Date.now() + session.expires_in * 1000
-        userRef.current = session.user
-        return session.access_token
-      } catch (error) {
-        if (isRefreshRejected(error)) {
-          await transitionToGuest()
-        }
-        throw error
-      } finally {
-        refreshPromiseRef.current = null
-      }
-    })()
-    refreshPromiseRef.current = promise
-    return promise
-  }, [transitionToGuest])
+  }, [activateOwner, refreshSession])
 
   const authenticatedRequest = useCallback<AuthenticatedRequest>(
     async <T,>(path: string, options: Omit<RequestOptions, 'accessToken'> = {}): Promise<T> => {
@@ -246,15 +285,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
       }
     }
-    const token = refreshTokenRef.current
-    if (token) {
-      try {
-        await authApi.logout(token)
-      } catch {
-        // ignore
+    await withAuthLock(async () => {
+      // Revoke the stored token: this tab's last one may already have been rotated by another tab.
+      const token = await getStoredRefreshToken()
+      if (token) {
+        try {
+          await authApi.logout(token)
+        } catch {
+          // ignore
+        }
       }
-    }
-    await transitionToGuest()
+      await transitionToGuest()
+    })
   }, [ownerId, enqueueWrites, transitionToGuest])
 
   const requestPasswordReset = useCallback(async (email: string) => {
