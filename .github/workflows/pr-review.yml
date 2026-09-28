@@ -1,0 +1,101 @@
+name: PR Review
+
+# Runs the read-only `reviewer` agent (.claude/agents/reviewer.md) on each PR
+# and posts its findings as a single, updated PR comment.
+#
+# Claude runs in a job that can only read. Posting happens in a separate job
+# that has pull-requests: write and never runs Claude.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip drafts, and fork PRs (secrets aren't available to them).
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      review: ${{ steps.extract.outputs.review }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Run reviewer agent
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Workflow token instead of the Claude GitHub App token, so this job
+          # stays read-only and needs no id-token permission.
+          github_token: ${{ github.token }}
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            Get the diff with `gh pr diff ${{ github.event.pull_request.number }}` (the checkout is shallow, so don't diff against main).
+            The PR's files are checked out in the working directory; read them for context.
+            Reply with only the review in the Critical / Should-fix / Nitpick format. Don't post it anywhere; a later step does that.
+          claude_args: |
+            --agent reviewer
+            --max-turns 20
+            --allowedTools "Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+
+      - name: Extract review text
+        id: extract
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          review="$(jq -r '[.[] | select(.type == "result")] | last | .result // empty' "$EXECUTION_FILE")"
+          if [ -z "$review" ]; then
+            echo "::error::Reviewer produced no result (likely hit --max-turns). See the step log above."
+            exit 1
+          fi
+          delim="REVIEW_$(openssl rand -hex 8)"
+          { echo "review<<$delim"; printf '%s\n' "$review"; echo "$delim"; } >> "$GITHUB_OUTPUT"
+
+  comment:
+    needs: review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post or update review comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW: ${{ needs.review.outputs.review }}
+        run: |
+          set -euo pipefail
+          marker='<!-- claude-pr-review -->'
+          {
+            echo "$marker"
+            echo '## Claude review'
+            echo
+            printf '%s\n' "$REVIEW"
+            echo
+            echo '---'
+            echo "_\`reviewer\` agent on ${{ github.event.pull_request.head.sha }}_"
+          } > review.md
+          # Update this workflow's previous comment (found by marker) instead of stacking new ones.
+          id="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$marker\"))) | .id" | tail -n1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -F body=@review.md >/dev/null
+          else
+            gh pr comment "$PR_NUMBER" --body-file review.md
+          fi

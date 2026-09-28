@@ -1,0 +1,51 @@
+name: Claude
+
+# Responds to @claude in issue comments, PR comments, and PR review comments.
+# The action itself rejects commenters without write access to the repo.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # push commits / branches
+      pull-requests: write # reply on and open PRs
+      issues: write # reply on issues
+      id-token: write # Claude GitHub App token exchange
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      # implementer runs typecheck and lint before finishing.
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # --agent isn't used here: an agent's tools allowlist would drop the
+          # action's own comment/commit tools. The main agent orchestrates the
+          # project subagents instead. browser-verifier (and pipeline, which
+          # calls it) needs a local browser + dev server, so it's denied in CI.
+          claude_args: |
+            --max-turns 30
+            --allowedTools "Read,Edit,Write,Glob,Grep,Agent(implementer),Agent(reviewer),Bash(npm ci),Bash(npm run typecheck),Bash(npm run lint),Bash(npm run test),Bash(npm run build),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+            --disallowedTools "Agent(browser-verifier),Agent(pipeline)"
+            --append-system-prompt "Dependencies were installed from the default branch; if you're on a PR branch whose package-lock.json differs, run npm ci first. This repo defines subagents in .claude/agents/. For requests to build or change UI: run the implementer subagent with the request as the spec, then run the reviewer subagent on the uncommitted changes (git diff HEAD plus untracked files). If reviewer reports Critical or Should-fix findings, send them verbatim back to implementer and review again, at most 3 implementer rounds in total, then report what is still open. browser-verifier is not available in CI; say in your reply that browser verification was not run. For questions, answer directly; for review requests, use the reviewer subagent and don't edit code."
