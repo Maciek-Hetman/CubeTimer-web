@@ -6,9 +6,14 @@ export interface RequestOptions {
   body?: unknown
   accessToken?: string | null
   headers?: Record<string, string>
+  /** Gives up after this long, including reading the body. */
+  timeoutMs?: number
 }
 
 export type AuthenticatedRequest = <T>(path: string, options?: Omit<RequestOptions, 'accessToken'>) => Promise<T>
+
+// Without a limit, one stalled connection leaves sync (and the cross-tab auth lock) waiting forever.
+const DEFAULT_TIMEOUT_MS = 30_000
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
@@ -21,15 +26,26 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (options.accessToken) {
     headers.Authorization = `Bearer ${options.accessToken}`
   }
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  })
-  if (response.status === 204) {
-    return undefined as T
+  const signal = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  let response: Response
+  let text: string
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal,
+    })
+    if (response.status === 204) {
+      return undefined as T
+    }
+    text = await response.text()
+  } catch (error) {
+    if (signal.aborted) {
+      throw new ApiError(0, 'timeout', 'The server took too long to respond')
+    }
+    throw error
   }
-  const text = await response.text()
   let payload: unknown
   if (text) {
     try {
