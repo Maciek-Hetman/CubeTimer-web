@@ -4,6 +4,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '../data/db'
+import { getCursor, lastSyncKey, setCursor } from '../sync/syncEngine'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 import { AuthProvider } from './AuthProvider'
 import { SettingsProvider } from './SettingsProvider'
@@ -128,6 +129,49 @@ describe('SyncContext & SyncProvider', () => {
 
     const remaining = await db.conflicts.get('conflict-1')
     expect(remaining).toBeUndefined()
+  })
+
+  it('re-downloads the server copy when keeping the server side of a conflict without it', async () => {
+    const { result } = renderHook(() => useSync(), {
+      wrapper: authWrapper({ token: 'current-token' }),
+    })
+    await waitFor(() => expect(mocks.runSync).toHaveBeenCalledTimes(1))
+
+    await setCursor('u-1', 42)
+    await db.meta.put({ key: lastSyncKey('u-1'), value: new Date().toISOString() })
+    const local = {
+      id: 'sess-1',
+      ownerId: 'u-1',
+      name: 'Local',
+      event: '3x3' as const,
+      kind: 'manual' as const,
+      startedAt: '2026-01-01T00:00:00Z',
+      endedAt: null,
+      archived: false,
+      updatedAt: '2026-01-01T00:00:00Z',
+      deletedAt: null,
+      version: 1,
+    }
+    await db.conflicts.put({
+      id: 'conflict-2',
+      ownerId: 'u-1',
+      entity: 'session',
+      entityId: 'sess-1',
+      message: 'Version conflict',
+      createdAt: '2026-01-01T00:00:00Z',
+      local,
+      current: { ...local, version: 3 },
+      serverDataMissing: true,
+    })
+
+    await act(async () => {
+      await result.current.resolveConflictKeepServer('conflict-2')
+    })
+
+    expect(await db.conflicts.get('conflict-2')).toBeUndefined()
+    expect(await getCursor('u-1')).toBe(0)
+    // A recent last-sync time would make the follow-up sync skip as too soon.
+    await waitFor(() => expect(mocks.runSync).toHaveBeenCalledTimes(2))
   })
 
   it('dismisses all rejected mutations', async () => {

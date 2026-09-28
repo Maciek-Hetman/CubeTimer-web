@@ -11,7 +11,7 @@ import { db } from '../data/db'
 import { putSession } from '../data/repositories/sessions'
 import { putSolve } from '../data/repositories/solves'
 import type { CubeSession, Solve, SyncStatus } from '../domain/models'
-import { getLastSyncedAt, runSync, withBackoff } from '../sync/syncEngine'
+import { getLastSyncedAt, lastSyncKey, runSync, setCursor, withBackoff } from '../sync/syncEngine'
 import { shouldSkipSync } from '../sync/syncPolicy'
 import {
   getDeviceId,
@@ -98,8 +98,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       ) {
         return
       }
-      // Refreshing on every sync rotates the refresh token and logs out other tabs;
-      // an expired access token is handled by runSync's single retry on 401.
+      // Refreshing on every sync would rotate the refresh token for nothing; an expired
+      // access token is handled by runSync's single retry on 401.
       let accessToken: string
       try {
         accessToken = tokenRef.current ?? (await refreshAccessToken())
@@ -198,9 +198,28 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const resolveConflictKeepServer = useCallback(async (conflictId: string) => {
-    await db.conflicts.delete(conflictId)
-  }, [])
+  const resolveConflictKeepServer = useCallback(
+    async (conflictId: string) => {
+      const conflict = await db.conflicts.get(conflictId)
+      if (!conflict) {
+        return
+      }
+      if (conflict.serverDataMissing) {
+        // The server's copy never arrived, so replay the change log to fetch it. The local row
+        // kept its older version, so the replayed change replaces it. Clearing the last sync
+        // time stops the sync from being skipped as too recent.
+        await db.transaction('rw', db.meta, async () => {
+          await setCursor(conflict.ownerId, 0)
+          await db.meta.delete(lastSyncKey(conflict.ownerId))
+        })
+      }
+      await db.conflicts.delete(conflictId)
+      if (conflict.serverDataMissing) {
+        requestSync()
+      }
+    },
+    [requestSync],
+  )
 
   const resolveConflictKeepLocal = useCallback(
     async (conflictId: string) => {

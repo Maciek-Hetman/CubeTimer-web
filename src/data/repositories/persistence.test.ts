@@ -65,6 +65,33 @@ describe('local persistence', () => {
     expect(outbox[0]?.baseVersion).toBe(0)
   })
 
+  it('adopts a guest history with one mutation per live row', async () => {
+    const session = newSession({ ownerId: 'guest:abc', name: 'Guest', event: '3x3', kind: 'automatic' })
+    await putSession(session, { enqueue: false })
+    const solves = Array.from({ length: 300 }, (_, i) =>
+      newSolve({
+        ownerId: 'guest:abc',
+        sessionId: session.id,
+        durationMs: 10_000 + i,
+        penalty: 'none',
+        scramble: 'R U',
+        event: '3x3',
+      }),
+    )
+    solves[0] = { ...solves[0], deletedAt: '2026-01-01T00:00:00.000Z' }
+    await db.solves.bulkPut(solves)
+
+    const adopted = await adoptGuestData('guest:abc', 'account-1')
+
+    expect(adopted).toEqual({ sessions: 1, solves: 300 })
+    expect(await db.solves.where('ownerId').equals('guest:abc').count()).toBe(0)
+    const outbox = await db.outbox.where('ownerId').equals('account-1').toArray()
+    // The tombstoned solve moves to the account but is never uploaded.
+    expect(outbox).toHaveLength(1 + 299)
+    expect(new Set(outbox.map((record) => record.entityId)).size).toBe(outbox.length)
+    expect(outbox.some((record) => record.entityId === solves[0].id)).toBe(false)
+  })
+
   it('keeps existing account settings when adopting guest data', async () => {
     await db.settings.put({ ownerId: 'account-1', ...DEFAULT_SETTINGS, event: '2x2', theme: 'dark' })
     await db.settings.put({ ownerId: 'guest:abc', ...DEFAULT_SETTINGS })

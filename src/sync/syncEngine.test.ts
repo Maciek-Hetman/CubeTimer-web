@@ -180,9 +180,181 @@ describe('syncEngine', () => {
 
       const result = await runSync(options)
       expect(result.conflicts).toBe(1)
+      // Only the version is known, so the local row keeps its own version; stamping 3 onto
+      // local data would stop the server's copy from ever replacing it.
       const stored = await db.sessions.get(session.id)
-      expect(stored?.version).toBe(3)
+      expect(stored?.version).toBe(1)
       expect(stored?.name).toBe('Existing Session')
+      const conflict = await db.conflicts.get(mutation.id)
+      expect(conflict?.serverDataMissing).toBe(true)
+      expect(conflict?.current.version).toBe(3)
+    })
+
+    const sessionData = (session: { id: string; startedAt: string }, name: string, version: number) => ({
+      id: session.id,
+      name,
+      event: '3x3',
+      kind: 'manual',
+      started_at: session.startedAt,
+      ended_at: null,
+      archived: false,
+      version,
+      updated_at: nowIso(),
+      deleted_at: null,
+    })
+
+    it('takes the server copy for a ConflictStub from changes in the same response', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Local Name', event: '3x3', kind: 'manual' })
+      session.version = 1
+      await putSession(session, { enqueue: true, baseVersion: 1 })
+      const mutation = (await listOutbox('account-1'))[0]
+
+      mockedSync.mockResolvedValueOnce({
+        outcomes: [
+          {
+            mutation_id: mutation.id,
+            status: 'conflict',
+            version: 3,
+            current: { id: session.id, version: 3, updated_at: nowIso() },
+          },
+        ],
+        changes: [
+          {
+            cursor: 9,
+            entity: 'session',
+            entity_id: session.id,
+            operation: 'upsert',
+            version: 3,
+            data: sessionData(session, 'Server Name', 3),
+            changed_at: nowIso(),
+          },
+        ],
+        next_cursor: 9,
+        has_more: false,
+      } satisfies SyncResponse)
+
+      await runSync(options)
+
+      const stored = await db.sessions.get(session.id)
+      expect(stored?.name).toBe('Server Name')
+      expect(stored?.version).toBe(3)
+      const conflict = await db.conflicts.get(mutation.id)
+      expect(conflict?.serverDataMissing).toBeUndefined()
+      expect((conflict?.current as { name: string } | undefined)?.name).toBe('Server Name')
+      expect((conflict?.local as { name: string } | undefined)?.name).toBe('Local Name')
+    })
+
+    it('takes the server copy for a ConflictStub from a change that arrived while the edit was queued', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Local Name', event: '3x3', kind: 'manual' })
+      session.version = 1
+      await putSession(session, { enqueue: true, baseVersion: 1 })
+
+      // An earlier response carries the remote edit while the local one is still queued.
+      await applySyncResponse(
+        'account-1',
+        [],
+        [],
+        [
+          {
+            cursor: 4,
+            entity: 'session',
+            entity_id: session.id,
+            operation: 'upsert',
+            version: 2,
+            data: sessionData(session, 'Server Name', 2),
+            changed_at: nowIso(),
+          },
+        ],
+        4,
+      )
+      expect((await db.sessions.get(session.id))?.name).toBe('Local Name')
+      const [queued] = await listOutbox('account-1')
+      expect(queued.remote?.version).toBe(2)
+
+      mockedSync.mockResolvedValueOnce({
+        outcomes: [
+          {
+            mutation_id: queued.id,
+            status: 'conflict',
+            version: 2,
+            current: { id: session.id, version: 2, updated_at: nowIso() },
+          },
+        ],
+        changes: [],
+        next_cursor: 5,
+        has_more: false,
+      } satisfies SyncResponse)
+
+      await runSync(options)
+
+      const stored = await db.sessions.get(session.id)
+      expect(stored?.name).toBe('Server Name')
+      expect(stored?.version).toBe(2)
+      expect((await db.conflicts.get(queued.id))?.serverDataMissing).toBeUndefined()
+    })
+
+    it('does not use a kept server copy older than the conflict version', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Local Name', event: '3x3', kind: 'manual' })
+      session.version = 1
+      await putSession(session, { enqueue: true, baseVersion: 1 })
+      await applySyncResponse(
+        'account-1',
+        [],
+        [],
+        [
+          {
+            cursor: 4,
+            entity: 'session',
+            entity_id: session.id,
+            operation: 'upsert',
+            version: 2,
+            data: sessionData(session, 'Stale Server Name', 2),
+            changed_at: nowIso(),
+          },
+        ],
+        4,
+      )
+      const [queued] = await listOutbox('account-1')
+
+      mockedSync.mockResolvedValueOnce({
+        outcomes: [
+          { mutation_id: queued.id, status: 'conflict', current: { id: session.id, version: 5, updated_at: nowIso() } },
+        ],
+        changes: [],
+        next_cursor: 5,
+        has_more: false,
+      } satisfies SyncResponse)
+
+      await runSync(options)
+
+      const stored = await db.sessions.get(session.id)
+      expect(stored?.name).toBe('Local Name')
+      expect(stored?.version).toBe(1)
+      expect((await db.conflicts.get(queued.id))?.serverDataMissing).toBe(true)
+    })
+
+    it('tombstones the local row when a conflict reports a DeleteStub', async () => {
+      const session = newSession({ ownerId: 'account-1', name: 'Local Name', event: '3x3', kind: 'manual' })
+      session.version = 1
+      await putSession(session, { enqueue: true, baseVersion: 1 })
+      const mutation = (await listOutbox('account-1'))[0]
+      const deletedAt = nowIso()
+
+      mockedSync.mockResolvedValueOnce({
+        outcomes: [
+          { mutation_id: mutation.id, status: 'conflict', current: { id: session.id, version: 4, deleted_at: deletedAt } },
+        ],
+        changes: [],
+        next_cursor: 5,
+        has_more: false,
+      } satisfies SyncResponse)
+
+      await runSync(options)
+
+      const stored = await db.sessions.get(session.id)
+      expect(stored?.deletedAt).toBe(deletedAt)
+      expect(stored?.version).toBe(4)
+      expect((await db.conflicts.get(mutation.id))?.serverDataMissing).toBeUndefined()
     })
 
     it('records a conflict without current using the outcome version and the local entity', async () => {
@@ -738,6 +910,36 @@ describe('syncEngine', () => {
 
       expect((await db.solves.get(pending.id))?.durationMs).toBe(1000)
       expect((await db.solves.get(newer.id))?.durationMs).toBe(2000)
+      // The skipped server copy is kept on the queued row in case the edit conflicts.
+      const [queued] = await listOutbox('account-1')
+      expect(queued.remote?.version).toBe(9)
+      expect(queued.remote?.data.duration_ms).toBe(5555)
+    })
+
+    it('applies a change for an entity whose queued mutation was resolved in the same response', async () => {
+      const solve = newSolve({
+        ownerId: 'account-1',
+        sessionId: null,
+        durationMs: 1000,
+        penalty: 'none',
+        scramble: 'R',
+        event: '3x3',
+      })
+      await putSolve(solve, { enqueue: true, baseVersion: 0 })
+      const [sent] = await listOutbox('account-1')
+
+      await applySyncResponse(
+        'account-1',
+        [sent],
+        [{ mutation_id: sent.id, status: 'rejected', code: 'invalid' }],
+        [solveChange(solve.id, 2, 7777)],
+        2,
+      )
+
+      expect(await db.outbox.count()).toBe(0)
+      const stored = await db.solves.get(solve.id)
+      expect(stored?.durationMs).toBe(7777)
+      expect(stored?.version).toBe(2)
     })
   })
 

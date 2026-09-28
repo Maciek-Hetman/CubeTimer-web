@@ -29,10 +29,14 @@ export function login(email: string, password: string) {
   })
 }
 
+// Refresh runs while the cross-tab auth lock is held, so it gives up sooner than the default.
+const AUTH_LOCKED_TIMEOUT_MS = 10_000
+
 export function refresh(refreshToken: string) {
   return apiRequest<AuthSession>('/v1/auth/refresh', {
     method: 'POST',
     body: { refresh_token: refreshToken },
+    timeoutMs: AUTH_LOCKED_TIMEOUT_MS,
   })
 }
 
@@ -40,6 +44,7 @@ export function logout(refreshToken: string) {
   return apiRequest<void>('/v1/auth/logout', {
     method: 'POST',
     body: { refresh_token: refreshToken },
+    timeoutMs: AUTH_LOCKED_TIMEOUT_MS,
   })
 }
 
