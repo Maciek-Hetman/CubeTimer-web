@@ -27,6 +27,11 @@ export interface ConflictRecord {
   current: CubeSession | Solve
   local: CubeSession | Solve
   createdAt: string
+  /**
+   * The server only sent its version number. `current` then holds local data at that version,
+   * and the server's copy has to be downloaded again to keep it.
+   */
+  serverDataMissing?: boolean
 }
 
 export interface RejectedRecord {

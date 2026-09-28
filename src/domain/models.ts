@@ -97,6 +97,19 @@ export interface MutationRecord {
   baseVersion: number
   data?: SessionInput | SolveInput
   createdAt: string
+  /**
+   * Newest server copy of the entity that arrived while this mutation was queued. It isn't
+   * applied over the local edit, but it's the server side if the mutation comes back as a conflict.
+   */
+  remote?: RemoteEntityState
+}
+
+/** An entity as the server last reported it, in API field names. */
+export interface RemoteEntityState {
+  version: number
+  data: Record<string, unknown>
+  deleted: boolean
+  changedAt?: string
 }
 
 export interface SessionInput {
