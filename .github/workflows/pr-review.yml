@@ -5,6 +5,11 @@ name: PR Review
 #
 # Claude runs in a job that can only read. Posting happens in a separate job
 # that has pull-requests: write and never runs Claude.
+#
+# Trust model: fork PRs are skipped, so every reviewed PR was pushed by someone
+# with write access. That's why the PR's own reviewer.md and CLAUDE.md are used
+# as-is and the review is posted unsanitised: an author who could steer them
+# could already edit this workflow or comment directly.
 
 on:
   pull_request:
