@@ -41,7 +41,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     }
     text = await response.text()
   } catch (error) {
-    if (signal.aborted) {
+    if (signal.aborted && (signal.reason as Error | undefined)?.name === 'TimeoutError') {
       throw new ApiError(0, 'timeout', 'The server took too long to respond')
     }
     throw error

@@ -130,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current
     }
-    const promise = withAuthLock(async () => {
+    const promise: Promise<AuthSession> = withAuthLock(async () => {
       // Read the token inside the lock: another tab may have rotated it since this tab's last refresh.
       const [token, storedUser] = await Promise.all([getStoredRefreshToken(), getStoredUser<User>()])
       const currentUserId = userRef.current?.id
@@ -158,7 +158,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error
       }
     }).finally(() => {
-      refreshPromiseRef.current = null
+      if (refreshPromiseRef.current === promise) {
+        refreshPromiseRef.current = null
+      }
     })
     refreshPromiseRef.current = promise
     return promise
@@ -285,18 +287,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
       }
     }
-    await withAuthLock(async () => {
-      // Revoke the stored token: this tab's last one may already have been rotated by another tab.
-      const token = await getStoredRefreshToken()
-      if (token) {
-        try {
-          await authApi.logout(token)
-        } catch {
-          // ignore
-        }
-      }
+    // Revoke the stored token: this tab's last one may already have been rotated by another tab.
+    // Only the local sign-out holds the lock; the best-effort revoke must not block other tabs.
+    const token = await withAuthLock(async () => {
+      const stored = await getStoredRefreshToken()
       await transitionToGuest()
+      return stored
     })
+    if (token) {
+      try {
+        await authApi.logout(token)
+      } catch {
+        // ignore
+      }
+    }
   }, [ownerId, enqueueWrites, transitionToGuest])
 
   const requestPasswordReset = useCallback(async (email: string) => {
