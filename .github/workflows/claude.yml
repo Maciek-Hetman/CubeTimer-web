@@ -1,0 +1,68 @@
+name: Claude
+
+# Responds to @claude in issue and PR conversation comments, and in inline PR
+# review comments. The action itself rejects commenters without write access.
+#
+# This job holds a write token and the Claude token, and Claude runs npm
+# scripts from the PR branch. So it refuses PRs from forks: only same-repo
+# branches, which already require write access to push, get their code run here.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # push commits / branches
+      pull-requests: write # reply on and open PRs
+      issues: write # reply on issues
+      id-token: write # Claude GitHub App token exchange
+    steps:
+      - name: Refuse fork PRs
+        if: github.event.issue.pull_request || github.event.pull_request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.repo.full_name')"
+          if [ "$head" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::PR #$PR_NUMBER comes from ${head:-a deleted fork}. @claude only runs on same-repo branches."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      # implementer runs typecheck and lint before finishing.
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # --agent isn't used here: an agent's tools allowlist would drop the
+          # action's own comment/commit tools. The main agent orchestrates the
+          # project subagents instead. browser-verifier (and pipeline, which
+          # calls it) needs a local browser + dev server, so it's denied in CI.
+          claude_args: |
+            --max-turns 30
+            --allowedTools "Read,Edit,Write,Glob,Grep,Agent(implementer),Agent(reviewer),Bash(npm ci),Bash(npm run typecheck),Bash(npm run lint),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+            --disallowedTools "Agent(browser-verifier),Agent(pipeline)"
+            --append-system-prompt "Dependencies were installed from the default branch; if you're on a PR branch whose package-lock.json differs, run npm ci first. This repo defines subagents in .claude/agents/. For requests to build or change UI: run the implementer subagent with the request as the spec, then run the reviewer subagent on the uncommitted changes (git diff HEAD plus untracked files). If reviewer reports Critical or Should-fix findings, send them verbatim back to implementer and review again, at most 3 implementer rounds in total, then report what is still open. browser-verifier is not available in CI; say in your reply that browser verification was not run. For questions, answer directly; for review requests, use the reviewer subagent and don't edit code."
