@@ -8,7 +8,7 @@ import { Select } from '../../ui/Select'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
-import { readUiScale, scalePx } from '../../ui/useUiScale'
+import { scalePx, useUiScale } from '../../ui/useUiScale'
 import { ACCENT_COLORS } from '../../styles/accents'
 import { WiredTimerSettings } from './WiredTimerSettings'
 
@@ -75,6 +75,7 @@ function getInitialSection(): string {
 export function SettingsPage() {
   const { settings, updateSettings } = useApp()
   const [activeSection, setActiveSection] = useState<string>(getInitialSection)
+  const uiScale = useUiScale()
 
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, '')
@@ -86,7 +87,10 @@ export function SettingsPage() {
         })
       }
     }
+  }, [])
 
+  // Recreated when the UI scale changes so the sticky-header offset stays in step with it.
+  useEffect(() => {
     const sectionElements = SETTINGS_SECTIONS.map((s) => document.getElementById(s.id)).filter(
       (el): el is HTMLElement => el !== null,
     )
@@ -107,8 +111,7 @@ export function SettingsPage() {
           }
         },
         {
-          // Offset for the sticky header, which scales with the root font size.
-          rootMargin: `-${scalePx(70, readUiScale())}px 0px -50% 0px`,
+          rootMargin: `-${scalePx(70, uiScale)}px 0px -50% 0px`,
           threshold: [0, 0.2, 0.5, 1],
         },
       )
@@ -119,7 +122,7 @@ export function SettingsPage() {
         observer.disconnect()
       }
     }
-  }, [])
+  }, [uiScale])
 
   const handleShortcutClick = useCallback((event: MouseEvent<HTMLAnchorElement>, id: string) => {
     event.preventDefault()
