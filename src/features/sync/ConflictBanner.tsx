@@ -18,7 +18,7 @@ export function ConflictBanner() {
   return (
     <Alert tone="warning">
       <strong>Sync conflict{conflicts.length > 1 ? ` · ${conflicts.length} remaining` : ''}</strong>
-      <p className="muted" style={{ margin: '6px 0 10px' }}>
+      <p className="muted" style={{ margin: '0.375rem 0 0.625rem' }}>
         {conflict.message}
       </p>
       <div className="row wrap">

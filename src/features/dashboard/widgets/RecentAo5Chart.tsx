@@ -40,7 +40,7 @@ export function RecentAo5Chart() {
   }
 
   return (
-    <div style={{ width: '100%', height: 180 }}>
+    <div style={{ width: '100%', height: '11.25rem' }}>
       <ResponsiveContainer>
         <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 8, left: 0 }}>
           <defs>

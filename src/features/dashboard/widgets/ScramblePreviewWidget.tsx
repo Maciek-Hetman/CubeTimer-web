@@ -17,11 +17,11 @@ export function ScramblePreviewWidget() {
   const { settings } = useSettings()
 
   if (!scramble) {
-    return <div className="muted" style={{ textAlign: 'center', padding: '16px' }}>Generating scramble…</div>
+    return <div className="muted" style={{ textAlign: 'center', padding: 'var(--space-4)' }}>Generating scramble…</div>
   }
 
   return (
-    <div style={{ width: '100%', height: '250px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+    <div style={{ width: '100%', height: '15.625rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <twisty-player
         puzzle={PUZZLE_IDS[settings.event] || '3x3x3'}
         experimental-setup-alg={scramble}

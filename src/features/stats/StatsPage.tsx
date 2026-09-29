@@ -11,6 +11,7 @@ import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { StatGrid } from '../../ui/StatGrid'
+import { scalePx, useUiScale } from '../../ui/useUiScale'
 
 const CHART_SERIES = [
   { key: 'time', label: 'Time', color: 'var(--accent)', strokeWidth: 1 },
@@ -25,7 +26,7 @@ function DeltaBadge({ delta }: { delta: number | null }) {
   const sign = isImprovement ? '-' : '+'
   const absDelta = Math.abs(delta)
   return (
-    <span style={{ color, fontSize: '0.85em', marginLeft: 8, fontWeight: 600 }}>
+    <span style={{ color, fontSize: '0.85em', marginLeft: 'var(--space-2)', fontWeight: 600 }}>
       {sign}{formatAverage(absDelta)}
     </span>
   )
@@ -33,6 +34,7 @@ function DeltaBadge({ delta }: { delta: number | null }) {
 
 export function StatsPage() {
   const { solveStats, sessions, settings, updateSettings, currentSession, ownerId } = useApp()
+  const uiScale = useUiScale()
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({})
 
   const chartScale: StatsChartScale = settings.statsChartScale ?? 'all'
@@ -115,32 +117,32 @@ export function StatsPage() {
         />
       ) : (
         <>
-          <div className="row wrap" style={{ gap: '16px' }}>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
+          <div className="row wrap" style={{ gap: 'var(--space-4)' }}>
+            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Time</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.best)}
               </div>
             </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
+            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao5</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo5)}
               </div>
             </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
+            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao12</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo12)}
               </div>
             </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
+            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao50</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo50)}
               </div>
             </Panel>
-            <Panel style={{ flex: 1, minWidth: '150px' }}>
+            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
               <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao100</div>
               <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
                 {formatAverage(solveStats.bestAo100)}
@@ -166,7 +168,7 @@ export function StatsPage() {
                 ))}
               </div>
             </div>
-            <div style={{ width: '100%', height: 250 }}>
+            <div style={{ width: '100%', height: '15.625rem' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData ?? []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   {CHART_SERIES.map(
@@ -187,12 +189,12 @@ export function StatsPage() {
                   <XAxis
                     dataKey="index"
                     stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                    tick={{ fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }}
                   />
                   <YAxis
                     stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                    width={40}
+                    tick={{ fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }}
+                    width={scalePx(40, uiScale)}
                   />
                   <Tooltip
                     contentStyle={{
@@ -226,9 +228,9 @@ export function StatsPage() {
                       aria-hidden="true"
                       style={{
                         display: 'inline-block',
-                        width: 10,
-                        height: 10,
-                        marginRight: 6,
+                        width: '0.625rem',
+                        height: '0.625rem',
+                        marginRight: '0.375rem',
                         borderRadius: '50%',
                         backgroundColor: series.color,
                         opacity: hidden ? 0.35 : 1,
@@ -242,7 +244,7 @@ export function StatsPage() {
           </Panel>
 
           <div className="row wrap" style={{ gap: 'var(--space-4)', alignItems: 'flex-start' }}>
-            <Panel className="stack" style={{ flex: 1, minWidth: '250px' }}>
+            <Panel className="stack" style={{ flex: 1, minWidth: '15.625rem' }}>
               <h2>All-time</h2>
               <StatGrid
                 items={[
@@ -259,7 +261,7 @@ export function StatsPage() {
               />
             </Panel>
 
-            <Panel className="stack" style={{ flex: 1, minWidth: '250px' }}>
+            <Panel className="stack" style={{ flex: 1, minWidth: '15.625rem' }}>
               <h2>Current session</h2>
               <StatGrid
                 items={[

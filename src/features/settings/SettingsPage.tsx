@@ -8,6 +8,7 @@ import { Select } from '../../ui/Select'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { Switch } from '../../ui/Switch'
+import { readUiScale, scalePx } from '../../ui/useUiScale'
 import { ACCENT_COLORS } from '../../styles/accents'
 import { WiredTimerSettings } from './WiredTimerSettings'
 
@@ -44,7 +45,7 @@ function SwatchGrid({
   onSelect: (id: string) => void
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(6.875rem, 1fr))', gap: 'var(--space-2)' }}>
       {options.map((option) => (
         <Button
           key={option.id}
@@ -53,7 +54,7 @@ function SwatchGrid({
           onClick={() => onSelect(option.id)}
           style={{ width: '100%', justifyContent: 'flex-start' }}
         >
-          <div style={{ width: 16, height: 16, borderRadius: 4, background: option.swatch, boxShadow: 'var(--shadow-sm)', flexShrink: 0 }} />
+          <div style={{ width: '1rem', height: '1rem', borderRadius: '0.25rem', background: option.swatch, boxShadow: 'var(--shadow-sm)', flexShrink: 0 }} />
           {option.label}
         </Button>
       ))}
@@ -106,7 +107,8 @@ export function SettingsPage() {
           }
         },
         {
-          rootMargin: '-70px 0px -50% 0px',
+          // Offset for the sticky header, which scales with the root font size.
+          rootMargin: `-${scalePx(70, readUiScale())}px 0px -50% 0px`,
           threshold: [0, 0.2, 0.5, 1],
         },
       )

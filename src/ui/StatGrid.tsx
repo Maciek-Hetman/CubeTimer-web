@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useUiScale } from './useUiScale'
 
 const MAX_PX = 30
 const MIN_PX = 11
@@ -35,7 +36,10 @@ export function StatGrid({
 
 function LargeValues({ items }: { items: Array<[string, ReactNode]> }) {
   const refs = useRef<Array<HTMLSpanElement | null>>([])
-  const [size, setSize] = useState(MAX_PX)
+  const uiScale = useUiScale()
+  const maxPx = MAX_PX * uiScale
+  const minPx = MIN_PX * uiScale
+  const [size, setSize] = useState(maxPx)
 
   useLayoutEffect(() => {
     let disposed = false
@@ -47,15 +51,15 @@ function LargeValues({ items }: { items: Array<[string, ReactNode]> }) {
       let maxScroll = 0
       let minClient = Infinity
       for (const el of els) {
-        el.style.fontSize = `${MAX_PX}px`
+        el.style.fontSize = `${maxPx}px`
         maxScroll = Math.max(maxScroll, el.scrollWidth)
         const parent = el.parentElement
         if (parent) minClient = Math.min(minClient, parent.clientWidth)
       }
       const px =
         maxScroll <= minClient
-          ? MAX_PX
-          : Math.min(MAX_PX, Math.max(MIN_PX, (MAX_PX * minClient) / maxScroll))
+          ? maxPx
+          : Math.min(maxPx, Math.max(minPx, (maxPx * minClient) / maxScroll))
       for (const el of els) {
         el.style.fontSize = `${px}px`
       }
@@ -91,7 +95,7 @@ function LargeValues({ items }: { items: Array<[string, ReactNode]> }) {
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [items])
+  }, [items, maxPx, minPx])
 
   return (
     <>
