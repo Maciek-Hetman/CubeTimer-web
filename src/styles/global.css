@@ -817,7 +817,8 @@ input[type='range']::-moz-range-thumb {
   align-items: stretch;
 }
 
-/* Wide enough for one row: equal side columns keep the scramble centered. */
+/* Wide enough for one row: equal side columns keep the scramble centered.
+   rem here is the (scaled) root font size, unlike in @media, so the breakpoint scales with the toolbar. */
 @container (min-width: 62.5rem) {
   .timer-toolbar {
     grid-template-columns: var(--toolbar-side-width) minmax(0, 1fr) var(--toolbar-side-width);

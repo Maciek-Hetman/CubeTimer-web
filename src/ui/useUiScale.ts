@@ -7,28 +7,48 @@ function readUiScale(): number {
   return Number.isFinite(px) && px > 0 ? px / BASE_PX : 1
 }
 
-// Cached so getSnapshot doesn't force a style recalc on every render. Only refreshed on
-// resize: a change to the browser's default font size isn't picked up until the next one.
+// Cached so getSnapshot doesn't force a style recalc on every render.
 let cached: number | null = null
 const listeners = new Set<() => void>()
+let probe: HTMLElement | null = null
+let probeObserver: ResizeObserver | null = null
 
-function onResize() {
+function refresh() {
   const next = readUiScale()
   if (next === cached) return
   cached = next
   listeners.forEach((listener) => listener())
 }
 
+// A hidden 1rem box resizes whenever the root font size changes, whatever the cause:
+// viewport resize, browser zoom, or a new default font size in the browser settings.
+function startWatching() {
+  window.addEventListener('resize', refresh)
+  if (typeof ResizeObserver === 'undefined') return
+  probe = document.createElement('div')
+  probe.setAttribute('aria-hidden', 'true')
+  probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;width:1rem;height:0;overflow:hidden'
+  document.body.append(probe)
+  probeObserver = new ResizeObserver(refresh)
+  probeObserver.observe(probe)
+}
+
+function stopWatching() {
+  window.removeEventListener('resize', refresh)
+  probeObserver?.disconnect()
+  probe?.remove()
+  probeObserver = null
+  probe = null
+  // Nobody is watching any more, so the cache can go stale.
+  cached = null
+}
+
 function subscribe(listener: () => void) {
-  if (listeners.size === 0) window.addEventListener('resize', onResize)
+  if (listeners.size === 0) startWatching()
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
-    if (listeners.size === 0) {
-      window.removeEventListener('resize', onResize)
-      // Nobody is listening for resizes any more, so the cache can go stale.
-      cached = null
-    }
+    if (listeners.size === 0) stopWatching()
   }
 }
 
