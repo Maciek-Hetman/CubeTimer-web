@@ -943,9 +943,9 @@ input[type='range']::-moz-range-thumb {
 .widget-column {
   min-width: 0;
   min-height: 240px;
-  transition: opacity 0.2s var(--ease), visibility 0.2s var(--ease);
 }
 
+.widget-column,
 .focus-hide {
   transition: opacity 0.2s var(--ease), visibility 0.2s var(--ease);
 }

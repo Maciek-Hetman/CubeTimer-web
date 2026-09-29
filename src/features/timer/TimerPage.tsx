@@ -502,6 +502,9 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   // On the body so the dashboard's widget columns, outside this page, fade out too.
   useEffect(() => {
     document.body.classList.toggle('focus-mode', isFocused)
+    // Don't strand focus on a control that is about to become visibility:hidden.
+    const active = document.activeElement
+    if (isFocused && active instanceof HTMLElement && active.closest('.focus-hide, .widget-column')) active.blur()
     return () => document.body.classList.remove('focus-mode')
   }, [isFocused])
 

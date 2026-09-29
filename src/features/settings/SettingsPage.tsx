@@ -249,7 +249,7 @@ export function SettingsPage() {
             />
             <Switch
               label="Focus mode"
-              description="Hide the scramble, toolbar, stats and widgets while solving"
+              description="Hide the scramble, event and timing-device pickers, stats and widgets while solving"
               checked={settings.focusMode}
               onChange={(checked) => void updateSettings({ focusMode: checked })}
             />
