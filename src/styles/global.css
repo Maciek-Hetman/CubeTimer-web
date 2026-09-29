@@ -130,6 +130,7 @@ h2 {
 
 .header-nav a,
 .header-nav button.nav-link {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -142,7 +143,7 @@ h2 {
   color: var(--text-muted);
   text-decoration: none;
   font-weight: 600;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   transition: color var(--duration) var(--ease), background-color var(--duration) var(--ease);
 }
 
@@ -170,7 +171,18 @@ h2 {
 
 .app-header .btn.compact,
 .app-header .btn.icon {
+  position: relative;
   min-height: 2rem;
+}
+
+/* Keep a 2.5rem hit area around the 2rem header controls. */
+.header-nav a::after,
+.header-nav button.nav-link::after,
+.app-header .btn.compact::after,
+.app-header .btn.icon::after {
+  content: '';
+  position: absolute;
+  inset: -0.25rem 0;
 }
 
 .app-header .btn.icon {
@@ -1036,7 +1048,7 @@ input[type='range']::-moz-range-thumb {
 }
 
 .stat-grid-large .stat-card .value {
-  font-size: 1.3rem;
+  font-size: var(--text-xl);
 }
 
 .widget-grid-item .stat-card .value {
