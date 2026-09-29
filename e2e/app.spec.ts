@@ -365,19 +365,32 @@ test('shows admin metrics for an admin account', async ({ page }) => {
       },
     })
   })
-  await page.route('**/v1/admin/stats/errors**', async (route) => {
+  await page.route('**/v1/admin/stats/request-types**', async (route) => {
     await route.fulfill({
       json: {
         from: '2026-08-18T00:00:00.000Z',
         to: '2026-08-25T00:00:00.000Z',
         interval: 'day',
-        points: [
+        types: [
+          { type: 'sync', request_count: 6 },
+          { type: 'auth', request_count: 4 },
+        ],
+      },
+    })
+  })
+  await page.route('**/v1/admin/stats/errors**', async (route) => {
+    await route.fulfill({
+      json: {
+        errors: [
           {
-            bucket: '2026-08-24T00:00:00.000Z',
+            id: 1,
+            created_at: '2026-08-24T12:00:00.000Z',
+            user_id: null,
             method: 'POST',
             route: '/v1/sync',
-            status_code: 409,
-            request_count: 4,
+            status: 409,
+            code: 'conflict',
+            message: 'Version conflict',
           },
         ],
       },
@@ -393,7 +406,7 @@ test('shows admin metrics for an admin account', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible()
   await expect(page.locator('.stat-card').filter({ hasText: 'Users' }).locator('.value')).toHaveText('12')
   await page.getByRole('link', { name: 'Errors', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Errors by route' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Error Logs' })).toBeVisible()
   await expect(page.getByText('/v1/sync')).toBeVisible()
 })
 
