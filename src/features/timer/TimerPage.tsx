@@ -497,16 +497,13 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const ao12 = useMemo(() => solveStats.ao12, [solveStats])
   const recent = recentSolves.slice(0, 5)
   const showHints = settings.showTimerHints ?? true
-  const hideScramble = settings.hideScrambleDuringSolve && isSolvingOrPreparing
+  const isFocused = settings.focusMode && isSolvingOrPreparing
 
+  // On the body so the dashboard's widget columns, outside this page, fade out too.
   useEffect(() => {
-    if (settings.hideWidgetsDuringSolve && isSolvingOrPreparing) {
-      document.body.classList.add('hide-widgets')
-    } else {
-      document.body.classList.remove('hide-widgets')
-    }
-    return () => document.body.classList.remove('hide-widgets')
-  }, [settings.hideWidgetsDuringSolve, isSolvingOrPreparing])
+    document.body.classList.toggle('focus-mode', isFocused)
+    return () => document.body.classList.remove('focus-mode')
+  }, [isFocused])
 
   const colorClass =
     snapshot.phase === 'holding'
@@ -587,7 +584,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         {liveMessage}
       </div>
 
-      <div className="timer-toolbar-wrap">
+      <div className="timer-toolbar-wrap focus-hide">
         <div className="timer-toolbar">
           <div className="row timer-toolbar-controls">
             <Select
@@ -620,7 +617,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
             />
           </div>
           <span className="scramble">
-            {hideScramble ? null : scrambleState === 'loading' ? (
+            {scrambleState === 'loading' ? (
               <span className="muted">Generating scramble…</span>
             ) : scrambleState === 'error' ? (
               <span role="alert">Could not generate scramble</span>
@@ -628,18 +625,16 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
               scramble
             )}
           </span>
-          {!hideScramble ? (
-            <Button
-              type="button"
-              className="icon timer-toolbar-refresh"
-              disabled={isSolvingOrPreparing}
-              aria-label={scrambleState === 'error' ? 'Retry' : 'New scramble'}
-              title={scrambleState === 'error' ? 'Retry' : 'New scramble'}
-              onClick={() => void loadScramble()}
-            >
-              <RefreshIcon />
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            className="icon timer-toolbar-refresh"
+            disabled={isSolvingOrPreparing}
+            aria-label={scrambleState === 'error' ? 'Retry' : 'New scramble'}
+            title={scrambleState === 'error' ? 'Retry' : 'New scramble'}
+            onClick={() => void loadScramble()}
+          >
+            <RefreshIcon />
+          </Button>
         </div>
       </div>
 
@@ -667,14 +662,14 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       />
 
       {variant !== 'desktop' ? (
-        <Panel muted className="row wrap" style={{ justifyContent: 'space-around' }}>
+        <Panel muted className="row wrap focus-hide" style={{ justifyContent: 'space-around' }}>
           <span>Ao5 {formatAverage(ao5)}</span>
           <span>Ao12 {formatAverage(ao12)}</span>
         </Panel>
       ) : null}
 
       {variant !== 'desktop' ? (
-        <div className="row wrap" style={{ justifyContent: 'center' }}>
+        <div className="row wrap focus-hide" style={{ justifyContent: 'center' }}>
           {recent.map((solve) => (
             <span key={solve.id} className="chip">
               {formatSolveTime(solve)}

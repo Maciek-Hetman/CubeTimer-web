@@ -338,6 +338,43 @@ describe('TimerPage', () => {
     expect(screen.queryByRole('button', { name: 'Save time' })).not.toBeInTheDocument()
   })
 
+  it('hides the toolbar and stats during a solve in focus mode', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timerStartDelayMs: 0, focusMode: true })
+
+    renderTimer()
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i))
+    const toolbar = document.querySelector('.timer-toolbar-wrap')
+    expect(toolbar).toHaveClass('focus-hide')
+    expect(within(toolbar as HTMLElement).getByRole('button', { name: 'New scramble' })).toBeInTheDocument()
+    expect(screen.getByText(/^Ao5/).closest('.panel')).toHaveClass('focus-hide')
+    expect(document.body).not.toHaveClass('focus-mode')
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Release to start/i))
+    expect(document.body).toHaveClass('focus-mode')
+    fireEvent.keyUp(window, { code: 'Space', key: ' ' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i))
+    expect(document.body).toHaveClass('focus-mode')
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+    await waitFor(() => expect(document.body).not.toHaveClass('focus-mode'))
+  })
+
+  it('keeps the toolbar visible during a solve when focus mode is off', async () => {
+    renderTimer()
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i))
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Release to start/i))
+    expect(document.body).not.toHaveClass('focus-mode')
+    fireEvent.keyUp(window, { code: 'Space', key: ' ' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Tap or press any key to stop/i))
+    expect(document.body).not.toHaveClass('focus-mode')
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+  })
+
   it('hides timer hints when showTimerHints is false', async () => {
     const ownerId = await ensureGuestOwner()
     const settings = await getOrCreateSettings(ownerId)

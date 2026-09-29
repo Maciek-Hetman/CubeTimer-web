@@ -943,11 +943,18 @@ input[type='range']::-moz-range-thumb {
 .widget-column {
   min-width: 0;
   min-height: 240px;
-  transition: opacity 0.2s var(--ease);
+  transition: opacity 0.2s var(--ease), visibility 0.2s var(--ease);
 }
 
-.hide-widgets .widget-column {
+.focus-hide {
+  transition: opacity 0.2s var(--ease), visibility 0.2s var(--ease);
+}
+
+/* Focus mode: hidden but still laid out, so the timer doesn't jump when a solve starts. */
+.focus-mode .widget-column,
+.focus-mode .focus-hide {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 
