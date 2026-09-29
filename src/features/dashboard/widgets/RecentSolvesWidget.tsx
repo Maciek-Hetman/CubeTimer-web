@@ -77,6 +77,7 @@ export function RecentSolvesWidget() {
                   <svg
                     width="12"
                     height="12"
+                    style={{ width: '0.75rem', height: '0.75rem' }}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"

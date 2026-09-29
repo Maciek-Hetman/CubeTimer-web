@@ -11,7 +11,7 @@ export function PageHeader({
 }) {
   return (
     <header className="page-header row wrap" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <div className="stack" style={{ gap: 4 }}>
+      <div className="stack" style={{ gap: 'var(--space-1)' }}>
         <h1>{title}</h1>
         {subtitle ? <p className="muted">{subtitle}</p> : null}
       </div>

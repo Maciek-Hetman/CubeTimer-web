@@ -27,6 +27,11 @@ export interface ConflictRecord {
   current: CubeSession | Solve
   local: CubeSession | Solve
   createdAt: string
+  /**
+   * The server only sent its version number. `current` then holds local data at that version,
+   * and the server's copy has to be downloaded again to keep it.
+   */
+  serverDataMissing?: boolean
 }
 
 export interface RejectedRecord {
@@ -83,6 +88,29 @@ class CubeTimerDB extends Dexie {
       conflicts: 'id, ownerId, entityId',
       rejections: 'id, ownerId, entityId, createdAt',
     })
+    // v4: "Hide scramble during solve" and "Hide widgets during solve" merged into focusMode.
+    this.version(4)
+      .stores({
+        solves:
+          'id, ownerId, sessionId, event, solvedAt, [ownerId+event], [ownerId+sessionId], [ownerId+event+solvedAt], [ownerId+sessionId+solvedAt]',
+        sessions: 'id, ownerId, event, kind, startedAt, [ownerId+event]',
+        outbox: 'id, ownerId, entity, entityId, createdAt',
+        settings: 'ownerId',
+        meta: 'key',
+        widgetLayouts: 'ownerId',
+        conflicts: 'id, ownerId, entityId',
+        rejections: 'id, ownerId, entityId, createdAt',
+      })
+      .upgrade((tx) =>
+        tx
+          .table('settings')
+          .toCollection()
+          .modify((settings: Record<string, unknown>) => {
+            settings.focusMode = Boolean(settings.hideScrambleDuringSolve || settings.hideWidgetsDuringSolve)
+            delete settings.hideScrambleDuringSolve
+            delete settings.hideWidgetsDuringSolve
+          }),
+      )
   }
 }
 

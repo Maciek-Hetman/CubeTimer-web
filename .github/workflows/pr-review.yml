@@ -63,7 +63,9 @@ jobs:
           # Workflow token instead of the Claude GitHub App token, so this job
           # stays read-only and needs no id-token permission.
           github_token: ${{ github.token }}
-          # Pushes by Claude (fix job, @claude) arrive as claude[bot].
+          # Also review pushes from Claude (the fix job below, and @claude in
+          # claude.yml). The action refuses bot actors by default, and both only
+          # act on same-repo PRs, so this stays within the trust model above.
           allowed_bots: claude
           prompt: |
             Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.

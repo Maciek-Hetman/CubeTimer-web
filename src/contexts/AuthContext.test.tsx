@@ -1,10 +1,11 @@
 /** @vitest-environment jsdom */
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../api/auth'
 import { ApiError, type AuthSession, type User } from '../api/types'
-import { saveAuth, setCurrentOwnerId } from '../app/profile'
+import { clearAuth, saveAuth, setCurrentOwnerId } from '../app/profile'
 import { db, getMeta } from '../data/db'
 import { AuthProvider } from './AuthProvider'
 import { useAuth } from './AuthContext'
@@ -264,5 +265,135 @@ describe('AuthContext & AuthProvider', () => {
     expect(result.current.ownerId).toMatch(/^guest:/)
     expect(await getMeta('auth.refresh', null)).toBeNull()
     expect(await getMeta('auth.user', null)).toBeNull()
+  })
+
+  describe('with other tabs sharing the stored session', () => {
+    const session = (suffix: string, user: User = storedUser): AuthSession => ({
+      access_token: `acc-${suffix}`,
+      refresh_token: `ref-${suffix}`,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      user,
+    })
+
+    async function renderSignedIn() {
+      await seedStoredSession()
+      vi.mocked(authApi.refresh).mockResolvedValueOnce(session('startup'))
+      const rendered = renderHook(() => useAuth(), {
+        wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+      })
+      await waitFor(() => expect(rendered.result.current.token).toBe('acc-startup'))
+      return rendered
+    }
+
+    it('refreshes with the token another tab rotated in, not the one this tab last had', async () => {
+      const { result } = await renderSignedIn()
+      await saveAuth('ref-other-tab', storedUser)
+      vi.mocked(authApi.refresh).mockResolvedValueOnce(session('next'))
+
+      await act(async () => {
+        await result.current.refreshAccessToken()
+      })
+
+      expect(authApi.refresh).toHaveBeenLastCalledWith('ref-other-tab')
+      expect(result.current.token).toBe('acc-next')
+      expect(await getMeta('auth.refresh', null)).toBe('ref-next')
+    })
+
+    it('follows another tab that signed in to a different account instead of using its token', async () => {
+      const { result } = await renderSignedIn()
+      const otherUser: User = { id: 'u-other', email: 'other@example.com', email_verified: true, user_role: 'user' }
+      await saveAuth('ref-other-user', otherUser)
+      await setCurrentOwnerId(otherUser.id)
+
+      let error: unknown
+      await act(async () => {
+        error = await result.current.refreshAccessToken().catch((err: unknown) => err)
+      })
+
+      expect(error).toBeInstanceOf(ApiError)
+      expect((error as ApiError).code).toBe('account_changed')
+      expect(authApi.refresh).toHaveBeenCalledTimes(1)
+      expect(result.current.ownerId).toBe('u-other')
+      expect(result.current.user).toEqual(otherUser)
+      expect(result.current.token).toBeNull()
+      expect(await getMeta('auth.refresh', null)).toBe('ref-other-user')
+    })
+
+    it('signs this tab out when another tab signed out', async () => {
+      const { result } = await renderSignedIn()
+      await clearAuth()
+
+      await act(async () => {
+        await result.current.refreshAccessToken().catch(() => undefined)
+      })
+
+      expect(authApi.refresh).toHaveBeenCalledTimes(1)
+      expect(result.current.user).toBeNull()
+      expect(result.current.ownerId).toMatch(/^guest:/)
+    })
+
+    it('keeps a newer stored token when a token replaced mid-request is rejected', async () => {
+      const { result } = await renderSignedIn()
+      vi.mocked(authApi.refresh).mockImplementationOnce(async () => {
+        await saveAuth('ref-newer', storedUser)
+        throw new ApiError(409, 'refresh_token_reused', 'Refresh token already used')
+      })
+
+      await act(async () => {
+        await result.current.refreshAccessToken().catch(() => undefined)
+      })
+
+      expect(result.current.user).toEqual(storedUser)
+      expect(result.current.ownerId).toBe('u-stored')
+      expect(await getMeta('auth.refresh', null)).toBe('ref-newer')
+    })
+
+    it('revokes the stored token on logout rather than a stale copy', async () => {
+      const { result } = await renderSignedIn()
+      await saveAuth('ref-other-tab', storedUser)
+      vi.mocked(authApi.logout).mockResolvedValueOnce()
+
+      await act(async () => {
+        await result.current.logout()
+      })
+
+      expect(authApi.logout).toHaveBeenCalledWith('ref-other-tab')
+      expect(result.current.user).toBeNull()
+    })
+
+    it('never spends the same token twice when two tabs start at once', async () => {
+      // jsdom has no Web Locks; this queue gives the same one-holder-at-a-time behavior.
+      let tail: Promise<unknown> = Promise.resolve()
+      const locks = {
+        request: (_name: string, task: () => Promise<unknown>) => {
+          const run = tail.then(task)
+          tail = run.catch(() => undefined)
+          return run
+        },
+      }
+      Object.defineProperty(navigator, 'locks', { value: locks, configurable: true })
+      await seedStoredSession()
+      vi.mocked(authApi.refresh).mockImplementation(async (token: string) => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        return session(`after-${token}`)
+      })
+
+      try {
+        const wrapper = ({ children }: { children: ReactNode }) => <AuthProvider>{children}</AuthProvider>
+        const tabA = renderHook(() => useAuth(), { wrapper })
+        const tabB = renderHook(() => useAuth(), { wrapper })
+
+        await waitFor(() => expect(tabA.result.current.ready && tabB.result.current.ready).toBe(true))
+        const tokensSpent = vi.mocked(authApi.refresh).mock.calls.map(([token]) => token)
+        expect(tokensSpent).toEqual(['ref-stored', 'ref-after-ref-stored'])
+        expect(await getMeta('auth.refresh', null)).toBe('ref-after-ref-after-ref-stored')
+        expect(tabA.result.current.user).toEqual(storedUser)
+        expect(tabB.result.current.user).toEqual(storedUser)
+      } finally {
+        vi.mocked(authApi.refresh).mockReset()
+        Reflect.deleteProperty(navigator, 'locks')
+      }
+    })
   })
 })

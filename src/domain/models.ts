@@ -97,6 +97,19 @@ export interface MutationRecord {
   baseVersion: number
   data?: SessionInput | SolveInput
   createdAt: string
+  /**
+   * Newest server copy of the entity that arrived while this mutation was queued. It isn't
+   * applied over the local edit, but it's the server side if the mutation comes back as a conflict.
+   */
+  remote?: RemoteEntityState
+}
+
+/** An entity as the server last reported it, in API field names. */
+export interface RemoteEntityState {
+  version: number
+  data: Record<string, unknown>
+  deleted: boolean
+  changedAt?: string
 }
 
 export interface SessionInput {
@@ -127,8 +140,8 @@ export interface AppSettings {
   timerStartDelayMs: number
   timerDisplayMode: TimerDisplayMode
   showTimerHints: boolean
-  hideScrambleDuringSolve: boolean
-  hideWidgetsDuringSolve: boolean
+  /** Hide everything but the timer (toolbar, scramble, widgets, stats) while a solve is in progress. */
+  focusMode: boolean
   enableWidgets: boolean
   theme: 'system' | 'light' | 'dark'
   accentColor: string
@@ -152,8 +165,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'ownerId'> = {
   timerStartDelayMs: 500,
   timerDisplayMode: 'show',
   showTimerHints: true,
-  hideScrambleDuringSolve: false,
-  hideWidgetsDuringSolve: false,
+  focusMode: false,
   enableWidgets: true,
   theme: 'system',
   accentColor: 'blue',

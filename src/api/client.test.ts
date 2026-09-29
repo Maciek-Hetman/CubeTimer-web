@@ -148,6 +148,27 @@ describe('apiRequest client', () => {
     await expect(apiRequest('/v1/sync')).rejects.toThrow(ApiError)
   })
 
+  it('gives up with a timeout ApiError when the server never answers', async () => {
+    const mockFetch = vi.mocked(globalThis.fetch)
+    mockFetch.mockImplementationOnce(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+        }),
+    )
+
+    await expect(apiRequest('/v1/sync', { method: 'POST', body: {}, timeoutMs: 20 })).rejects.toThrow(
+      new ApiError(0, 'timeout', 'The server took too long to respond'),
+    )
+  })
+
+  it('passes network errors through unchanged', async () => {
+    const mockFetch = vi.mocked(globalThis.fetch)
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    await expect(apiRequest('/v1/me')).rejects.toThrow(TypeError)
+  })
+
   it('falls back to statusText when error body is not structured', async () => {
     const mockFetch = vi.mocked(globalThis.fetch)
     mockFetch.mockResolvedValueOnce({

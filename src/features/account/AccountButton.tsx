@@ -28,7 +28,7 @@ export function AccountButton() {
       aria-label="Account"
     >
       <UserIcon />
-      <span className={`sync-dot ${tone}`} style={{ position: 'absolute', bottom: '6px', right: '6px', border: '1.5px solid var(--surface)' }} />
+      <span className={`sync-dot ${tone}`} style={{ position: 'absolute', bottom: '0.375rem', right: '0.375rem', border: '1.5px solid var(--surface)' }} />
     </button>
   )
 }

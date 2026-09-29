@@ -14,7 +14,7 @@ import { db, getMeta, type ConflictRecord, type RejectedRecord } from '../data/d
 import { listOutbox, removeOutbox } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
-import type { CubeSession, MutationRecord, Solve } from '../domain/models'
+import type { CubeSession, MutationRecord, RemoteEntityState, Solve } from '../domain/models'
 import { createId, normalizeTimingDevice, nowIso } from '../domain/models'
 
 export type SyncStatus = 'idle' | 'syncing' | 'pending' | 'offline' | 'error' | 'conflict'
@@ -116,16 +116,14 @@ export async function applySnapshotData(
   solves: ApiSolve[] = [],
 ): Promise<void> {
   await db.transaction('rw', [db.sessions, db.solves, db.outbox], async () => {
-    const pendingOutbox = await db.outbox.where('ownerId').equals(ownerId).toArray()
-    const pendingEntityIds = new Set(pendingOutbox.map((r) => r.entityId))
-    const existingSessions = await loadById(db.sessions, sessions.map((s) => s.id).filter((id) => !pendingEntityIds.has(id)))
-    const existingSolves = await loadById(db.solves, solves.map((sl) => sl.id).filter((id) => !pendingEntityIds.has(id)))
+    const queued = queuedIndex(await db.outbox.where('ownerId').equals(ownerId).toArray())
+    const liveSessions = sessions.filter((s) => !queued.stash('session', s.id, snapshotState(s)))
+    const liveSolves = solves.filter((sl) => !queued.stash('solve', sl.id, snapshotState(sl)))
+    const existingSessions = await loadById(db.sessions, liveSessions.map((s) => s.id))
+    const existingSolves = await loadById(db.solves, liveSolves.map((sl) => sl.id))
 
     const sessionsToPut: CubeSession[] = []
-    for (const s of sessions) {
-      if (pendingEntityIds.has(s.id)) {
-        continue
-      }
+    for (const s of liveSessions) {
       const existing = existingSessions.get(s.id)
       if (existing && existing.version >= s.version) {
         continue
@@ -149,10 +147,7 @@ export async function applySnapshotData(
     }
 
     const solvesToPut: Solve[] = []
-    for (const sl of solves) {
-      if (pendingEntityIds.has(sl.id)) {
-        continue
-      }
+    for (const sl of liveSolves) {
       const existing = existingSolves.get(sl.id)
       if (existing && existing.version >= sl.version) {
         continue
@@ -174,6 +169,10 @@ export async function applySnapshotData(
     }
     if (solvesToPut.length > 0) {
       await db.solves.bulkPut(solvesToPut)
+    }
+    const stashed = queued.updatedRecords()
+    if (stashed.length > 0) {
+      await db.outbox.bulkPut(stashed)
     }
   })
 }
@@ -277,6 +276,12 @@ export async function applySyncResponse(
       latestSentByEntity.set(key, record)
     }
   }
+  // A conflict outcome may carry only the server's version; its content then comes from here.
+  const remoteByEntity = new Map<string, RemoteEntityState>()
+  for (const change of changes) {
+    const key = entityKey(change.entity, change.entity_id)
+    remoteByEntity.set(key, newerState(remoteByEntity.get(key), changeState(change)))
+  }
   let conflicts = 0
   let rejected = 0
   await db.transaction(
@@ -295,11 +300,6 @@ export async function applySyncResponse(
       for (const record of await db.outbox.where('ownerId').equals(ownerId).toArray()) {
         outboxById.set(record.id, record)
       }
-      // Rebasing keeps a row's entityId, so this set stays valid for the whole transaction.
-      const pendingEntityIds = new Set<string>()
-      for (const record of outboxById.values()) {
-        pendingEntityIds.add(record.entityId)
-      }
       const sessionIds: string[] = []
       const solveIds: string[] = []
       for (const outcome of outcomes) {
@@ -310,10 +310,8 @@ export async function applySyncResponse(
         }
       }
       for (const change of changes) {
-        if (!pendingEntityIds.has(change.entity_id)) {
-          const ids = change.entity === 'session' ? sessionIds : solveIds
-          ids.push(change.entity_id)
-        }
+        const ids = change.entity === 'session' ? sessionIds : solveIds
+        ids.push(change.entity_id)
       }
       const storedSessions = await loadById(db.sessions, sessionIds)
       const storedSolves = await loadById(db.solves, solveIds)
@@ -361,47 +359,56 @@ export async function applySyncResponse(
           local.entity === 'session'
             ? (sessionsToPut.get(local.entityId) ?? storedSessions.get(local.entityId))
             : (solvesToPut.get(local.entityId) ?? storedSolves.get(local.entityId))
-        // Without `current`, a conflict is only resolvable when we know the server version and
-        // still have the local entity to show; otherwise it falls through to a rejection.
-        const rawCurrent: Record<string, unknown> | undefined =
-          outcome.current !== undefined
-            ? (outcome.current as Record<string, unknown>)
-            : previous && outcome.version !== undefined
-              ? { id: local.entityId, version: outcome.version }
+        const reported = outcome.current as Record<string, unknown> | undefined
+        const serverVersion = toVersion(reported?.version) ?? outcome.version
+
+        if (outcome.status === 'conflict' && serverVersion !== undefined) {
+          // Protocol v2 may report only the server's version (a ConflictStub). Its content is then
+          // in this response's changes, or was kept on the queued row when it arrived earlier.
+          const known = [
+            outcomeState(reported, serverVersion),
+            remoteByEntity.get(entityKey(local.entity, local.entityId)),
+            pending?.remote,
+            local.remote,
+          ].reduce<RemoteEntityState | undefined>(newerState, undefined)
+          const server =
+            known && known.version >= serverVersion
+              ? toLocalEntity(ownerId, local.entity, local.entityId, known, previous)
               : undefined
-
-        if (outcome.status === 'conflict' && rawCurrent) {
-          removedIds.push(outcome.mutation_id)
-          conflicts += 1
-          const isConflictStub = rawCurrent.name === undefined && rawCurrent.duration_ms === undefined
-
-          let current: CubeSession | Solve
-          if (isConflictStub && previous) {
-            current = {
+          // With no server copy, show local data at the server's version but leave the stored row
+          // alone: stamping that version onto local data would hide the difference from later syncs.
+          const current =
+            server ??
+            (previous && {
               ...previous,
-              version: Number(rawCurrent.version ?? outcome.version ?? previous.version),
-              updatedAt: String(rawCurrent.updated_at ?? nowIso()),
+              version: serverVersion,
+              updatedAt: String(reported?.updated_at ?? nowIso()),
+            })
+          // Without either copy there is nothing to show, so it falls through to a rejection.
+          if (current) {
+            removedIds.push(outcome.mutation_id)
+            conflicts += 1
+            if (server && local.entity === 'session') {
+              sessionsToPut.set(server.id, server as CubeSession)
+            } else if (server) {
+              solvesToPut.set(server.id, server as Solve)
             }
-          } else {
-            current = mapChangeData(ownerId, local.entity, rawCurrent)
+            conflictsToPut.push({
+              id: outcome.mutation_id,
+              ownerId,
+              entity: local.entity,
+              entityId: local.entityId,
+              message: outcome.message ?? 'Remote version differs',
+              current,
+              local: previous ?? current,
+              createdAt: nowIso(),
+              ...(server ? {} : { serverDataMissing: true }),
+            })
+            continue
           }
+        }
 
-          if (local.entity === 'session') {
-            sessionsToPut.set(current.id, current as CubeSession)
-          } else {
-            solvesToPut.set(current.id, current as Solve)
-          }
-          conflictsToPut.push({
-            id: outcome.mutation_id,
-            ownerId,
-            entity: local.entity,
-            entityId: local.entityId,
-            message: outcome.message ?? 'Remote version differs',
-            current,
-            local: previous ?? current,
-            createdAt: nowIso(),
-          })
-        } else if (changedWhileSending && pending) {
+        if (changedWhileSending && pending) {
           await rebasePendingMutation(outboxById, pending, outcome.version)
         } else {
           // Rejections, unresolvable conflicts and unknown statuses must leave the outbox,
@@ -422,83 +429,35 @@ export async function applySyncResponse(
         }
       }
 
+      // Rows still queued after the outcomes above hold local edits the server hasn't taken yet.
+      // Their incoming changes are kept on the row instead of overwriting those edits.
+      const removed = new Set(removedIds)
+      const queued = queuedIndex([...outboxById.values()].filter((record) => !removed.has(record.id)))
       for (const change of changes) {
-        // Matches on entityId alone, whatever the entity type, and still counts rows whose
-        // outcomes are handled above because they are only removed at the end.
-        if (pendingEntityIds.has(change.entity_id)) {
+        const state = changeState(change)
+        if (queued.stash(change.entity, change.entity_id, state)) {
           continue
         }
-
-        const rawData = change.data as Record<string, unknown>
-        const isDelete = change.operation === 'delete' || rawData.deleted_at != null
-        const isDeleteStub = isDelete && rawData.name === undefined && rawData.duration_ms === undefined
-
+        const id = change.entity_id
+        const existing =
+          change.entity === 'session'
+            ? (sessionsToPut.get(id) ?? storedSessions.get(id))
+            : (solvesToPut.get(id) ?? storedSolves.get(id))
+        if (existing && existing.version >= change.version) {
+          continue
+        }
+        const next = toLocalEntity(ownerId, change.entity, id, state, existing)
         if (change.entity === 'session') {
-          const existing = sessionsToPut.get(change.entity_id) ?? storedSessions.get(change.entity_id)
-          if (existing && existing.version >= change.version) {
-            continue
-          }
-          if (isDeleteStub) {
-            if (existing) {
-              sessionsToPut.set(change.entity_id, {
-                ...existing,
-                version: change.version,
-                deletedAt: String(rawData.deleted_at ?? change.changed_at ?? nowIso()),
-                updatedAt: String(rawData.updated_at ?? change.changed_at ?? nowIso()),
-              })
-            } else {
-              sessionsToPut.set(change.entity_id, {
-                id: change.entity_id,
-                ownerId,
-                name: 'Deleted Session',
-                event: '3x3',
-                kind: 'manual',
-                startedAt: String(rawData.started_at ?? change.changed_at ?? nowIso()),
-                endedAt: null,
-                archived: true,
-                version: change.version,
-                updatedAt: String(rawData.updated_at ?? change.changed_at ?? nowIso()),
-                deletedAt: String(rawData.deleted_at ?? change.changed_at ?? nowIso()),
-              })
-            }
-          } else {
-            sessionsToPut.set(change.entity_id, mapChangeData(ownerId, 'session', rawData) as CubeSession)
-          }
+          sessionsToPut.set(id, next as CubeSession)
         } else {
-          const existing = solvesToPut.get(change.entity_id) ?? storedSolves.get(change.entity_id)
-          if (existing && existing.version >= change.version) {
-            continue
-          }
-          if (isDeleteStub) {
-            if (existing) {
-              solvesToPut.set(change.entity_id, {
-                ...existing,
-                version: change.version,
-                deletedAt: String(rawData.deleted_at ?? change.changed_at ?? nowIso()),
-                updatedAt: String(rawData.updated_at ?? change.changed_at ?? nowIso()),
-              })
-            } else {
-              solvesToPut.set(change.entity_id, {
-                id: change.entity_id,
-                ownerId,
-                sessionId: null,
-                durationMs: 0,
-                penalty: 'none',
-                solvedAt: String(rawData.solved_at ?? change.changed_at ?? nowIso()),
-                scramble: '',
-                event: '3x3',
-                timingDevice: 'keyboard',
-                version: change.version,
-                updatedAt: String(rawData.updated_at ?? change.changed_at ?? nowIso()),
-                deletedAt: String(rawData.deleted_at ?? change.changed_at ?? nowIso()),
-              })
-            }
-          } else {
-            solvesToPut.set(change.entity_id, mapChangeData(ownerId, 'solve', rawData) as Solve)
-          }
+          solvesToPut.set(id, next as Solve)
         }
       }
 
+      const stashed = queued.updatedRecords()
+      if (stashed.length > 0) {
+        await db.outbox.bulkPut(stashed)
+      }
       if (sessionsToPut.size > 0) {
         await db.sessions.bulkPut(Array.from(sessionsToPut.values()))
       }
@@ -579,6 +538,130 @@ async function loadById<T extends { id: string }>(table: Table<T, string>, ids: 
     }
   }
   return byId
+}
+
+function entityKey(entity: 'session' | 'solve', id: string): string {
+  return `${entity}:${id}`
+}
+
+function toVersion(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function hasEntityFields(data: Record<string, unknown>): boolean {
+  return data.name !== undefined || data.duration_ms !== undefined
+}
+
+function newerState(a: RemoteEntityState | undefined, b: RemoteEntityState): RemoteEntityState
+function newerState(
+  a: RemoteEntityState | undefined,
+  b: RemoteEntityState | undefined,
+): RemoteEntityState | undefined
+function newerState(a: RemoteEntityState | undefined, b: RemoteEntityState | undefined) {
+  return b && (!a || b.version > a.version) ? b : a
+}
+
+function changeState(change: Change): RemoteEntityState {
+  const data = change.data as Record<string, unknown>
+  return {
+    version: change.version,
+    data,
+    deleted: change.operation === 'delete' || data.deleted_at != null,
+    changedAt: change.changed_at,
+  }
+}
+
+function snapshotState(row: ApiSession | ApiSolve): RemoteEntityState {
+  return { version: row.version, data: { ...row }, deleted: row.deleted_at != null }
+}
+
+/** The server state a conflict outcome reports, unless it's a ConflictStub with only the version. */
+function outcomeState(
+  reported: Record<string, unknown> | undefined,
+  version: number,
+): RemoteEntityState | undefined {
+  if (!reported) {
+    return undefined
+  }
+  const deleted = reported.deleted_at != null
+  return deleted || hasEntityFields(reported) ? { version, data: reported, deleted } : undefined
+}
+
+/** Maps server state to a local row. A delete stub tombstones `existing`, or a placeholder. */
+function toLocalEntity(
+  ownerId: string,
+  entity: 'session' | 'solve',
+  entityId: string,
+  state: RemoteEntityState,
+  existing: CubeSession | Solve | undefined,
+): CubeSession | Solve {
+  const d = state.data
+  if (!state.deleted || hasEntityFields(d)) {
+    return mapChangeData(ownerId, entity, d)
+  }
+  const deletedAt = String(d.deleted_at ?? state.changedAt ?? nowIso())
+  const updatedAt = String(d.updated_at ?? state.changedAt ?? nowIso())
+  if (existing) {
+    return { ...existing, version: state.version, deletedAt, updatedAt }
+  }
+  if (entity === 'session') {
+    return {
+      id: entityId,
+      ownerId,
+      name: 'Deleted Session',
+      event: '3x3',
+      kind: 'manual',
+      startedAt: String(d.started_at ?? state.changedAt ?? nowIso()),
+      endedAt: null,
+      archived: true,
+      version: state.version,
+      updatedAt,
+      deletedAt,
+    }
+  }
+  return {
+    id: entityId,
+    ownerId,
+    sessionId: null,
+    durationMs: 0,
+    penalty: 'none',
+    solvedAt: String(d.solved_at ?? state.changedAt ?? nowIso()),
+    scramble: '',
+    event: '3x3',
+    timingDevice: 'keyboard',
+    version: state.version,
+    updatedAt,
+    deletedAt,
+  }
+}
+
+/**
+ * Outbox rows by entity. `stash` tells whether an entity has a queued local edit and, if so,
+ * keeps the incoming server state on that row; `updatedRecords` lists the rows to write back.
+ */
+function queuedIndex(records: Iterable<MutationRecord>) {
+  const byEntity = new Map<string, MutationRecord>()
+  for (const record of records) {
+    byEntity.set(entityKey(record.entity, record.entityId), record)
+  }
+  const updated = new Map<string, MutationRecord>()
+  return {
+    stash(entity: 'session' | 'solve', id: string, state: RemoteEntityState): boolean {
+      const key = entityKey(entity, id)
+      const record = byEntity.get(key)
+      if (!record) {
+        return false
+      }
+      const remote = newerState(record.remote, state)
+      if (remote !== record.remote) {
+        const next = { ...record, remote }
+        byEntity.set(key, next)
+        updated.set(next.id, next)
+      }
+      return true
+    },
+    updatedRecords: () => [...updated.values()],
+  }
 }
 
 function mapChangeData(

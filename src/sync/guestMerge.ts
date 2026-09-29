@@ -1,5 +1,5 @@
 import { db, getOrCreateSettings } from '../data/db'
-import { enqueueMutation } from '../data/repositories/outbox'
+import { enqueueMutationsBatch } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
 import type { CubeSession, Solve } from '../domain/models'
@@ -13,45 +13,50 @@ export async function adoptGuestData(guestOwnerId: string, accountOwnerId: strin
     return { sessions: 0, solves: 0 }
   }
 
-  const sessions = await db.sessions.where('ownerId').equals(guestOwnerId).toArray()
-  const solves = await db.solves.where('ownerId').equals(guestOwnerId).toArray()
-  const settings = await db.settings.get(guestOwnerId)
-  const widgets = await db.widgetLayouts.get(guestOwnerId)
+  return db.transaction('rw', db.sessions, db.solves, db.outbox, db.settings, db.widgetLayouts, async () => {
+    // Read inside the transaction so nothing written in between is left with the guest.
+    const sessions = await db.sessions.where('ownerId').equals(guestOwnerId).toArray()
+    const solves = await db.solves.where('ownerId').equals(guestOwnerId).toArray()
+    const settings = await db.settings.get(guestOwnerId)
+    const widgets = await db.widgetLayouts.get(guestOwnerId)
 
-  await db.transaction('rw', db.sessions, db.solves, db.outbox, db.settings, db.widgetLayouts, async () => {
-    for (const session of sessions) {
-      const updated: CubeSession = { ...session, ownerId: accountOwnerId, version: 0 }
-      await db.sessions.put(updated)
-      if (!updated.deletedAt) {
-        await enqueueMutation({
+    const adoptedSessions: CubeSession[] = sessions.map((session) => ({
+      ...session,
+      ownerId: accountOwnerId,
+      version: 0,
+    }))
+    const adoptedSolves: Solve[] = solves.map((solve) => ({
+      ...solve,
+      ownerId: accountOwnerId,
+      version: 0,
+      timingDevice: normalizeTimingDevice(solve.timingDevice),
+    }))
+    await db.sessions.bulkPut(adoptedSessions)
+    await db.solves.bulkPut(adoptedSolves)
+    // One batch: enqueuing row by row scans the growing outbox each time, which is quadratic.
+    await enqueueMutationsBatch([
+      ...adoptedSessions
+        .filter((session) => !session.deletedAt)
+        .map((session) => ({
           ownerId: accountOwnerId,
-          entity: 'session',
-          entityId: updated.id,
-          operation: 'upsert',
+          entity: 'session' as const,
+          entityId: session.id,
+          operation: 'upsert' as const,
           baseVersion: 0,
-          data: toSessionInput(updated),
-        })
-      }
-    }
-    for (const solve of solves) {
-      const updated: Solve = {
-        ...solve,
-        ownerId: accountOwnerId,
-        version: 0,
-        timingDevice: normalizeTimingDevice(solve.timingDevice),
-      }
-      await db.solves.put(updated)
-      if (!updated.deletedAt) {
-        await enqueueMutation({
+          data: toSessionInput(session),
+        })),
+      ...adoptedSolves
+        .filter((solve) => !solve.deletedAt)
+        .map((solve) => ({
           ownerId: accountOwnerId,
-          entity: 'solve',
-          entityId: updated.id,
-          operation: 'upsert',
+          entity: 'solve' as const,
+          entityId: solve.id,
+          operation: 'upsert' as const,
           baseVersion: 0,
-          data: toSolveInput(updated),
-        })
-      }
-    }
+          data: toSolveInput(solve),
+        })),
+    ])
+
     const existingSettings = await db.settings.get(accountOwnerId)
     if (settings && !existingSettings) {
       await db.settings.put({ ...settings, ownerId: accountOwnerId })
@@ -64,7 +69,7 @@ export async function adoptGuestData(guestOwnerId: string, accountOwnerId: strin
       await db.widgetLayouts.put({ ...widgets, ownerId: accountOwnerId })
     }
     await db.widgetLayouts.delete(guestOwnerId)
-  })
 
-  return { sessions: sessions.length, solves: solves.length }
+    return { sessions: sessions.length, solves: solves.length }
+  })
 }

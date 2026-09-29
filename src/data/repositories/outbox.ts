@@ -10,9 +10,9 @@ export async function enqueueMutation(input: {
   data?: SessionInput | SolveInput
 }): Promise<MutationRecord> {
   const existing = await db.outbox
-    .where('ownerId')
-    .equals(input.ownerId)
-    .filter((record) => record.entity === input.entity && record.entityId === input.entityId)
+    .where('entityId')
+    .equals(input.entityId)
+    .filter((record) => record.ownerId === input.ownerId && record.entity === input.entity)
     .first()
 
   const record: MutationRecord = existing
