@@ -35,7 +35,7 @@ A solve is dropped if the timer is reset mid-solve or its signal is lost for mor
 
 Supported events: 2x2, 3x3, 4x4, 5x5, Megaminx, and Pyraminx. Switch events from the timer. Each event keeps its own current session.
 
-You can hide the scramble, averages, or last results during a solve, and enable focus mode to hide chrome while the timer is running. On viewports narrower than 1200px the timer uses a compact mobile layout; at 1200px and above the desktop widget dashboard appears.
+Turn on **Settings → Timer → Focus mode** to hide the scramble, event and timing-device pickers, averages, recent times, and desktop widgets while a solve is in progress. On viewports narrower than 1200px the timer uses a compact mobile layout; at 1200px and above the desktop widget dashboard appears.
 
 ## Desktop dashboard
 

@@ -23,8 +23,7 @@ const mocks = vi.hoisted(() => ({
     timerStartDelayMs: 500,
     timerDisplayMode: 'show',
     showTimerHints: true,
-    hideScrambleDuringSolve: false,
-    hideWidgetsDuringSolve: false,
+    focusMode: false,
     enableWidgets: true,
     theme: 'system',
     accentColor: 'blue',
@@ -156,6 +155,18 @@ describe('SettingsPage', () => {
     expect(showHintsSwitch).toBeChecked()
     await user.click(showHintsSwitch)
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showTimerHints: false })
+  })
+
+  it('toggles focus mode from a single switch', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(screen.queryByRole('checkbox', { name: /hide scramble during solve/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /hide widgets during solve/i })).not.toBeInTheDocument()
+    const focusSwitch = screen.getByRole('checkbox', { name: /focus mode/i })
+    expect(focusSwitch).not.toBeChecked()
+    await user.click(focusSwitch)
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ focusMode: true })
   })
 
   it('chooses which inputs start and stop the keyboard timer', async () => {

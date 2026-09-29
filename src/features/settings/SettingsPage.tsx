@@ -248,22 +248,16 @@ export function SettingsPage() {
               onChange={(checked) => void updateSettings({ showTimerHints: checked })}
             />
             <Switch
-              label="Hide scramble during solve"
-              checked={settings.hideScrambleDuringSolve}
-              onChange={(checked) => void updateSettings({ hideScrambleDuringSolve: checked })}
+              label="Focus mode"
+              description="Hide the scramble, event and timing-device pickers, stats and widgets while solving"
+              checked={settings.focusMode}
+              onChange={(checked) => void updateSettings({ focusMode: checked })}
             />
             <Switch
               label="Enable widgets (desktop only)"
               checked={settings.enableWidgets ?? true}
               onChange={(checked) => void updateSettings({ enableWidgets: checked })}
             />
-            {(settings.enableWidgets ?? true) && (
-              <Switch
-                label="Hide widgets during solve"
-                checked={settings.hideWidgetsDuringSolve}
-                onChange={(checked) => void updateSettings({ hideWidgetsDuringSolve: checked })}
-              />
-            )}
             {(settings.enableWidgets ?? true) && (
               <>
                 <Field label={`Widget scale (${settings.widgetScale}%)`}>

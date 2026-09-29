@@ -80,6 +80,50 @@ test('keeps the navbar visible while the timer is running', async ({ page }) => 
   await page.mouse.up()
 })
 
+test('focus mode hides everything but the timer during a solve', async ({ page }) => {
+  const isDesktop = test.info().project.name === 'desktop'
+  await page.goto('/settings')
+  const focusSwitch = page.getByRole('checkbox', { name: /Focus mode/ })
+  // Controlled by a live DB query, so it flips after the write lands rather than on click.
+  await focusSwitch.click()
+  await expect(focusSwitch).toBeChecked()
+  await page.goto('/')
+
+  const timer = page.getByRole('button', { name: 'Timer' })
+  const focusHidden = [
+    page.locator('.timer-toolbar-wrap'),
+    page.getByRole('combobox', { name: 'Event' }),
+    page.getByRole('combobox', { name: 'Timing device' }),
+    page.locator('.scramble'),
+    page.getByRole('button', { name: 'New scramble' }),
+    ...(isDesktop ? [page.locator('.widget-column').first()] : [page.getByText(/^Ao5/)]),
+  ]
+  await expect(hint(page)).toContainText(/to start/i)
+  // A scramble landing mid-solve resizes the toolbar and would move the timer on its own.
+  await expect(page.locator('.scramble')).not.toContainText(/Generating/)
+  for (const locator of focusHidden) {
+    await expect(locator).toBeVisible()
+  }
+  const idleBox = await timer.boundingBox()
+
+  await page.keyboard.down('Space')
+  await expect(hint(page)).toContainText(/Hold|Release to start/i)
+  await page.waitForTimeout(800)
+  await page.keyboard.up('Space')
+  await expect(hint(page)).toContainText(/stop/i, { timeout: 8000 })
+  for (const locator of focusHidden) {
+    await expect(locator).toBeHidden()
+  }
+  expect(await timer.boundingBox()).toEqual(idleBox)
+
+  await page.keyboard.down('Space')
+  await page.keyboard.up('Space')
+  await expect(hint(page)).toContainText(/to start/i)
+  for (const locator of focusHidden) {
+    await expect(locator).toBeVisible()
+  }
+})
+
 test('shows the desktop widget dashboard and shared header nav', async ({ page }) => {
   test.skip(test.info().project.name === 'mobile', 'desktop layout only')
   await page.setViewportSize({ width: 1440, height: 900 })
