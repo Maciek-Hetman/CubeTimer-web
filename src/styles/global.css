@@ -852,8 +852,15 @@ input[type='range']::-moz-range-thumb {
   align-items: stretch;
 }
 
+/* Match the card/refresh-button surface instead of the muted select default. */
 .timer-toolbar .custom-select-trigger {
   height: 100%;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.timer-toolbar .custom-select-trigger:hover:not(:disabled) {
+  background: var(--surface-muted);
 }
 
 .scramble {
