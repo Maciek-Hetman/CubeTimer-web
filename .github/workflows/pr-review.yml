@@ -47,6 +47,10 @@ jobs:
           # Workflow token instead of the Claude GitHub App token, so this job
           # stays read-only and needs no id-token permission.
           github_token: ${{ github.token }}
+          # Also review pushes from the @claude fix bot (claude.yml). The action
+          # refuses bot actors by default, and that bot only acts for commenters
+          # with write access, so this stays within the trust model above.
+          allowed_bots: claude
           prompt: |
             Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
             Get the diff with `gh pr diff ${{ github.event.pull_request.number }}` (the checkout is shallow, so don't diff against main).
