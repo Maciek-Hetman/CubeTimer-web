@@ -130,8 +130,8 @@ export function AdminErrorsPage() {
                   </tr>
                   {expandedTraceId === log.id && (
                     <tr>
-                      <td colSpan={7} style={{ padding: '16px', background: 'var(--surface-muted)', borderTop: '1px solid var(--border)' }}>
-                        <pre style={{ margin: 0, padding: '12px', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)', borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                      <td colSpan={7} style={{ padding: 'var(--space-4)', background: 'var(--surface-muted)', borderTop: '1px solid var(--border)' }}>
+                        <pre style={{ margin: 0, padding: 'var(--space-3)', background: 'var(--surface)', boxShadow: 'var(--shadow-sm)', borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: 'var(--text-xs)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                           <code>{JSON.stringify(log, null, 2)}</code>
                         </pre>
                       </td>
@@ -143,7 +143,7 @@ export function AdminErrorsPage() {
           </table>
           
           {nextCursor && (
-            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+            <div style={{ marginTop: 'var(--space-4)', textAlign: 'center' }}>
               <Button
                 onClick={() => {
                   setLoading(true)

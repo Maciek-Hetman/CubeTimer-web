@@ -276,7 +276,7 @@ export function AccountPage() {
                   <strong>
                     {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} could not be synced
                   </strong>
-                  <p className="muted" style={{ margin: '6px 0 10px' }}>
+                  <p className="muted" style={{ margin: '0.375rem 0 0.625rem' }}>
                     Dismiss to clear.
                   </p>
                   <div className="row wrap">

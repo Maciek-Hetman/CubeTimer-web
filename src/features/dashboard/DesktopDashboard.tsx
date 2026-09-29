@@ -256,7 +256,7 @@ function WidgetColumn({
   const scale = settings.widgetScale / 100
 
   return (
-    <aside className="widget-column" style={{ display: 'flex', flexDirection: 'column', gap: '16px', zoom: scale }}>
+    <aside className="widget-column" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', zoom: scale }}>
       {editing ? (
         <Field label="Add widget">
           <Select
@@ -276,7 +276,7 @@ function WidgetColumn({
         </Field>
       ) : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: '200px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minHeight: '12.5rem' }}>
         <SortableContext
           id={side}
           items={widgets.map((widget) => widget.i)}
@@ -349,7 +349,7 @@ function WidgetCard({
         ...(overlay ? { opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' } : {}),
       }}
     >
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
         <h3
           className="widget-drag"
           style={{ cursor: editing ? (overlay ? 'grabbing' : 'grab') : 'default' }}

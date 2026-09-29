@@ -15,11 +15,12 @@ import {
 } from 'recharts'
 import { EmptyState } from '../../ui/EmptyState'
 import { Panel } from '../../ui/Panel'
+import { scalePx, useUiScale } from '../../ui/useUiScale'
 import type { AdminContextType } from './AdminLayout'
 
 const chartTooltipStyle = {
   background: 'var(--surface)',
-  borderRadius: 8,
+  borderRadius: 'var(--radius-sm)',
   boxShadow: 'var(--shadow-md)',
 }
 
@@ -45,6 +46,7 @@ const REQUEST_TYPE_COLORS: Record<string, string> = {
 
 export function AdminTrafficPage() {
   const { requests, requestTypes, loading } = useOutletContext<AdminContextType>()
+  const uiScale = useUiScale()
 
   const chartData = useMemo(() => {
     if (!requests || !requests.points) return []
@@ -109,7 +111,7 @@ export function AdminTrafficPage() {
                     <BarChart data={typeData} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis type="number" stroke="var(--text-muted)" allowDecimals={false} />
-                      <YAxis type="category" dataKey="label" width={84} stroke="var(--text-muted)" />
+                      <YAxis type="category" dataKey="label" width={scalePx(84, uiScale)} stroke="var(--text-muted)" />
                       <Tooltip
                         contentStyle={chartTooltipStyle}
                         formatter={(value) => [`${Number(value).toLocaleString()} requests`, undefined]}
@@ -158,7 +160,7 @@ export function AdminTrafficPage() {
                 <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
-                  <YAxis width={40} stroke="var(--text-muted)" allowDecimals={false} />
+                  <YAxis width={scalePx(40, uiScale)} stroke="var(--text-muted)" allowDecimals={false} />
                   <Tooltip contentStyle={chartTooltipStyle} labelFormatter={formatBucket} />
                   <Legend />
                   <Bar dataKey="status_2xx" name="2xx" stackId="status" fill="var(--success)" />
@@ -176,7 +178,7 @@ export function AdminTrafficPage() {
                 <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
-                  <YAxis width={48} stroke="var(--text-muted)" tickFormatter={(value: number) => `${value.toFixed(1)}`} />
+                  <YAxis width={scalePx(48, uiScale)} stroke="var(--text-muted)" tickFormatter={(value: number) => `${value.toFixed(1)}`} />
                   <Tooltip
                     contentStyle={chartTooltipStyle}
                     labelFormatter={formatBucket}
@@ -202,7 +204,7 @@ export function AdminTrafficPage() {
                 <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
-                  <YAxis width={48} stroke="var(--text-muted)" domain={[0, 100]} tickFormatter={(value: number) => `${Math.round(value)}%`} />
+                  <YAxis width={scalePx(48, uiScale)} stroke="var(--text-muted)" domain={[0, 100]} tickFormatter={(value: number) => `${Math.round(value)}%`} />
                   <Tooltip
                     contentStyle={chartTooltipStyle}
                     labelFormatter={formatBucket}
@@ -236,7 +238,7 @@ export function AdminTrafficPage() {
                 <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="bucket" tickFormatter={formatBucket} stroke="var(--text-muted)" minTickGap={24} />
-                  <YAxis width={48} stroke="var(--text-muted)" tickFormatter={(value: number) => `${Math.round(value)}`} />
+                  <YAxis width={scalePx(48, uiScale)} stroke="var(--text-muted)" tickFormatter={(value: number) => `${Math.round(value)}`} />
                   <Tooltip
                     contentStyle={chartTooltipStyle}
                     labelFormatter={formatBucket}
