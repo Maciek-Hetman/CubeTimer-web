@@ -1,23 +1,33 @@
 name: PR Review
 
 # Runs the read-only `reviewer` agent (.claude/agents/reviewer.md) on each PR
-# and posts its findings as a single, updated PR comment.
+# and posts its findings as a single, updated PR comment. If the review has
+# Critical or Should-fix findings, the `fix` job hands them to the
+# `implementer` agent and pushes the result to the PR branch.
 #
-# Claude runs in a job that can only read. Posting happens in a separate job
-# that has pull-requests: write and never runs Claude.
+# The reviewing Claude runs in a job that can only read. Posting happens in a
+# separate job that has pull-requests: write and never runs Claude. The fix job
+# does hold a write token (it has to push), like claude.yml.
 #
 # Trust model: fork PRs are skipped, so every reviewed PR was pushed by someone
 # with write access. That's why the PR's own reviewer.md and CLAUDE.md are used
 # as-is and the review is posted unsanitised: an author who could steer them
-# could already edit this workflow or comment directly.
+# could already edit this workflow or comment directly. The same holds for the
+# fix job, which runs npm scripts from the PR branch.
+#
+# Fix loop: the fix commit is pushed with the Claude GitHub App token, so it
+# triggers this workflow again as claude[bot] (hence allowed_bots). The
+# re-review either passes or feeds the next round. After MAX_FIX_ROUNDS
+# consecutive fix commits it stops and says so in the review comment; any
+# other commit on the branch resets the count.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-concurrency:
-  group: pr-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+env:
+  MAX_FIX_ROUNDS: 3
+  FIX_COMMIT_PREFIX: Apply reviewer findings
 
 jobs:
   review:
@@ -27,11 +37,17 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # A new push supersedes an in-flight review (and, through `needs`, its fix).
+    concurrency:
+      group: pr-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: read
       pull-requests: read
     outputs:
       review: ${{ steps.extract.outputs.review }}
+      blocking: ${{ steps.extract.outputs.blocking }}
+      fix_round: ${{ steps.rounds.outputs.fix_round }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -47,9 +63,9 @@ jobs:
           # Workflow token instead of the Claude GitHub App token, so this job
           # stays read-only and needs no id-token permission.
           github_token: ${{ github.token }}
-          # Also review pushes from the @claude fix bot (claude.yml). The action
-          # refuses bot actors by default, and that bot only acts for commenters
-          # with write access, so this stays within the trust model above.
+          # Also review pushes from Claude (the fix job below, and @claude in
+          # claude.yml). The action refuses bot actors by default, and both only
+          # act on same-repo PRs, so this stays within the trust model above.
           allowed_bots: claude
           prompt: |
             Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
@@ -74,6 +90,32 @@ jobs:
           fi
           delim="REVIEW_$(openssl rand -hex 8)"
           { echo "review<<$delim"; printf '%s\n' "$review"; echo "$delim"; } >> "$GITHUB_OUTPUT"
+          # Blocking = any bullet other than "- none" under Critical or Should-fix.
+          if printf '%s\n' "$review" | awk '
+            /^##[[:space:]]/ { s = ($0 ~ /^##[[:space:]]+(Critical|Should-fix)/); next }
+            s && /^[[:space:]]*[-*][[:space:]]/ && !/^[[:space:]]*[-*][[:space:]]+[Nn]one\.?[[:space:]]*$/ { found = 1 }
+            END { exit !found }'; then
+            echo "blocking=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "blocking=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The round the next fix would be: 1 + consecutive fix commits at the
+      # PR's tip. 0 means the limit is reached and no fix runs.
+      - name: Count fix rounds
+        id: rounds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          done_rounds="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" \
+            --jq '[.[] | .commit.message | startswith(env.FIX_COMMIT_PREFIX)] | reverse | (indices(false)[0] // length)')"
+          if [ "$done_rounds" -ge "$MAX_FIX_ROUNDS" ]; then
+            echo "fix_round=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "fix_round=$((done_rounds + 1))" >> "$GITHUB_OUTPUT"
+          fi
 
   comment:
     needs: review
@@ -88,6 +130,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REVIEW: ${{ needs.review.outputs.review }}
+          BLOCKING: ${{ needs.review.outputs.blocking }}
+          FIX_ROUND: ${{ needs.review.outputs.fix_round }}
         run: |
           set -euo pipefail
           marker='<!-- claude-pr-review -->'
@@ -99,6 +143,13 @@ jobs:
             echo
             echo '---'
             echo "_\`reviewer\` agent on ${{ github.event.pull_request.head.sha }}_"
+            if [ "$BLOCKING" = "true" ] && [ "$FIX_ROUND" = "0" ]; then
+              echo
+              echo "_Auto-fix stopped after $MAX_FIX_ROUNDS rounds. Fix the findings above by hand or with \`@claude\`._"
+            elif [ "$BLOCKING" = "true" ]; then
+              echo
+              echo "_Auto-fix round $FIX_ROUND of $MAX_FIX_ROUNDS: \`implementer\` is applying the Critical and Should-fix findings._"
+            fi
           } > review.md
           # Update this workflow's previous comment (found by marker) instead of stacking new ones.
           id="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate \
@@ -108,3 +159,62 @@ jobs:
           else
             gh pr comment "$PR_NUMBER" --body-file review.md
           fi
+
+  fix:
+    needs: review
+    # Same-repo check repeated as a guard; review already skips forks.
+    if: >-
+      needs.review.outputs.blocking == 'true' &&
+      needs.review.outputs.fix_round != '0' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Not cancelled by newer pushes: its own push starts the next run. If the
+    # branch moved meanwhile, its push is rejected as non-fast-forward.
+    concurrency:
+      group: pr-fix-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write # push the fix commit
+      id-token: write # Claude GitHub App token exchange; its pushes trigger re-review
+    steps:
+      # Exactly the reviewed commit, so the findings' file:line references match.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      # From the PR's own lockfile. implementer runs typecheck and lint.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply reviewer findings
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # This job runs as claude[bot] when re-triggered by its own fix commit.
+          allowed_bots: claude
+          prompt: |
+            The `reviewer` agent reviewed PR #${{ github.event.pull_request.number }} at commit ${{ github.event.pull_request.head.sha }}, which is checked out. Its review:
+
+            <review>
+            ${{ needs.review.outputs.review }}
+            </review>
+
+            Fix the Critical and Should-fix findings. Ignore Nitpicks.
+            1. Run the `implementer` subagent. Spec: "Fix these reviewer findings on an existing PR:" followed by the Critical and Should-fix sections copied verbatim. Don't paraphrase them.
+            2. Check `git status --porcelain` and `git diff`. If nothing changed, stop and explain why.
+            3. Run `git add -A`, then commit with exactly this subject line: `${{ env.FIX_COMMIT_PREFIX }} (round ${{ needs.review.outputs.fix_round }})`. In the body, list the findings fixed and any not fixed, with implementer's reason.
+            4. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. If it's rejected because the branch moved, stop: the new commits get their own review.
+            Don't run the reviewer yourself; the push triggers a fresh review of the PR.
+          # --agent isn't used, for the same reason as in claude.yml. The push
+          # rule is the exact command, so no force-push or other branches.
+          claude_args: |
+            --max-turns 30
+            --allowedTools "Read,Glob,Grep,Agent(implementer),Bash(npm run typecheck),Bash(npm run lint),Bash(git status:*),Bash(git diff:*),Bash(git add -A),Bash(git commit:*),Bash(git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }})"
+            --disallowedTools "Agent(browser-verifier),Agent(pipeline),Agent(reviewer)"
