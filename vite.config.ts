@@ -1,12 +1,30 @@
+import { execSync } from 'node:child_process'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Deploys run on a pushed v* tag; elsewhere describe the checkout relative to the latest tag.
+function appVersion(): string {
+  if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) {
+    return process.env.GITHUB_REF_NAME
+  }
+  try {
+    return execSync('git describe --tags --always', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return 'dev'
+  }
+}
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion()),
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // src/app/registerAppUpdates.ts registers the worker and decides when to reload onto a new version.
+      injectRegister: false,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'CubeTimer',
@@ -26,6 +44,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Activate a new deploy as soon as it is installed; the page then reloads onto it when that's harmless.
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallback: '/index.html',
         runtimeCaching: [
           {

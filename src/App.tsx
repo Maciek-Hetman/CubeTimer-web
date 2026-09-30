@@ -19,6 +19,7 @@ const HistoryPage = lazy(() => import('./features/history/HistoryPage').then((m)
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 const AboutPage = lazy(() => import('./features/legal/AboutPage').then((m) => ({ default: m.AboutPage })))
 const PrivacyPage = lazy(() => import('./features/legal/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
+const ReleaseNotesPage = lazy(() => import('./features/legal/ReleaseNotesPage').then((m) => ({ default: m.ReleaseNotesPage })))
 const AccountPage = lazy(() => import('./features/account/AccountPage').then((m) => ({ default: m.AccountPage })))
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/account" element={<AccountPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/release-notes" element={<ReleaseNotesPage />} />
               <Route
                 path="/admin"
                 element={

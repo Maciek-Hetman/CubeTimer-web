@@ -69,6 +69,13 @@ Ensure the static root is readable by the Caddy container (non-root):
 sudo chmod -R a+rX /var/www/cubetimer
 ```
 
+### Releasing a version
+
+1. Add an entry for the new tag at the top of [`src/features/legal/releaseNotes.ts`](../src/features/legal/releaseNotes.ts). It is shown on the in-app Release notes page (`/release-notes`, linked from the footer), which also marks the version the visitor is running.
+2. Merge to `main`, then tag and push: `git tag v0.4.0 && git push origin v0.4.0`.
+
+The build embeds the tag name as the app version. Open clients pick up the new deploy without a hard refresh: the service worker installs and activates it in the background (it also checks hourly and whenever the app returns to the foreground), and the page reloads onto it when that is harmless — within 30 seconds of the app being opened or brought back, on the next page change, or while the tab is hidden, never during a solve. See [`src/app/appUpdate.ts`](../src/app/appUpdate.ts).
+
 ### First deploy checklist
 
 1. CubeSync is healthy: `curl -fsS https://api.cubetimer.cc/health/ready`

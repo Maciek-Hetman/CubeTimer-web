@@ -1,9 +1,15 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 import * as React from 'react'
 
 interface ImportMetaEnv {
   readonly VITE_CUBESYNC_URL?: string
   readonly VITE_GOOGLE_CLIENT_ID?: string
+}
+
+declare global {
+  /** The deployed release tag (e.g. v0.4.0), or `git describe` output for local builds. */
+  const __APP_VERSION__: string
 }
 
 declare module 'react' {
