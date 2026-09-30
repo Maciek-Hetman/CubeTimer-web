@@ -203,7 +203,9 @@ jobs:
       # deletes test files or test cases, or skips or focuses tests, which
       # would otherwise turn the test run green. The Playwright tests in e2e/
       # are outside src/, so the session can't touch them. It can't
-      # catch a test whose assertions were weakened; review still has to. A
+      # catch a test whose assertions were weakened, or a deleted test offset
+      # by an unrelated one added elsewhere (it counts cases across the whole
+      # diff); review still has to. A
       # refusal is recorded in a marker file for the report step, and cleared
       # when a later push passes. The diff against the reviewed SHA relies on
       # checkout's ref being that SHA (it is the only commit fetched).
@@ -313,9 +315,13 @@ jobs:
           reason=""
           if [ -f "$marker" ]; then
             reason="The pre-push hook refused it: $(sort -u "$marker" | paste -sd ';' - | sed 's/;/; /g')."
-          elif [ "$(git rev-parse HEAD)" != "$REVIEWED_SHA" ] &&
-            [ "$(gh api "repos/$GH_REPO/git/ref/heads/$HEAD_REF" --jq .object.sha)" = "$REVIEWED_SHA" ]; then
-            reason="The session committed a fix but stopped before pushing it."
+          elif [ "$(git rev-parse HEAD)" != "$REVIEWED_SHA" ]; then
+            # A failed lookup must not read as "pushed": fail when the push can't be confirmed.
+            if ! remote_sha="$(gh api "repos/$GH_REPO/git/ref/heads/$HEAD_REF" --jq .object.sha)"; then
+              reason="The session committed a fix, but reading the branch to confirm the push failed."
+            elif [ "$remote_sha" = "$REVIEWED_SHA" ]; then
+              reason="The session committed a fix but stopped before pushing it."
+            fi
           fi
           if [ -n "$reason" ]; then
             echo "::error::Auto-fix wasn't pushed. $reason"
