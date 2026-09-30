@@ -194,6 +194,7 @@ jobs:
         run: npm ci
 
       - name: Apply reviewer findings
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -214,7 +215,39 @@ jobs:
             Don't run the reviewer yourself; the push triggers a fresh review of the PR.
           # --agent isn't used, for the same reason as in claude.yml. The push
           # rule is the exact command, so no force-push or other branches.
+          # Edit and Write are listed even though this session only delegates:
+          # implementer's tool calls are checked against this allowlist, and in
+          # CI anything not on it is denied. Without them implementer can't
+          # change a file and the job ends green with nothing committed. They
+          # are scoped to src/ (implementer's remit) because the review text in
+          # the prompt is model output derived from PR content, so the session
+          # must not be able to write workflows or agent definitions.
           claude_args: |
             --max-turns 30
-            --allowedTools "Read,Glob,Grep,Agent(implementer),Bash(npm run typecheck),Bash(npm run lint),Bash(git status:*),Bash(git diff:*),Bash(git add -A),Bash(git commit:*),Bash(git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }})"
+            --allowedTools "Read,Edit(src/**),Write(src/**),Glob,Grep,Agent(implementer),Bash(npm run typecheck),Bash(npm run lint),Bash(git status:*),Bash(git diff:*),Bash(git add -A),Bash(git commit:*),Bash(git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }})"
             --disallowedTools "Agent(browser-verifier),Agent(pipeline),Agent(reviewer)"
+
+      # The action exits 0 even when Claude made no commit (a denied tool, or a
+      # finding it decided not to fix), which reads as a green run that did
+      # nothing. Flag that, with Claude's own explanation. The action also
+      # skips itself, writing no execution file, on a PR that changes a workflow
+      # file (it requires them to match the default branch), so the file is
+      # optional here.
+      - name: Report if nothing was committed
+        env:
+          REVIEWED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          if [ "$(git rev-parse HEAD)" = "$REVIEWED_SHA" ]; then
+            echo "::warning::Auto-fix made no commit on top of $REVIEWED_SHA. See the job summary."
+            {
+              echo '### Auto-fix made no commit'
+              echo
+              if [ -f "${EXECUTION_FILE:-}" ]; then
+                jq -r '[.[] | select(.type == "result")] | last | .result // "Claude returned no result message."' "$EXECUTION_FILE"
+              else
+                echo "Claude did not run: the action wrote no output. It skips itself on PRs that change a workflow file. Check the \"Apply reviewer findings\" step log."
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
