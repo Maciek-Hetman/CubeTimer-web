@@ -164,6 +164,32 @@ describe('AccountPage', () => {
     expect(mocks.dismissAllRejected).not.toHaveBeenCalled()
   })
 
+  it('disables the rejected-change buttons while a retry runs', async () => {
+    const user = userEvent.setup()
+    mocks.rejectedCount = 2
+    let finish = () => {}
+    mocks.retryRejected.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)))
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Dismiss all' })).toBeDisabled()
+
+    finish()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled())
+  })
+
+  it('shows an error when retrying rejected changes fails', async () => {
+    const user = userEvent.setup()
+    mocks.rejectedCount = 2
+    mocks.retryRejected.mockRejectedValue(new Error('transaction failed'))
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('Could not retry rejected changes')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
+  })
+
   it('hides account management panels for guests', () => {
     mocks.user = null
     renderPage()

@@ -14,7 +14,14 @@ import { db, getMeta, type ConflictRecord, type RejectedRecord } from '../data/d
 import { enqueueMutationsBatch, listOutbox, removeOutbox } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
-import type { CubeSession, MutationRecord, RemoteEntityState, Solve } from '../domain/models'
+import type {
+  CubeSession,
+  MutationRecord,
+  RemoteEntityState,
+  SessionInput,
+  Solve,
+  SolveInput,
+} from '../domain/models'
 import { createId, normalizeTimingDevice, nowIso } from '../domain/models'
 
 export type SyncStatus = 'idle' | 'syncing' | 'pending' | 'offline' | 'error' | 'conflict'
@@ -480,7 +487,8 @@ export async function applySyncResponse(
 }
 
 /**
- * Queues the current local copy of every rejected entity again and clears the rejections.
+ * Queues the current local copy of every rejected entity again and clears those rejections.
+ * A rejection whose row is gone locally is kept, since nothing can be sent for it.
  * Returns how many mutations were queued.
  */
 export async function requeueRejected(ownerId: string): Promise<number> {
@@ -495,11 +503,19 @@ export async function requeueRejected(ownerId: string): Promise<number> {
       rejections.filter((r) => r.entity === 'solve').map((r) => r.entityId),
     )
     const inputs: Parameters<typeof enqueueMutationsBatch>[0] = []
-    for (const rejection of rejections) {
-      const row = rejection.entity === 'session' ? sessions.get(rejection.entityId) : solves.get(rejection.entityId)
-      // Gone locally, or deleted locally and missing on the server: there is nothing to send.
-      if (!row || (row.deletedAt && rejection.code === 'not_found')) {
-        continue
+    const cleared: string[] = []
+    const requeue = (
+      rejection: RejectedRecord,
+      row: CubeSession | Solve | undefined,
+      data: SessionInput | SolveInput | undefined,
+    ) => {
+      if (!row) {
+        return
+      }
+      cleared.push(rejection.id)
+      // Deleted locally and missing on the server: the change already holds.
+      if (row.deletedAt && rejection.code === 'not_found') {
+        return
       }
       inputs.push({
         ownerId,
@@ -507,15 +523,20 @@ export async function requeueRejected(ownerId: string): Promise<number> {
         entityId: row.id,
         operation: row.deletedAt ? 'delete' : 'upsert',
         baseVersion: row.version,
-        data: row.deletedAt
-          ? undefined
-          : rejection.entity === 'session'
-            ? toSessionInput(row as CubeSession)
-            : toSolveInput(row as Solve),
+        data: row.deletedAt ? undefined : data,
       })
     }
+    for (const rejection of rejections) {
+      if (rejection.entity === 'session') {
+        const session = sessions.get(rejection.entityId)
+        requeue(rejection, session, session && toSessionInput(session))
+      } else {
+        const solve = solves.get(rejection.entityId)
+        requeue(rejection, solve, solve && toSolveInput(solve))
+      }
+    }
     await enqueueMutationsBatch(inputs)
-    await db.rejections.bulkDelete(rejections.map((r) => r.id))
+    await db.rejections.bulkDelete(cleared)
     return inputs.length
   })
 }

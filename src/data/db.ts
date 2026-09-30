@@ -111,6 +111,38 @@ class CubeTimerDB extends Dexie {
             delete settings.hideWidgetsDuringSolve
           }),
       )
+    // v5: keyboard solves were stored with sub-millisecond durations, which CubeSync rejects.
+    // Floor them, and the queued payloads built from them, to match what the server keeps.
+    this.version(5)
+      .stores({
+        solves:
+          'id, ownerId, sessionId, event, solvedAt, [ownerId+event], [ownerId+sessionId], [ownerId+event+solvedAt], [ownerId+sessionId+solvedAt]',
+        sessions: 'id, ownerId, event, kind, startedAt, [ownerId+event]',
+        outbox: 'id, ownerId, entity, entityId, createdAt',
+        settings: 'ownerId',
+        meta: 'key',
+        widgetLayouts: 'ownerId',
+        conflicts: 'id, ownerId, entityId',
+        rejections: 'id, ownerId, entityId, createdAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('solves')
+          .filter((solve: Solve) => !Number.isInteger(solve.durationMs))
+          .modify((solve: Solve) => {
+            solve.durationMs = Math.floor(solve.durationMs)
+          })
+        await tx
+          .table('outbox')
+          .filter((record: MutationRecord) => {
+            const duration = (record.data as { duration_ms?: unknown } | undefined)?.duration_ms
+            return typeof duration === 'number' && !Number.isInteger(duration)
+          })
+          .modify((record: MutationRecord) => {
+            const data = record.data as { duration_ms: number }
+            data.duration_ms = Math.floor(data.duration_ms)
+          })
+      })
   }
 }
 

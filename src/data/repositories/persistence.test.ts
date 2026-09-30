@@ -337,7 +337,8 @@ describe('sync outcomes', () => {
       baseVersion: 4,
       data: { penalty: 'plus_two' },
     })
-    expect(await db.rejections.where('ownerId').equals('account-1').count()).toBe(0)
+    // Only the rejection with no local row is left, since nothing could be sent for it.
+    expect((await db.rejections.where('ownerId').equals('account-1').toArray()).map((r) => r.id)).toEqual(['r4'])
     expect(await db.rejections.get('other-owner')).toBeTruthy()
   })
 })
