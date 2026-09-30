@@ -10,6 +10,7 @@ import {
   type BluetoothTimerContextValue,
   type BluetoothTimerStatus,
 } from './BluetoothTimerContext'
+import { appUpdater } from '../app/appUpdate'
 import { useSettings } from './SettingsContext'
 
 function requestMacFromUser(suggested: string | null): string | null {
@@ -91,6 +92,10 @@ export function BluetoothTimerProvider({ children }: { children: ReactNode }) {
       void disconnect()
     }
   }, [active, disconnect])
+
+  // A reload would drop the device connection (and the pairing grant), so hold updates while it is open.
+  const holdingUpdate = status !== 'disconnected'
+  useEffect(() => (holdingUpdate ? appUpdater.hold() : undefined), [holdingUpdate])
 
   useEffect(() => () => void connectionRef.current?.disconnect(), [])
 

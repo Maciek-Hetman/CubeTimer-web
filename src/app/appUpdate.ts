@@ -73,6 +73,7 @@ export function createAppUpdater(env: AppUpdaterEnv): AppUpdater {
     },
     navigated() {
       // Let the route commit and paint settle first, so the reload doesn't land mid-render of the new page.
+      // tryApply re-checks holds and editing when it fires; the initial redirect is also covered by the wake window.
       setTimeout(() => tryApply(true), 0)
     },
     hold() {

@@ -67,16 +67,15 @@ export function registerAppUpdates() {
       // No reload coming: let the error surface instead of swallowing it.
       return
     }
+    // Record the attempt first: if storage isn't writable the loop guard can't work, so let the error surface.
+    try {
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
+    } catch {
+      return
+    }
     // A reload is scheduled, so the failed import is expected to be fixed by it.
     event.preventDefault()
-    appUpdater.whenNotHeld(() => {
-      try {
-        sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
-      } catch {
-        return
-      }
-      window.location.reload()
-    })
+    appUpdater.whenNotHeld(() => window.location.reload())
   }
   window.addEventListener('vite:preloadError', onPreloadError)
 

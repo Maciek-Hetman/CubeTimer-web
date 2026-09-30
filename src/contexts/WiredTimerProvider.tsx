@@ -6,6 +6,7 @@ import {
   isWiredTimerSupported,
   type WiredTimerConnection,
 } from '../features/timer/wired/wiredTimer'
+import { appUpdater } from '../app/appUpdate'
 import { useSettings } from './SettingsContext'
 import { WiredTimerContext, type WiredTimerContextValue, type WiredTimerStatus } from './WiredTimerContext'
 
@@ -139,6 +140,10 @@ export function WiredTimerProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [active, supported, connect, disconnect])
+
+  // A reload would drop the audio connection (and the mic grant), so hold updates while it is open.
+  const holdingUpdate = status !== 'disconnected'
+  useEffect(() => (holdingUpdate ? appUpdater.hold() : undefined), [holdingUpdate])
 
   useEffect(() => () => void connectionRef.current?.disconnect(), [])
 
