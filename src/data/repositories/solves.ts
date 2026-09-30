@@ -255,7 +255,8 @@ export function toSolveInput(solve: Solve): SolveInput {
   return {
     id: solve.id,
     session_id: solve.sessionId,
-    duration_ms: solve.durationMs,
+    // CubeSync rejects a fractional duration_ms; older keyboard solves were stored with one.
+    duration_ms: Math.floor(solve.durationMs),
     penalty: solve.penalty,
     solved_at: solve.solvedAt,
     scramble: solve.scramble,

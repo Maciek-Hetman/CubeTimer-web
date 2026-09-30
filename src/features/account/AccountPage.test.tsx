@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   deleteAccount: vi.fn(),
   rejectedCount: 0 as number,
   dismissAllRejected: vi.fn(),
+  retryRejected: vi.fn(),
 }))
 
 vi.mock('../../app/AppContext', () => ({
@@ -26,6 +27,7 @@ vi.mock('../../app/AppContext', () => ({
     conflicts: 1,
     rejectedCount: mocks.rejectedCount,
     dismissAllRejected: mocks.dismissAllRejected,
+    retryRejected: mocks.retryRejected,
     lastSyncedAt: null,
     deviceName: 'Test Device',
     deviceId: 'dev-1',
@@ -60,6 +62,7 @@ describe('AccountPage', () => {
     mocks.authenticatedRequest.mockReset()
     mocks.deleteAccount.mockReset()
     mocks.dismissAllRejected.mockReset()
+    mocks.retryRejected.mockReset()
     vi.unstubAllGlobals()
   })
 
@@ -149,6 +152,16 @@ describe('AccountPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Dismiss all' }))
     expect(mocks.dismissAllRejected).toHaveBeenCalled()
+  })
+
+  it('retries rejected changes', async () => {
+    const user = userEvent.setup()
+    mocks.rejectedCount = 2
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryRejected).toHaveBeenCalled()
+    expect(mocks.dismissAllRejected).not.toHaveBeenCalled()
   })
 
   it('hides account management panels for guests', () => {

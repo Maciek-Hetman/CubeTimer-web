@@ -42,6 +42,7 @@ export function AccountPage() {
     conflicts,
     rejectedCount,
     dismissAllRejected,
+    retryRejected,
     lastSyncedAt,
     deviceName,
     deviceId,
@@ -277,9 +278,12 @@ export function AccountPage() {
                     {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} could not be synced
                   </strong>
                   <p className="muted" style={{ margin: '0.375rem 0 0.625rem' }}>
-                    Dismiss to clear.
+                    Retry sends your local copies again. Dismiss clears the list; those changes stay on this device only.
                   </p>
                   <div className="row wrap">
+                    <Button type="button" onClick={() => void retryRejected()}>
+                      Retry
+                    </Button>
                     <Button type="button" variant="ghost" onClick={() => void dismissAllRejected()}>
                       Dismiss all
                     </Button>

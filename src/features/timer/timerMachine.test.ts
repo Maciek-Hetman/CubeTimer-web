@@ -54,6 +54,14 @@ describe('timer machine', () => {
     expect(finished.finishedMs).toBe(625)
   })
 
+  it('records whole milliseconds from sub-millisecond event times', () => {
+    const engine = createTimerEngine(() => 500)
+    engine.start(1000.3)
+    const finished = engine.stop(23333.4)
+    expect(finished.finishedMs).toBe(22333)
+    expect(finished.elapsedMs).toBe(22333)
+  })
+
   it('cancels an interrupted hold without starting', () => {
     const engine = createTimerEngine(() => 500)
     engine.press(0)

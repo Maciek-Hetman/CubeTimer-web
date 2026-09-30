@@ -49,6 +49,7 @@ export interface AppContextValue {
   conflicts: number
   rejectedCount: number
   dismissAllRejected: () => Promise<void>
+  retryRejected: () => Promise<void>
   lastSyncedAt: string | null
   deviceName: string | null
   deviceId: string | null
@@ -95,6 +96,7 @@ export function useApp(): AppContextValue {
     resolveConflictKeepServer: sync.resolveConflictKeepServer,
     resolveConflictKeepLocal: sync.resolveConflictKeepLocal,
     dismissAllRejected: sync.dismissAllRejected,
+    retryRejected: sync.retryRejected,
 
     scramble: scramble.scramble,
     scrambleState: scramble.scrambleState,

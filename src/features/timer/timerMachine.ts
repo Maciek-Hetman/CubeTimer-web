@@ -64,7 +64,8 @@ export function createTimerEngine(getHoldMs?: () => number): TimerEngine {
   function finishRun(now: number): void {
     const t = normalizeTime(now)
     phase = 'finished'
-    finishedMs = Math.max(0, t - runStartedAt)
+    // Event clocks are sub-millisecond, but a solve is stored and synced in whole milliseconds.
+    finishedMs = Math.max(0, Math.floor(t - runStartedAt))
     elapsedMs = finishedMs
   }
 

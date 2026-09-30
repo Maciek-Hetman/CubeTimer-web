@@ -11,7 +11,7 @@ import type {
   SnapshotResponse,
 } from '../api/types'
 import { db, getMeta, type ConflictRecord, type RejectedRecord } from '../data/db'
-import { listOutbox, removeOutbox } from '../data/repositories/outbox'
+import { enqueueMutationsBatch, listOutbox, removeOutbox } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
 import type { CubeSession, MutationRecord, RemoteEntityState, Solve } from '../domain/models'
@@ -477,6 +477,47 @@ export async function applySyncResponse(
     },
   )
   return { conflicts, rejected }
+}
+
+/**
+ * Queues the current local copy of every rejected entity again and clears the rejections.
+ * Returns how many mutations were queued.
+ */
+export async function requeueRejected(ownerId: string): Promise<number> {
+  return db.transaction('rw', [db.rejections, db.sessions, db.solves, db.outbox], async () => {
+    const rejections = await db.rejections.where('ownerId').equals(ownerId).toArray()
+    const sessions = await loadById(
+      db.sessions,
+      rejections.filter((r) => r.entity === 'session').map((r) => r.entityId),
+    )
+    const solves = await loadById(
+      db.solves,
+      rejections.filter((r) => r.entity === 'solve').map((r) => r.entityId),
+    )
+    const inputs: Parameters<typeof enqueueMutationsBatch>[0] = []
+    for (const rejection of rejections) {
+      const row = rejection.entity === 'session' ? sessions.get(rejection.entityId) : solves.get(rejection.entityId)
+      // Gone locally, or deleted locally and missing on the server: there is nothing to send.
+      if (!row || (row.deletedAt && rejection.code === 'not_found')) {
+        continue
+      }
+      inputs.push({
+        ownerId,
+        entity: rejection.entity,
+        entityId: row.id,
+        operation: row.deletedAt ? 'delete' : 'upsert',
+        baseVersion: row.version,
+        data: row.deletedAt
+          ? undefined
+          : rejection.entity === 'session'
+            ? toSessionInput(row as CubeSession)
+            : toSolveInput(row as Solve),
+      })
+    }
+    await enqueueMutationsBatch(inputs)
+    await db.rejections.bulkDelete(rejections.map((r) => r.id))
+    return inputs.length
+  })
 }
 
 function toApiMutation(record: MutationRecord): Mutation {
