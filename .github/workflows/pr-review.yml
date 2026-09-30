@@ -3,7 +3,9 @@ name: PR Review
 # Runs the read-only `reviewer` agent (.claude/agents/reviewer.md) on each PR
 # and posts its findings as a single, updated PR comment. If the review has
 # Critical or Should-fix findings, the `fix` job hands them to the
-# `implementer` agent and pushes the result to the PR branch.
+# `implementer` agent and pushes the result to the PR branch. A pre-push hook
+# blocks that push unless typecheck, lint, and tests pass and no Vitest tests
+# were deleted or skipped.
 #
 # The reviewing Claude runs in a job that can only read. Posting happens in a
 # separate job that has pull-requests: write and never runs Claude. The fix job
@@ -193,6 +195,61 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Gate the fix push on a green build, whatever the session did or
+      # skipped. The hook lives outside the checkout, so the session (which can
+      # only write src/ and run the exact push command, no --no-verify) can't
+      # edit or bypass it. Since the session can edit the Vitest tests next to
+      # the source (src/**/*.test.ts[x]), the hook also refuses a fix that
+      # deletes test files or test cases, or skips or focuses tests, which
+      # would otherwise turn the test run green. The Playwright tests in e2e/
+      # are outside src/, so the session can't touch them. It can't
+      # catch a test whose assertions were weakened, or a deleted test offset
+      # by an unrelated one added elsewhere (it counts cases across the whole
+      # diff); review still has to. A
+      # refusal is recorded in a marker file for the report step, and cleared
+      # when a later push passes. The diff against the reviewed SHA relies on
+      # checkout's ref being that SHA (it is the only commit fetched).
+      - name: Require checks before pushing
+        env:
+          REVIEWED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          hooks="$RUNNER_TEMP/git-hooks"
+          mkdir -p "$hooks"
+          {
+            echo '#!/usr/bin/env bash'
+            printf "reviewed='%s'\nmarker='%s'\n" "$REVIEWED_SHA" "$RUNNER_TEMP/pre-push-refused"
+            cat <<'HOOK'
+          set -euo pipefail
+          refuse() {
+            echo "pre-push: $1, push refused" >&2
+            echo "$1" >> "$marker"
+            exit 1
+          }
+          tests=(-- '*.test.ts' '*.test.tsx')
+          if [ -n "$(git diff --name-only --diff-filter=D "$reviewed" HEAD "${tests[@]}")" ]; then
+            refuse "the fix deletes test files"
+          fi
+          test_diff="$(git diff -U0 "$reviewed" HEAD "${tests[@]}")"
+          if grep -E '^\+[^+].*(\b(describe|it|test)\.(skip|skipIf|runIf|only|todo|fails)\b|\bx(describe|it|test)\()' \
+            <<<"$test_diff" >/dev/null; then
+            refuse "the fix skips or focuses tests"
+          fi
+          # Test cases are it(...) / test(...) calls, including .each; a fix may move them but not drop them.
+          removed="$(grep -cE '^-\s*(it|test)\b[^(]*\(' <<<"$test_diff" || true)"
+          added="$(grep -cE '^\+\s*(it|test)\b[^(]*\(' <<<"$test_diff" || true)"
+          if [ "$removed" -gt "$added" ]; then
+            refuse "the fix removes test cases ($removed removed, $added added)"
+          fi
+          echo "pre-push: running typecheck, lint, and tests" >&2
+          { npm run typecheck && npm run lint && npm run test; } >&2 || refuse "typecheck, lint, or tests failed"
+          # A retry that passes lands the fix, so an earlier refusal no longer applies.
+          rm -f "$marker"
+          HOOK
+          } > "$hooks/pre-push"
+          chmod +x "$hooks/pre-push"
+          git config core.hooksPath "$hooks"
+
       - name: Apply reviewer findings
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -216,8 +273,9 @@ jobs:
             Fix the Critical and Should-fix findings. Ignore Nitpicks.
             1. Run the `implementer` subagent in the foreground and wait for its report before step 2. Spec: "Fix these reviewer findings on an existing PR:" followed by the Critical and Should-fix sections copied verbatim. Don't paraphrase them.
             2. Check `git status --porcelain` and `git diff`. If nothing changed, stop and explain why.
-            3. Run `git add -A`, then commit with exactly this subject line: `${{ env.FIX_COMMIT_PREFIX }} (round ${{ needs.review.outputs.fix_round }})`. In the body, list the findings fixed and any not fixed, with implementer's reason.
-            4. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. If it's rejected because the branch moved, stop: the new commits get their own review.
+            3. Run `npm run typecheck`, `npm run lint`, and `npm run test`. If any fail, run `implementer` again in the foreground with the failures and their error output, and tell it to fix the code or update tests whose expectations the fix intentionally changed. Don't delete, skip, or focus tests, or remove test cases, to make them pass; the pre-push hook refuses that. Repeat at most twice. If anything still fails, stop and report the failures without committing.
+            4. Run `git add -A`, then commit with exactly this subject line: `${{ env.FIX_COMMIT_PREFIX }} (round ${{ needs.review.outputs.fix_round }})`. In the body, list the findings fixed and any not fixed, with implementer's reason.
+            5. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. A pre-push hook runs typecheck, lint, and tests and checks that no Vitest tests were deleted, removed, or skipped. If it refuses the push, stop and report its failures; don't retry. If the push is rejected because the branch moved, stop: the new commits get their own review.
             Don't run the reviewer yourself; the push triggers a fresh review of the PR.
           # --agent isn't used, for the same reason as in claude.yml. The push
           # rule is the exact command, so no force-push or other branches.
@@ -230,7 +288,7 @@ jobs:
           # must not be able to write workflows or agent definitions.
           claude_args: |
             --max-turns 30
-            --allowedTools "Read,Edit(src/**),Write(src/**),Glob,Grep,Agent(implementer),Bash(npm run typecheck),Bash(npm run lint),Bash(git status:*),Bash(git diff:*),Bash(git add -A),Bash(git commit:*),Bash(git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }})"
+            --allowedTools "Read,Edit(src/**),Write(src/**),Glob,Grep,Agent(implementer),Bash(npm run typecheck),Bash(npm run lint),Bash(npm run test),Bash(git status:*),Bash(git diff:*),Bash(git add -A),Bash(git commit:*),Bash(git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }})"
             --disallowedTools "Agent(browser-verifier),Agent(pipeline),Agent(reviewer)"
 
       # The action exits 0 even when Claude made no commit (a denied tool, or a
@@ -239,12 +297,45 @@ jobs:
       # skips itself, writing no execution file, on a PR that changes a workflow
       # file (it requires them to match the default branch), so the file is
       # optional here.
-      - name: Report if nothing was committed
+      - name: Report if the fix wasn't pushed
         env:
           REVIEWED_SHA: ${{ github.event.pull_request.head.sha }}
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
+          # Fail the job when a fix was held back, so it never passes as a green
+          # run that did nothing: the pre-push hook refused it (the marker file
+          # says why, even if the branch has moved since), or the session
+          # committed and stopped before pushing. A push rejected only because
+          # the branch moved stays green: the new commits get their own review.
+          marker="$RUNNER_TEMP/pre-push-refused"
+          reason=""
+          if [ -f "$marker" ]; then
+            reason="The pre-push hook refused it: $(sort -u "$marker" | paste -sd ';' - | sed 's/;/; /g')."
+          elif [ "$(git rev-parse HEAD)" != "$REVIEWED_SHA" ]; then
+            # A failed lookup must not read as "pushed": fail when the push can't be confirmed.
+            if ! remote_sha="$(gh api "repos/$GH_REPO/git/ref/heads/$HEAD_REF" --jq .object.sha)"; then
+              reason="The session committed a fix, but reading the branch to confirm the push failed."
+            elif [ "$remote_sha" = "$REVIEWED_SHA" ]; then
+              reason="The session committed a fix but stopped before pushing it."
+            fi
+          fi
+          if [ -n "$reason" ]; then
+            echo "::error::Auto-fix wasn't pushed. $reason"
+            {
+              echo '### Auto-fix not pushed'
+              echo
+              echo "$reason See the \"Apply reviewer findings\" step log, and fix the findings by hand or with \`@claude\`."
+              if [ -f "${EXECUTION_FILE:-}" ]; then
+                echo
+                jq -r '[.[] | select(.type == "result")] | last | .result // "Claude returned no result message."' "$EXECUTION_FILE"
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           if [ "$(git rev-parse HEAD)" = "$REVIEWED_SHA" ]; then
             echo "::warning::Auto-fix made no commit on top of $REVIEWED_SHA. See the job summary."
             {
