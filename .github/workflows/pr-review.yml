@@ -4,8 +4,8 @@ name: PR Review
 # and posts its findings as a single, updated PR comment. If the review has
 # Critical or Should-fix findings, the `fix` job hands them to the
 # `implementer` agent and pushes the result to the PR branch. A pre-push hook
-# blocks that push unless typecheck, lint, and tests pass and no tests were
-# deleted or skipped.
+# blocks that push unless typecheck, lint, and tests pass and no Vitest tests
+# were deleted or skipped.
 #
 # The reviewing Claude runs in a job that can only read. Posting happens in a
 # separate job that has pull-requests: write and never runs Claude. The fix job
@@ -198,9 +198,11 @@ jobs:
       # Gate the fix push on a green build, whatever the session did or
       # skipped. The hook lives outside the checkout, so the session (which can
       # only write src/ and run the exact push command, no --no-verify) can't
-      # edit or bypass it. Since the session can edit tests, the hook also
-      # refuses a fix that deletes test files or test cases, or skips or
-      # focuses tests, which would otherwise turn the test run green. It can't
+      # edit or bypass it. Since the session can edit the Vitest tests next to
+      # the source (src/**/*.test.ts[x]), the hook also refuses a fix that
+      # deletes test files or test cases, or skips or focuses tests, which
+      # would otherwise turn the test run green. The Playwright tests in e2e/
+      # are outside src/, so the session can't touch them. It can't
       # catch a test whose assertions were weakened; review still has to. A
       # refusal is recorded in a marker file for the report step, and cleared
       # when a later push passes. The diff against the reviewed SHA relies on
@@ -271,7 +273,7 @@ jobs:
             2. Check `git status --porcelain` and `git diff`. If nothing changed, stop and explain why.
             3. Run `npm run typecheck`, `npm run lint`, and `npm run test`. If any fail, run `implementer` again in the foreground with the failures and their error output, and tell it to fix the code or update tests whose expectations the fix intentionally changed. Don't delete, skip, or focus tests, or remove test cases, to make them pass; the pre-push hook refuses that. Repeat at most twice. If anything still fails, stop and report the failures without committing.
             4. Run `git add -A`, then commit with exactly this subject line: `${{ env.FIX_COMMIT_PREFIX }} (round ${{ needs.review.outputs.fix_round }})`. In the body, list the findings fixed and any not fixed, with implementer's reason.
-            5. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. A pre-push hook runs typecheck, lint, and tests and checks that no tests were deleted, removed, or skipped. If it refuses the push, stop and report its failures; don't retry. If the push is rejected because the branch moved, stop: the new commits get their own review.
+            5. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. A pre-push hook runs typecheck, lint, and tests and checks that no Vitest tests were deleted, removed, or skipped. If it refuses the push, stop and report its failures; don't retry. If the push is rejected because the branch moved, stop: the new commits get their own review.
             Don't run the reviewer yourself; the push triggers a fresh review of the PR.
           # --agent isn't used, for the same reason as in claude.yml. The push
           # rule is the exact command, so no force-push or other branches.
