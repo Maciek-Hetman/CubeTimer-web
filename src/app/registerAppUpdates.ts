@@ -27,12 +27,11 @@ export function registerAppUpdates() {
   }
 
   // The worker skips waiting and claims clients, so a new version shows up as a controller change. The plugin's
-  // own reload-on-activation is disabled (prompt mode) and its reload callback is routed through the updater.
+  // own reload-on-activation is disabled (registerType 'prompt'). With clientsClaim the first install fires
+  // controllerchange too, so only listen when the page already had a controller: that is an update, not a first visit.
   const hadController = !!navigator.serviceWorker?.controller
   registerSW({
     immediate: true,
-    onNeedRefresh: () => {},
-    onNeedReload: () => appUpdater.updateReady(),
     onRegisteredSW(_swUrl, reg) {
       registration = reg
     },

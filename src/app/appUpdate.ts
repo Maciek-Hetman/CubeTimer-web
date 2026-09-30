@@ -80,12 +80,15 @@ export function createAppUpdater(env: AppUpdaterEnv): AppUpdater {
         }
         released = true
         holds -= 1
+        tryApply(false)
         if (holds === 0) {
           const queued = onNotHeld
           onNotHeld = []
-          queued.forEach((fn) => fn())
+          // Queued reloads are redundant once the update reload is under way.
+          if (!reloading) {
+            queued.forEach((fn) => fn())
+          }
         }
-        tryApply(false)
       }
     },
     whenNotHeld(fn) {

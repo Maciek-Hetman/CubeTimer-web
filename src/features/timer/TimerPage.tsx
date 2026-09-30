@@ -290,7 +290,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   // its own hold in a later effect, so the finished phase is held too to leave no gap; this also keeps a reload
   // from landing right after a save).
   const holdsUpdate = isSolvingOrPreparing || snapshot.phase === 'finished'
-  useEffect(() => (holdsUpdate ? appUpdater.hold() : undefined), [holdsUpdate])
+  useLayoutEffect(() => (holdsUpdate ? appUpdater.hold() : undefined), [holdsUpdate])
 
   useEffect(() => {
     loadTimerFont(settings.timerFont ?? 'jetbrains')
