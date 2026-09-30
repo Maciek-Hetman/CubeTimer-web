@@ -45,8 +45,8 @@ export function RecentAo5Chart() {
         <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 8, left: 0 }}>
           <defs>
             <linearGradient id="colorMsAo5" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--chart-ao5)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="var(--chart-ao5)" stopOpacity={0} />
+              <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <XAxis dataKey="index" hide />
@@ -73,7 +73,7 @@ export function RecentAo5Chart() {
             type="monotone"
             dataKey="ms"
             name="Ao5"
-            stroke="var(--chart-ao5)"
+            stroke="var(--accent)"
             fillOpacity={1}
             fill="url(#colorMsAo5)"
             strokeWidth={2}
