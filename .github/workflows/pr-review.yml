@@ -196,6 +196,12 @@ jobs:
       - name: Apply reviewer findings
         id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          # Subagents run in the background by default (Claude Code 2.1.198+).
+          # This session only delegates, so it would end right after starting
+          # implementer, killing it before it edits anything: the job then ends
+          # green with nothing committed. Keep subagents in the foreground.
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # This job runs as claude[bot] when re-triggered by its own fix commit.
@@ -208,7 +214,7 @@ jobs:
             </review>
 
             Fix the Critical and Should-fix findings. Ignore Nitpicks.
-            1. Run the `implementer` subagent. Spec: "Fix these reviewer findings on an existing PR:" followed by the Critical and Should-fix sections copied verbatim. Don't paraphrase them.
+            1. Run the `implementer` subagent in the foreground and wait for its report before step 2. Spec: "Fix these reviewer findings on an existing PR:" followed by the Critical and Should-fix sections copied verbatim. Don't paraphrase them.
             2. Check `git status --porcelain` and `git diff`. If nothing changed, stop and explain why.
             3. Run `git add -A`, then commit with exactly this subject line: `${{ env.FIX_COMMIT_PREFIX }} (round ${{ needs.review.outputs.fix_round }})`. In the body, list the findings fixed and any not fixed, with implementer's reason.
             4. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. If it's rejected because the branch moved, stop: the new commits get their own review.
