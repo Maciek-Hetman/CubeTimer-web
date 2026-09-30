@@ -128,7 +128,12 @@ class CubeTimerDB extends Dexie {
       .upgrade(async (tx) => {
         await tx
           .table('solves')
-          .filter((solve: Solve) => !Number.isInteger(solve.durationMs))
+          .filter(
+            (solve: Solve) =>
+              typeof solve.durationMs === 'number' &&
+              Number.isFinite(solve.durationMs) &&
+              !Number.isInteger(solve.durationMs),
+          )
           .modify((solve: Solve) => {
             solve.durationMs = Math.floor(solve.durationMs)
           })

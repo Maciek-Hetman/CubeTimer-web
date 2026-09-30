@@ -517,6 +517,9 @@ export async function requeueRejected(ownerId: string): Promise<number> {
       if (row.deletedAt && rejection.code === 'not_found') {
         return
       }
+      // Batch merge semantics: if a mutation is already queued for this entity, its
+      // baseVersion is kept and only operation/data are overwritten, so row.version
+      // here applies only when nothing is queued.
       inputs.push({
         ownerId,
         entity: rejection.entity,
