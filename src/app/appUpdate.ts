@@ -1,5 +1,5 @@
-// A new deploy is installed by the service worker in the background and waits, while the open page keeps
-// running the old bundle. The updater applies it for the user at a moment that costs them nothing: right after
+// A new deploy is installed and activated by the service worker in the background, but the open page keeps
+// running the old bundle until it reloads. The updater applies it for the user at a moment that costs them nothing: right after
 // the app was opened or brought back, on the next in-app navigation, or while the tab is hidden — and never
 // while something (a solve in progress) holds it off.
 //
@@ -80,15 +80,19 @@ export function createAppUpdater(env: AppUpdaterEnv): AppUpdater {
         }
         released = true
         holds -= 1
-        tryApply(false)
-        if (holds === 0) {
-          const queued = onNotHeld
-          onNotHeld = []
-          // Queued reloads are redundant once the update reload is under way.
-          if (!reloading) {
-            queued.forEach((fn) => fn())
+        // Settle after the current task, so a hold handed over within one React commit (a solve's busy hold
+        // released as its save hold is taken) never leaves a gap for a reload.
+        queueMicrotask(() => {
+          tryApply(false)
+          if (holds === 0 && onNotHeld.length > 0) {
+            const queued = onNotHeld
+            onNotHeld = []
+            // Queued reloads are redundant once the update reload is under way.
+            if (!reloading) {
+              queued.forEach((fn) => fn())
+            }
           }
-        }
+        })
       }
     },
     whenNotHeld(fn) {

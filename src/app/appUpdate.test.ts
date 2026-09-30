@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAppUpdater, WAKE_WINDOW_MS } from './appUpdate'
 
+const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve))
+
 function setup() {
   const env = {
     time: 0,
@@ -63,26 +65,69 @@ describe('app updater', () => {
     expect(env.reload).toHaveBeenCalledTimes(1)
   })
 
-  it('never reloads while held, and applies the update once released', () => {
+  it('never reloads while held, and applies the update once released', async () => {
     const { env, updater } = setup()
     const release = updater.hold()
     updater.updateReady()
     updater.navigated()
     expect(env.reload).not.toHaveBeenCalled()
     release()
+    await settle()
     expect(env.reload).toHaveBeenCalledTimes(1)
   })
 
-  it('stays held until every hold is released, even if one is released twice', () => {
+  it('stays held until every hold is released, even if one is released twice', async () => {
     const { env, updater } = setup()
     const first = updater.hold()
     const second = updater.hold()
     updater.updateReady()
     first()
     first()
+    await settle()
     expect(env.reload).not.toHaveBeenCalled()
     second()
+    await settle()
     expect(env.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves no gap when one hold is handed over to another in the same task', async () => {
+    const { env, updater } = setup()
+    const solving = updater.hold()
+    updater.updateReady()
+    solving()
+    const saving = updater.hold()
+    await settle()
+    expect(env.reload).not.toHaveBeenCalled()
+    saving()
+    await settle()
+    expect(env.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs deferred work right away, or once the last hold is released', async () => {
+    const { updater } = setup()
+    const now = vi.fn()
+    updater.whenNotHeld(now)
+    expect(now).toHaveBeenCalledTimes(1)
+
+    const later = vi.fn()
+    const release = updater.hold()
+    updater.whenNotHeld(later)
+    expect(later).not.toHaveBeenCalled()
+    release()
+    await settle()
+    expect(later).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops deferred work when the update reload wins', async () => {
+    const { env, updater } = setup()
+    const chunkReload = vi.fn()
+    const release = updater.hold()
+    updater.updateReady()
+    updater.whenNotHeld(chunkReload)
+    release()
+    await settle()
+    expect(env.reload).toHaveBeenCalledTimes(1)
+    expect(chunkReload).not.toHaveBeenCalled()
   })
 
   it('reloads only once', () => {

@@ -33,8 +33,8 @@ export function ReleaseNotesPage({
               </time>
             </div>
             <ul>
-              {release.changes.map((change) => (
-                <li key={change}>{change}</li>
+              {release.changes.map((change, index) => (
+                <li key={index}>{change}</li>
               ))}
             </ul>
           </section>

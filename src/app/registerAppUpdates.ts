@@ -26,20 +26,16 @@ export function registerAppUpdates() {
     registration.update().catch(() => {})
   }
 
-  // The worker skips waiting and claims clients, so a new version shows up as a controller change. The plugin's
-  // own reload-on-activation is disabled (registerType 'prompt'). With clientsClaim the first install fires
-  // controllerchange too, so only listen when the page already had a controller: that is an update, not a first visit.
-  const hadController = !!navigator.serviceWorker?.controller
   registerSW({
     immediate: true,
+    // registerType is 'autoUpdate': the worker skips waiting, and once a new version activates (found at load or
+    // by a later check) the plugin calls onNeedReload. It reloads the page itself when this callback is missing —
+    // mid-solve included — so it must stay; the updater picks a harmless moment instead.
+    onNeedReload: () => appUpdater.updateReady(),
     onRegisteredSW(_swUrl, reg) {
       registration = reg
     },
   })
-  const onControllerChange = () => appUpdater.updateReady()
-  if (hadController) {
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
-  }
 
   const interval = window.setInterval(check, UPDATE_CHECK_INTERVAL_MS)
   const onVisibility = () => {
@@ -75,7 +71,6 @@ export function registerAppUpdates() {
     window.clearInterval(interval)
     document.removeEventListener('visibilitychange', onVisibility)
     window.removeEventListener('vite:preloadError', onPreloadError)
-    navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange)
     registered = false
   })
 }
