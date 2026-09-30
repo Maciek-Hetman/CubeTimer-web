@@ -1,7 +1,11 @@
-// A new deploy is installed and activated by the service worker in the background, but the open page keeps
-// running the old bundle until it reloads. The updater reloads it for the user at a moment that costs them
-// nothing: right after the app was opened or brought back, on the next in-app navigation, or while the tab is
-// hidden — and never while something (a solve in progress) holds it off.
+// A new deploy is installed by the service worker in the background and waits, while the open page keeps
+// running the old bundle. The updater applies it for the user at a moment that costs them nothing: right after
+// the app was opened or brought back, on the next in-app navigation, or while the tab is hidden — and never
+// while something (a solve in progress) holds it off.
+//
+// Limits: a tab that stays in the foreground, is never navigated and is past the wake window keeps the old
+// bundle until it is hidden or navigated. A hidden-tab apply skipped because a field is being edited is retried
+// on the next wake/hide/navigation/hold release, not on a timer.
 
 /** How long after the app is opened or brought back to the foreground an update may reload it outright. */
 export const WAKE_WINDOW_MS = 30_000
@@ -90,9 +94,16 @@ function isEditingText(): boolean {
   return active instanceof HTMLTextAreaElement || active.isContentEditable
 }
 
+let applyUpdate: () => void = () => window.location.reload()
+
+/** Replaces how a pending update is applied (e.g. activate the waiting worker, then reload). */
+export function setApplyUpdate(fn: () => void) {
+  applyUpdate = fn
+}
+
 export const appUpdater = createAppUpdater({
   now: () => Date.now(),
-  reload: () => window.location.reload(),
+  reload: () => applyUpdate(),
   isHidden: () => document.visibilityState === 'hidden',
   isEditing: isEditingText,
 })

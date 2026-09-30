@@ -286,8 +286,11 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const activePointerRef = useRef<number | null>(null)
   const isSolvingOrPreparing = isTimerBusy(snapshot.phase)
 
-  // Never reload onto a new version in the middle of a solve.
-  useEffect(() => (isSolvingOrPreparing ? appUpdater.hold() : undefined), [isSolvingOrPreparing])
+  // Never reload onto a new version in the middle of a solve, nor between its finish and its save (the save takes
+  // its own hold in a later effect, so the finished phase is held too to leave no gap; this also keeps a reload
+  // from landing right after a save).
+  const holdsUpdate = isSolvingOrPreparing || snapshot.phase === 'finished'
+  useEffect(() => (holdsUpdate ? appUpdater.hold() : undefined), [holdsUpdate])
 
   useEffect(() => {
     loadTimerFont(settings.timerFont ?? 'jetbrains')

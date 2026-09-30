@@ -8,6 +8,10 @@ function formatReleaseDate(date: string): string {
   return dateFormat.format(new Date(`${date}T00:00:00Z`))
 }
 
+function releaseId(version: string): string {
+  return `release-${version.replace(/[^A-Za-z0-9_-]/g, '-')}`
+}
+
 export function ReleaseNotesPage({
   releases = RELEASES,
   currentVersion = __APP_VERSION__,
@@ -20,9 +24,9 @@ export function ReleaseNotesPage({
       <PageHeader title="Release notes" subtitle={`You're using ${currentVersion}.`} />
       <Panel className="stack legal-panel">
         {releases.map((release) => (
-          <section key={release.version} className="stack release" aria-labelledby={`release-${release.version}`}>
+          <section key={release.version} className="stack release" aria-labelledby={releaseId(release.version)}>
             <div className="release-heading">
-              <h2 id={`release-${release.version}`}>{release.version}</h2>
+              <h2 id={releaseId(release.version)}>{release.version}</h2>
               {release.version === currentVersion ? <span className="release-current">Current</span> : null}
               <time className="muted" dateTime={release.date}>
                 {formatReleaseDate(release.date)}
