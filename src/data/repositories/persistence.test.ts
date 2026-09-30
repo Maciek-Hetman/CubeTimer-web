@@ -341,4 +341,27 @@ describe('sync outcomes', () => {
     expect((await db.rejections.where('ownerId').equals('account-1').toArray()).map((r) => r.id)).toEqual(['r4'])
     expect(await db.rejections.get('other-owner')).toBeTruthy()
   })
+
+  it('merges a retry into an edit already queued for the rejected entity', async () => {
+    const solve = { ...solveOf(22333.099999999627), version: 4 }
+    await db.solves.put(solve)
+    await db.rejections.put({
+      id: 'r1',
+      ownerId: 'account-1',
+      entity: 'solve',
+      entityId: solve.id,
+      operation: 'upsert',
+      code: 'invalid_solve',
+      createdAt: new Date().toISOString(),
+    })
+    // An edit made after the rejection, rebased onto a newer server version than the stored row.
+    await putSolve({ ...solve, penalty: 'dnf' }, { enqueue: true, baseVersion: 5 })
+
+    expect(await requeueRejected('account-1')).toBe(1)
+
+    const pending = await listOutbox('account-1')
+    expect(pending).toHaveLength(1)
+    // The queued base wins: resending from the row's older version would conflict with the server.
+    expect(pending[0]).toMatchObject({ baseVersion: 5, data: { penalty: 'dnf', duration_ms: 22333 } })
+  })
 })
