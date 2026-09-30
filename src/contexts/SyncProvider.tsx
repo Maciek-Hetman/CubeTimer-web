@@ -11,7 +11,14 @@ import { db } from '../data/db'
 import { putSession } from '../data/repositories/sessions'
 import { putSolve } from '../data/repositories/solves'
 import type { CubeSession, Solve, SyncStatus } from '../domain/models'
-import { getLastSyncedAt, lastSyncKey, runSync, setCursor, withBackoff } from '../sync/syncEngine'
+import {
+  getLastSyncedAt,
+  lastSyncKey,
+  requeueRejected,
+  runSync,
+  setCursor,
+  withBackoff,
+} from '../sync/syncEngine'
 import { shouldSkipSync } from '../sync/syncPolicy'
 import {
   getDeviceId,
@@ -250,6 +257,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     await db.rejections.where('ownerId').equals(ownerId).delete()
   }, [ownerId])
 
+  const retryRejected = useCallback(async () => {
+    const queued = await requeueRejected(ownerId)
+    if (queued > 0) {
+      requestSync()
+    }
+  }, [ownerId, requestSync])
+
   const computedSyncStatus: SyncStatus =
     pendingMutations > 0 && rawSyncStatus === 'idle'
       ? 'pending'
@@ -274,6 +288,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       resolveConflictKeepServer,
       resolveConflictKeepLocal,
       dismissAllRejected,
+      retryRejected,
     }),
     [
       computedSyncStatus,
@@ -289,6 +304,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       resolveConflictKeepServer,
       resolveConflictKeepLocal,
       dismissAllRejected,
+      retryRejected,
     ],
   )
 

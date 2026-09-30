@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   deleteAccount: vi.fn(),
   rejectedCount: 0 as number,
   dismissAllRejected: vi.fn(),
+  retryRejected: vi.fn(),
 }))
 
 vi.mock('../../app/AppContext', () => ({
@@ -26,6 +27,7 @@ vi.mock('../../app/AppContext', () => ({
     conflicts: 1,
     rejectedCount: mocks.rejectedCount,
     dismissAllRejected: mocks.dismissAllRejected,
+    retryRejected: mocks.retryRejected,
     lastSyncedAt: null,
     deviceName: 'Test Device',
     deviceId: 'dev-1',
@@ -60,6 +62,7 @@ describe('AccountPage', () => {
     mocks.authenticatedRequest.mockReset()
     mocks.deleteAccount.mockReset()
     mocks.dismissAllRejected.mockReset()
+    mocks.retryRejected.mockReset()
     vi.unstubAllGlobals()
   })
 
@@ -149,6 +152,42 @@ describe('AccountPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Dismiss all' }))
     expect(mocks.dismissAllRejected).toHaveBeenCalled()
+  })
+
+  it('retries rejected changes', async () => {
+    const user = userEvent.setup()
+    mocks.rejectedCount = 2
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryRejected).toHaveBeenCalled()
+    expect(mocks.dismissAllRejected).not.toHaveBeenCalled()
+  })
+
+  it('disables the rejected-change buttons while a retry runs', async () => {
+    const user = userEvent.setup()
+    mocks.rejectedCount = 2
+    let finish = () => {}
+    mocks.retryRejected.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)))
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Dismiss all' })).toBeDisabled()
+
+    finish()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled())
+  })
+
+  it('shows an error when retrying rejected changes fails', async () => {
+    const user = userEvent.setup()
+    mocks.rejectedCount = 2
+    mocks.retryRejected.mockRejectedValue(new Error('transaction failed'))
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('Could not retry rejected changes')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
   })
 
   it('hides account management panels for guests', () => {

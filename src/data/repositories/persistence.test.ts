@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../db'
 import { deleteSessionCascade, newSession, putSession, toSessionInput } from './sessions'
-import { newSolve, putSolve } from './solves'
+import { newSolve, putSolve, toSolveInput } from './solves'
 import { listOutbox } from './outbox'
 import { adoptGuestData } from '../../sync/guestMerge'
-import { applySyncResponse } from '../../sync/syncEngine'
+import { applySyncResponse, requeueRejected } from '../../sync/syncEngine'
 import { DEFAULT_SETTINGS, type MutationRecord } from '../../domain/models'
 
 describe('local persistence', () => {
@@ -293,5 +293,75 @@ describe('sync outcomes', () => {
     const pending = await listOutbox('account-1')
     expect(pending).toHaveLength(1)
     expect(pending[0]?.id).not.toBe(sent.id)
+  })
+
+  const solveOf = (durationMs: number) =>
+    newSolve({ ownerId: 'account-1', sessionId: null, durationMs, penalty: 'none', scramble: 'R U', event: '3x3' })
+
+  it('sends a fractional stored duration as whole milliseconds', () => {
+    expect(toSolveInput(solveOf(22333.099999999627)).duration_ms).toBe(22333)
+  })
+
+  it('requeues rejected changes from their local copies', async () => {
+    const solve = solveOf(22333.099999999627)
+    const deleted = { ...solveOf(9000), deletedAt: new Date().toISOString() }
+    const synced = { ...solveOf(11000), version: 4, penalty: 'plus_two' as const }
+    await db.solves.bulkPut([solve, deleted, synced])
+    const rejection = {
+      ownerId: 'account-1',
+      entity: 'solve' as const,
+      operation: 'upsert' as const,
+      code: 'invalid_solve',
+      message: 'solve data is invalid',
+      createdAt: new Date().toISOString(),
+    }
+    await db.rejections.bulkPut([
+      { ...rejection, id: 'r1', entityId: solve.id },
+      { ...rejection, id: 'r2', entityId: deleted.id, operation: 'delete', code: 'not_found' },
+      { ...rejection, id: 'r3', entityId: synced.id },
+      { ...rejection, id: 'r4', entityId: 'gone-locally' },
+      { ...rejection, id: 'other-owner', ownerId: 'account-2', entityId: solve.id },
+    ])
+
+    expect(await requeueRejected('account-1')).toBe(2)
+
+    const pending = await listOutbox('account-1')
+    expect(pending).toHaveLength(2)
+    expect(pending.find((m) => m.entityId === solve.id)).toMatchObject({
+      operation: 'upsert',
+      baseVersion: 0,
+      data: { duration_ms: 22333 },
+    })
+    expect(pending.find((m) => m.entityId === synced.id)).toMatchObject({
+      operation: 'upsert',
+      baseVersion: 4,
+      data: { penalty: 'plus_two' },
+    })
+    // Only the rejection with no local row is left, since nothing could be sent for it.
+    expect((await db.rejections.where('ownerId').equals('account-1').toArray()).map((r) => r.id)).toEqual(['r4'])
+    expect(await db.rejections.get('other-owner')).toBeTruthy()
+  })
+
+  it('merges a retry into an edit already queued for the rejected entity', async () => {
+    const solve = { ...solveOf(22333.099999999627), version: 4 }
+    await db.solves.put(solve)
+    await db.rejections.put({
+      id: 'r1',
+      ownerId: 'account-1',
+      entity: 'solve',
+      entityId: solve.id,
+      operation: 'upsert',
+      code: 'invalid_solve',
+      createdAt: new Date().toISOString(),
+    })
+    // An edit made after the rejection, rebased onto a newer server version than the stored row.
+    await putSolve({ ...solve, penalty: 'dnf' }, { enqueue: true, baseVersion: 5 })
+
+    expect(await requeueRejected('account-1')).toBe(1)
+
+    const pending = await listOutbox('account-1')
+    expect(pending).toHaveLength(1)
+    // The queued base wins: resending from the row's older version would conflict with the server.
+    expect(pending[0]).toMatchObject({ baseVersion: 5, data: { penalty: 'dnf', duration_ms: 22333 } })
   })
 })

@@ -17,6 +17,8 @@ export interface SyncContextValue {
   resolveConflictKeepServer: (conflictId: string) => Promise<void>
   resolveConflictKeepLocal: (conflictId: string) => Promise<void>
   dismissAllRejected: () => Promise<void>
+  /** Queues the local copy of each rejected change again and syncs. */
+  retryRejected: () => Promise<void>
 }
 
 export const SyncContext = createContext<SyncContextValue | null>(null)

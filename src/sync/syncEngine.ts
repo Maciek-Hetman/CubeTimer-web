@@ -11,10 +11,17 @@ import type {
   SnapshotResponse,
 } from '../api/types'
 import { db, getMeta, type ConflictRecord, type RejectedRecord } from '../data/db'
-import { listOutbox, removeOutbox } from '../data/repositories/outbox'
+import { enqueueMutationsBatch, listOutbox, removeOutbox } from '../data/repositories/outbox'
 import { toSessionInput } from '../data/repositories/sessions'
 import { toSolveInput } from '../data/repositories/solves'
-import type { CubeSession, MutationRecord, RemoteEntityState, Solve } from '../domain/models'
+import type {
+  CubeSession,
+  MutationRecord,
+  RemoteEntityState,
+  SessionInput,
+  Solve,
+  SolveInput,
+} from '../domain/models'
 import { createId, normalizeTimingDevice, nowIso } from '../domain/models'
 
 export type SyncStatus = 'idle' | 'syncing' | 'pending' | 'offline' | 'error' | 'conflict'
@@ -477,6 +484,64 @@ export async function applySyncResponse(
     },
   )
   return { conflicts, rejected }
+}
+
+/**
+ * Queues the current local copy of every rejected entity again and clears those rejections.
+ * A rejection whose row is gone locally is kept, since nothing can be sent for it.
+ * Returns how many mutations were queued.
+ */
+export async function requeueRejected(ownerId: string): Promise<number> {
+  return db.transaction('rw', [db.rejections, db.sessions, db.solves, db.outbox], async () => {
+    const rejections = await db.rejections.where('ownerId').equals(ownerId).toArray()
+    const sessions = await loadById(
+      db.sessions,
+      rejections.filter((r) => r.entity === 'session').map((r) => r.entityId),
+    )
+    const solves = await loadById(
+      db.solves,
+      rejections.filter((r) => r.entity === 'solve').map((r) => r.entityId),
+    )
+    const inputs: Parameters<typeof enqueueMutationsBatch>[0] = []
+    const cleared: string[] = []
+    const requeue = (
+      rejection: RejectedRecord,
+      row: CubeSession | Solve | undefined,
+      data: SessionInput | SolveInput | undefined,
+    ) => {
+      if (!row) {
+        return
+      }
+      cleared.push(rejection.id)
+      // Deleted locally and missing on the server: the change already holds.
+      if (row.deletedAt && rejection.code === 'not_found') {
+        return
+      }
+      // Batch merge semantics: if a mutation is already queued for this entity, its
+      // baseVersion is kept and only operation/data are overwritten, so row.version
+      // here applies only when nothing is queued.
+      inputs.push({
+        ownerId,
+        entity: rejection.entity,
+        entityId: row.id,
+        operation: row.deletedAt ? 'delete' : 'upsert',
+        baseVersion: row.version,
+        data: row.deletedAt ? undefined : data,
+      })
+    }
+    for (const rejection of rejections) {
+      if (rejection.entity === 'session') {
+        const session = sessions.get(rejection.entityId)
+        requeue(rejection, session, session && toSessionInput(session))
+      } else {
+        const solve = solves.get(rejection.entityId)
+        requeue(rejection, solve, solve && toSolveInput(solve))
+      }
+    }
+    await enqueueMutationsBatch(inputs)
+    await db.rejections.bulkDelete(cleared)
+    return inputs.length
+  })
 }
 
 function toApiMutation(record: MutationRecord): Mutation {

@@ -42,6 +42,7 @@ export function AccountPage() {
     conflicts,
     rejectedCount,
     dismissAllRejected,
+    retryRejected,
     lastSyncedAt,
     deviceName,
     deviceId,
@@ -62,12 +63,26 @@ export function AccountPage() {
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [serverStatus, setServerStatus] = useState<'idle' | 'checking' | 'online' | 'offline'>('idle')
+  const [rejectedAction, setRejectedAction] = useState<'retry' | 'dismiss' | null>(null)
+  const [rejectedError, setRejectedError] = useState('')
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000)
     return () => window.clearInterval(id)
   }, [])
+
+  async function handleRejected(action: 'retry' | 'dismiss') {
+    setRejectedAction(action)
+    setRejectedError('')
+    try {
+      await (action === 'retry' ? retryRejected() : dismissAllRejected())
+    } catch {
+      setRejectedError(action === 'retry' ? 'Could not retry rejected changes' : 'Could not dismiss rejected changes')
+    } finally {
+      setRejectedAction(null)
+    }
+  }
 
   async function sendVerification() {
     if (!user?.email) {
@@ -277,14 +292,29 @@ export function AccountPage() {
                     {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} could not be synced
                   </strong>
                   <p className="muted" style={{ margin: '0.375rem 0 0.625rem' }}>
-                    Dismiss to clear.
+                    Retry sends your local copies again. Dismiss clears the list; those changes stay on this device only.
                   </p>
                   <div className="row wrap">
-                    <Button type="button" variant="ghost" onClick={() => void dismissAllRejected()}>
+                    <Button
+                      type="button"
+                      loading={rejectedAction === 'retry'}
+                      disabled={rejectedAction !== null}
+                      onClick={() => void handleRejected('retry')}
+                    >
+                      Retry
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      loading={rejectedAction === 'dismiss'}
+                      disabled={rejectedAction !== null}
+                      onClick={() => void handleRejected('dismiss')}
+                    >
                       Dismiss all
                     </Button>
                   </div>
                 </Alert>
+                {rejectedError ? <Alert tone="error">{rejectedError}</Alert> : null}
               </div>
             ) : null}
             <div className="row wrap">
