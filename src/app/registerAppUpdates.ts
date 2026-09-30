@@ -30,7 +30,8 @@ export function registerAppUpdates() {
     immediate: true,
     // registerType is 'autoUpdate': the worker skips waiting, and once a new version activates (found at load or
     // by a later check) the plugin calls onNeedReload. It reloads the page itself when this callback is missing —
-    // mid-solve included — so it must stay; the updater picks a harmless moment instead.
+    // mid-solve included — so it must stay; the updater picks a harmless moment instead. (onNeedReload is in
+    // vite-plugin-pwa's register.js and types/index.d.ts since 1.x; the activated handler calls it in place of reload.)
     onNeedReload: () => appUpdater.updateReady(),
     onRegisteredSW(_swUrl, reg) {
       registration = reg
