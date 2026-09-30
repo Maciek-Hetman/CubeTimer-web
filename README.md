@@ -63,3 +63,7 @@ Playwright browsers: `npx playwright install chromium`
 See [docs/deployment.md](docs/deployment.md) for production URLs, Caddy/VPS layout, and the GitHub Actions deploy pipeline.
 
 Build static files with `VITE_CUBESYNC_URL` set to the public CubeSync origin, then serve `dist/` over HTTPS. Keep CubeSync `ALLOWED_ORIGINS` / `CLIENT_URL` in sync with the deployed web origin. Authenticated API traffic is not cached by the service worker.
+
+## License
+
+CubeTimer Web is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
