@@ -1,54 +1,55 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppContext'
-import { eventLabel, STATS_CHART_SCALES, STATS_CHART_SCALE_LABELS, type StatsChartScale } from '../../domain/models'
-import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
-import { collectChartSeries, computeSolveStats } from '../../data/repositories/solveStats'
+import {
+  eventLabel,
+  STATS_CHART_SCALES,
+  STATS_CHART_SCALE_LABELS,
+  type CubeSession,
+  type StatsChartScale,
+} from '../../domain/models'
+import { formatAverage, formatDuration, formatTotalTime } from '../../domain/stats/formatTime'
+import {
+  collectChartSeries,
+  computeSolveStats,
+  type ChartPoint,
+  type SolveStats,
+} from '../../data/repositories/solveStats'
 import { Button } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { StatGrid } from '../../ui/StatGrid'
 import { scalePx, useUiScale } from '../../ui/useUiScale'
+import { formatAxisSeconds, formatChartSeconds, solveTicks } from './chartAxes'
 
 const CHART_SERIES = [
-  { key: 'time', label: 'Time', color: 'var(--accent)', strokeWidth: 1 },
-  { key: 'ao5', label: 'Ao5', color: 'var(--chart-ao5)', strokeWidth: 2 },
-  { key: 'ao12', label: 'Ao12', color: 'var(--chart-ao12)', strokeWidth: 2 },
+  // Single times are the noisy backdrop; the rolling averages carry the trend.
+  { key: 'time', label: 'Time', color: 'var(--accent)', strokeWidth: 1, strokeOpacity: 0.45 },
+  { key: 'ao5', label: 'Ao5', color: 'var(--chart-ao5)', strokeWidth: 2, strokeOpacity: 1 },
+  { key: 'ao12', label: 'Ao12', color: 'var(--chart-ao12)', strokeWidth: 2, strokeOpacity: 1 },
 ] as const
 
-function DeltaBadge({ delta }: { delta: number | null }) {
-  if (delta === null || isNaN(delta)) return null
-  const isImprovement = delta < 0
-  const color = isImprovement ? 'var(--ready)' : 'var(--danger)'
-  const sign = isImprovement ? '-' : '+'
-  const absDelta = Math.abs(delta)
-  return (
-    <span style={{ color, fontSize: '0.85em', marginLeft: 'var(--space-2)', fontWeight: 600 }}>
-      {sign}{formatAverage(absDelta)}
-    </span>
-  )
+type SeriesKey = (typeof CHART_SERIES)[number]['key']
+
+const NO_CHART_POINTS: ChartPoint[] = []
+
+/** A stat that needs `needed` solves: a dash until there are enough, then the time (or DNF). */
+function formatStat(value: number | null, count: number, needed = 1): string {
+  return count < needed ? '—' : formatAverage(value)
 }
 
 export function StatsPage() {
   const { solveStats, sessions, settings, updateSettings, currentSession, ownerId } = useApp()
-  const uiScale = useUiScale()
-  const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({})
-
   const chartScale: StatsChartScale = settings.statsChartScale ?? 'all'
 
-  const toggleSeries = (key: string) =>
-    setHiddenSeries((prev) => ({ ...prev, [key]: !prev[key] }))
-
+  // Sessions come newest first, so the one before the current session sits right after it.
   const previousSession = useMemo(() => {
     if (!currentSession) return null
     const currentIndex = sessions.findIndex((s) => s.id === currentSession.id)
-    if (currentIndex > 0) {
-      return sessions[currentIndex - 1]
-    }
-    return null
+    return currentIndex >= 0 ? (sessions[currentIndex + 1] ?? null) : null
   }, [sessions, currentSession])
 
   const sessionStats = useLiveQuery(
@@ -68,43 +69,9 @@ export function StatsPage() {
     [ownerId, settings.event, chartScale],
   )
 
-  const sessionSummary = useMemo(
-    () => ({
-      count: sessionStats?.count ?? 0,
-      best: sessionStats?.best ?? null,
-      mean: sessionStats?.mean ?? null,
-      stdDev: sessionStats?.stdDev ?? null,
-      totalTime: sessionStats?.totalTime ?? 0,
-      ao5: sessionStats?.ao5 ?? null,
-      ao50: sessionStats?.ao50 ?? null,
-      ao100: sessionStats?.ao100 ?? null,
-    }),
-    [sessionStats],
-  )
-
-  const previousSessionSummary = useMemo(
-    () => ({
-      best: previousSessionStats?.best ?? null,
-      mean: previousSessionStats?.mean ?? null,
-      stdDev: previousSessionStats?.stdDev ?? null,
-      ao5: previousSessionStats?.ao5 ?? null,
-      ao50: previousSessionStats?.ao50 ?? null,
-      ao100: previousSessionStats?.ao100 ?? null,
-    }),
-    [previousSessionStats],
-  )
-
-  const getDelta = (current: number | null, previous: number | null) => {
-    if (current === null || previous === null) return null
-    return current - previous
-  }
-
   return (
     <div className="stack">
-      <PageHeader
-        title="Stats"
-        subtitle={`${eventLabel(settings.event)}${currentSession ? ` · ${currentSession.name}` : ''}`}
-      />
+      <PageHeader title="Stats" subtitle={eventLabel(settings.event)} />
 
       {solveStats.count === 0 ? (
         <EmptyState
@@ -116,205 +83,306 @@ export function StatsPage() {
           }
         />
       ) : (
-        <>
-          <div className="row wrap" style={{ gap: 'var(--space-4)' }}>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Time</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.best)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao5</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo5)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao12</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo12)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao50</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo50)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao100</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo100)}
-              </div>
-            </Panel>
-          </div>
-
-          <Panel className="stack">
-            <div className="row wrap" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <h2 style={{ margin: 0 }}>Times Graph</h2>
-              <div className="segmented" role="group" aria-label="Graph scale">
-                {STATS_CHART_SCALES.map((scale) => (
-                  <Button
-                    key={scale}
-                    type="button"
-                    className="compact"
-                    variant={chartScale === scale ? 'primary' : 'default'}
-                    aria-pressed={chartScale === scale}
-                    onClick={() => void updateSettings({ statsChartScale: scale })}
-                  >
-                    {STATS_CHART_SCALE_LABELS[scale]}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div style={{ width: '100%', height: '15.625rem' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData ?? []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  {CHART_SERIES.map(
-                    (series) =>
-                      !hiddenSeries[series.key] && (
-                        <Line
-                          key={series.key}
-                          type="monotone"
-                          dataKey={series.key}
-                          name={series.label}
-                          stroke={series.color}
-                          strokeWidth={series.strokeWidth}
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                      ),
-                  )}
-                  <XAxis
-                    dataKey="index"
-                    stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }}
-                  />
-                  <YAxis
-                    stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }}
-                    width={scalePx(40, uiScale)}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--surface)',
-                      borderColor: 'var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      boxShadow: 'var(--shadow-md)',
-                      color: 'var(--text)',
-                    }}
-                    itemStyle={{ color: 'var(--text)' }}
-                    labelStyle={{ color: 'var(--text-muted)', fontWeight: 600 }}
-                    labelFormatter={(label) => `Solve ${label}`}
-                    formatter={(value, name) => [`${Number(value).toFixed(2)}s`, String(name)]}
-                  />
-                  <Legend wrapperStyle={{ color: 'var(--text-muted)' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="segmented" role="group" aria-label="Chart series visibility">
-              {CHART_SERIES.map((series) => {
-                const hidden = Boolean(hiddenSeries[series.key])
-                return (
-                  <Button
-                    key={series.key}
-                    type="button"
-                    variant={hidden ? 'default' : 'primary'}
-                    aria-pressed={!hidden}
-                    onClick={() => toggleSeries(series.key)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        display: 'inline-block',
-                        width: '0.625rem',
-                        height: '0.625rem',
-                        marginRight: '0.375rem',
-                        borderRadius: '50%',
-                        backgroundColor: series.color,
-                        opacity: hidden ? 0.35 : 1,
-                      }}
-                    />
-                    {series.label}
-                  </Button>
-                )
-              })}
-            </div>
-          </Panel>
-
-          <div className="row wrap" style={{ gap: 'var(--space-4)', alignItems: 'flex-start' }}>
-            <Panel className="stack" style={{ flex: 1, minWidth: '15.625rem' }}>
-              <h2>All-time</h2>
-              <StatGrid
-                items={[
-                  ['Solves', String(solveStats.count)],
-                  ['Total Time', formatTotalTime(solveStats.totalTime)],
-                  ['Worst', formatAverage(solveStats.worst)],
-                  ['Mean', formatAverage(solveStats.mean)],
-                  ['Std Dev', formatAverage(solveStats.stdDev)],
-                  ['Ao5', formatAverage(solveStats.ao5)],
-                  ['Ao12', formatAverage(solveStats.ao12)],
-                  ['Ao50', formatAverage(solveStats.ao50)],
-                  ['Ao100', formatAverage(solveStats.ao100)],
-                ]}
-              />
-            </Panel>
-
-            <Panel className="stack" style={{ flex: 1, minWidth: '15.625rem' }}>
-              <h2>Current session</h2>
-              <StatGrid
-                items={[
-                  ['Solves', String(sessionSummary.count)],
-                  ['Total Time', formatTotalTime(sessionSummary.totalTime)],
-                  [
-                    'Best',
-                    <span key="best">
-                      {formatAverage(sessionSummary.best)}
-                      {previousSessionSummary.best !== null && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
-                    </span>,
-                  ],
-                  [
-                    'Mean',
-                    <span key="mean">
-                      {formatAverage(sessionSummary.mean)}
-                      {previousSessionSummary.mean !== null && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
-                    </span>,
-                  ],
-                  [
-                    'Std Dev',
-                    <span key="stdDev">
-                      {formatAverage(sessionSummary.stdDev)}
-                      {previousSessionSummary.stdDev !== null && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao5',
-                    <span key="ao5">
-                      {formatAverage(sessionSummary.ao5)}
-                      {previousSessionSummary.ao5 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao50',
-                    <span key="ao50">
-                      {formatAverage(sessionSummary.ao50)}
-                      {previousSessionSummary.ao50 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao100',
-                    <span key="ao100">
-                      {formatAverage(sessionSummary.ao100)}
-                      {previousSessionSummary.ao100 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
-                    </span>,
-                  ],
-                ]}
-              />
-            </Panel>
-          </div>
-        </>
+        <div className="stats-layout">
+          <PersonalBests stats={solveStats} />
+          <CurrentSession
+            session={currentSession}
+            stats={sessionStats}
+            previousSession={previousSession}
+            previousStats={previousSessionStats}
+          />
+          <ProgressChart
+            data={chartData ?? NO_CHART_POINTS}
+            scale={chartScale}
+            onScaleChange={(scale) => void updateSettings({ statsChartScale: scale })}
+          />
+          <AllTimeTotals stats={solveStats} />
+        </div>
       )}
     </div>
+  )
+}
+
+interface Kpi {
+  label: string
+  /** Null until there are enough solves for the stat. */
+  value: string | null
+  context: string
+  contextValue?: string
+}
+
+/** A personal best over `n` solves, next to where that average stands now. */
+function bestAverageKpi(label: string, n: number, best: number | null, current: number | null, count: number): Kpi {
+  if (count < n) {
+    return { label, value: null, context: `Needs ${n} solves` }
+  }
+  return { label, value: formatAverage(best), context: 'Current', contextValue: formatAverage(current) }
+}
+
+function PersonalBests({ stats }: { stats: SolveStats }) {
+  const headingId = useId()
+  const { count } = stats
+  const headline: Kpi[] = [
+    { label: 'Single', value: formatStat(stats.best, count), context: 'Mean', contextValue: formatStat(stats.mean, count) },
+    bestAverageKpi('Ao5', 5, stats.bestAo5, stats.ao5, count),
+    bestAverageKpi('Ao12', 12, stats.bestAo12, stats.ao12, count),
+  ]
+  const longer: Kpi[] = [
+    bestAverageKpi('Ao50', 50, stats.bestAo50, stats.ao50, count),
+    bestAverageKpi('Ao100', 100, stats.bestAo100, stats.ao100, count),
+  ]
+
+  return (
+    <Panel role="region" aria-labelledby={headingId} className="stats-bests stack">
+      <h2 id={headingId}>Personal bests</h2>
+      <div className="stats-bests-groups">
+        <KpiList items={headline} />
+        <KpiList items={longer} secondary />
+      </div>
+    </Panel>
+  )
+}
+
+function KpiList({ items, secondary = false }: { items: Kpi[]; secondary?: boolean }) {
+  return (
+    <dl className={['stats-kpis', secondary ? 'secondary' : ''].filter(Boolean).join(' ')}>
+      {items.map((item) => (
+        <div key={item.label} className="stats-kpi">
+          <dt>{item.label}</dt>
+          <dd className={item.value === null ? 'stats-kpi-value pending' : 'stats-kpi-value'}>{item.value ?? '—'}</dd>
+          <dd className="stats-kpi-context">
+            {item.context}
+            {item.contextValue ? <span> {item.contextValue}</span> : null}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function CurrentSession({
+  session,
+  stats,
+  previousSession,
+  previousStats,
+}: {
+  session: CubeSession | null
+  stats: SolveStats | null | undefined
+  previousSession: CubeSession | null
+  previousStats: SolveStats | null | undefined
+}) {
+  const headingId = useId()
+  const compared = previousSession && previousStats && previousStats.count > 0 ? previousStats : null
+
+  let body
+  if (!session) {
+    body = <p className="muted stats-session-empty">No active session. Your next solve starts one.</p>
+  } else if (!stats) {
+    body = null
+  } else if (stats.count === 0) {
+    body = <p className="muted stats-session-empty">No solves in this session yet.</p>
+  } else {
+    const rows = [
+      { label: 'Ao5', value: formatStat(stats.ao5, stats.count, 5), delta: difference(stats.ao5, compared?.ao5) },
+      { label: 'Ao12', value: formatStat(stats.ao12, stats.count, 12), delta: difference(stats.ao12, compared?.ao12) },
+      { label: 'Mean', value: formatStat(stats.mean, stats.count), delta: difference(stats.mean, compared?.mean) },
+      { label: 'Best', value: formatStat(stats.best, stats.count), delta: difference(stats.best, compared?.best) },
+    ]
+    body = (
+      <>
+        <p className="stats-session-meta">
+          {stats.count.toLocaleString()} {stats.count === 1 ? 'solve' : 'solves'} · {formatTotalTime(stats.totalTime)}
+        </p>
+        <dl className="stats-session-list">
+          {rows.map((row) => (
+            <div key={row.label}>
+              <dt>{row.label}</dt>
+              <dd className="stats-session-value">{row.value}</dd>
+              {row.delta === null ? null : (
+                <dd>
+                  <Delta value={row.delta} />
+                </dd>
+              )}
+            </div>
+          ))}
+        </dl>
+        {compared && previousSession ? (
+          <p className="muted stats-session-note">Compared with {previousSession.name}</p>
+        ) : null}
+      </>
+    )
+  }
+
+  return (
+    <Panel role="region" aria-labelledby={headingId} className="stats-session">
+      <div className="stats-session-header">
+        <h2 id={headingId}>Current session</h2>
+        {session ? <p className="muted">{session.name}</p> : null}
+      </div>
+      {body}
+    </Panel>
+  )
+}
+
+function difference(current: number | null, previous: number | null | undefined): number | null {
+  return current === null || previous === null || previous === undefined ? null : current - previous
+}
+
+/** Change against the previous session. Lower times are better. */
+function Delta({ value }: { value: number }) {
+  const amount = formatDuration(Math.abs(value))
+  if (amount === formatDuration(0)) {
+    return (
+      <span className="stats-delta same">
+        <span aria-hidden="true">±{amount}</span>
+        <span className="sr-only">Same as the previous session</span>
+      </span>
+    )
+  }
+  const faster = value < 0
+  return (
+    <span className={`stats-delta ${faster ? 'better' : 'worse'}`}>
+      <span aria-hidden="true">
+        {faster ? '−' : '+'}
+        {amount}
+      </span>
+      <span className="sr-only">
+        {amount} {faster ? 'faster' : 'slower'} than the previous session
+      </span>
+    </span>
+  )
+}
+
+function ProgressChart({
+  data,
+  scale,
+  onScaleChange,
+}: {
+  data: ChartPoint[]
+  scale: StatsChartScale
+  onScaleChange: (scale: StatsChartScale) => void
+}) {
+  const headingId = useId()
+  const uiScale = useUiScale()
+  const [hiddenSeries, setHiddenSeries] = useState<Partial<Record<SeriesKey, boolean>>>({})
+  const xTicks = useMemo(() => solveTicks(data), [data])
+  const tick = { fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }
+
+  const toggleSeries = (key: SeriesKey) =>
+    setHiddenSeries((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  return (
+    <Panel role="region" aria-labelledby={headingId} className="stats-progress stack">
+      <div className="stats-panel-header">
+        <h2 id={headingId}>Progress</h2>
+        <div className="stats-range" role="group" aria-label="Graph scale">
+          {STATS_CHART_SCALES.map((option) => (
+            <Button
+              key={option}
+              type="button"
+              variant="ghost"
+              aria-pressed={scale === option}
+              aria-label={STATS_CHART_SCALE_LABELS[option]}
+              title={`${STATS_CHART_SCALE_LABELS[option]} solves`}
+              onClick={() => onScaleChange(option)}
+            >
+              {option === 'all' ? STATS_CHART_SCALE_LABELS.all : option}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="stats-chart">
+        <div className="stats-chart-canvas">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid vertical={false} stroke="var(--border)" />
+              <XAxis
+                dataKey="index"
+                type="number"
+                domain={['dataMin', 'dataMax']}
+                ticks={xTicks}
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                minTickGap={scalePx(24, uiScale)}
+                tick={tick}
+              />
+              <YAxis
+                domain={['auto', 'auto']}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatAxisSeconds}
+                tick={tick}
+                width={scalePx(40, uiScale)}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: 'var(--surface)',
+                  borderColor: 'var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: 'var(--shadow-md)',
+                  color: 'var(--text)',
+                }}
+                itemStyle={{ color: 'var(--text)' }}
+                labelStyle={{ color: 'var(--text-muted)', fontWeight: 600 }}
+                labelFormatter={(label) => `Solve ${label}`}
+                formatter={(value, name) => [formatChartSeconds(Number(value)), String(name)]}
+                itemSorter={(item) => CHART_SERIES.findIndex((series) => series.key === item.dataKey)}
+              />
+              {CHART_SERIES.map((series) =>
+                hiddenSeries[series.key] ? null : (
+                  <Line
+                    key={series.key}
+                    type="monotone"
+                    dataKey={series.key}
+                    name={series.label}
+                    stroke={series.color}
+                    strokeWidth={series.strokeWidth}
+                    strokeOpacity={series.strokeOpacity}
+                    dot={false}
+                    activeDot={{ r: scalePx(4, uiScale) }}
+                    isAnimationActive={false}
+                  />
+                ),
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <div className="stats-legend" role="group" aria-label="Chart series visibility">
+        {CHART_SERIES.map((series) => {
+          const hidden = Boolean(hiddenSeries[series.key])
+          return (
+            <Button
+              key={series.key}
+              type="button"
+              variant="ghost"
+              aria-pressed={!hidden}
+              onClick={() => toggleSeries(series.key)}
+            >
+              <span aria-hidden="true" className="stats-legend-key" style={{ backgroundColor: series.color }} />
+              {series.label}
+            </Button>
+          )
+        })}
+      </div>
+    </Panel>
+  )
+}
+
+function AllTimeTotals({ stats }: { stats: SolveStats }) {
+  const headingId = useId()
+  return (
+    <Panel muted role="region" aria-labelledby={headingId} className="stats-all-time">
+      <h2 id={headingId}>All-time</h2>
+      <StatGrid
+        items={[
+          ['Solves', stats.count.toLocaleString()],
+          ['Total time', formatTotalTime(stats.totalTime)],
+          ['Std dev', stats.stdDev === null ? '—' : formatDuration(stats.stdDev)],
+          ['Worst', formatAverage(stats.worst)],
+        ]}
+      />
+    </Panel>
   )
 }
