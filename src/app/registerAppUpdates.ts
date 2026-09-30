@@ -30,8 +30,9 @@ export function registerAppUpdates() {
     immediate: true,
     // registerType is 'autoUpdate': the worker skips waiting, and once a new version activates (found at load or
     // by a later check) the plugin calls onNeedReload. It reloads the page itself when this callback is missing —
-    // mid-solve included — so it must stay; the updater picks a harmless moment instead. (onNeedReload is in
-    // vite-plugin-pwa's register.js and types/index.d.ts since 1.x; the activated handler calls it in place of reload.)
+    // mid-solve included — so it must stay; the updater picks a harmless moment instead. (onNeedReload is typed in
+    // vite-plugin-pwa's types/index.d.ts and called from dist/client/build/register.js as of 1.3.0, so dropping
+    // it from the options fails typecheck if the installed version removes it.)
     onNeedReload: () => appUpdater.updateReady(),
     onRegisteredSW(_swUrl, reg) {
       registration = reg
@@ -53,19 +54,30 @@ export function registerAppUpdates() {
 
   // A page still running an old bundle can ask for a lazy chunk the new deploy removed. Reload onto the new
   // version, but only once in a while so a chunk that is genuinely broken can't loop, and never mid-solve.
-  const reloadForChunkError = () => {
+  const canReloadForChunkError = () => {
     try {
       const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) ?? 0)
-      if (Date.now() - last < 60_000) {
-        return
-      }
-      sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
+      return Date.now() - last >= 60_000
     } catch {
+      return false
+    }
+  }
+  const onPreloadError = (event: Event) => {
+    if (!canReloadForChunkError()) {
+      // No reload coming: let the error surface instead of swallowing it.
       return
     }
-    window.location.reload()
+    // A reload is scheduled, so the failed import is expected to be fixed by it.
+    event.preventDefault()
+    appUpdater.whenNotHeld(() => {
+      try {
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
+      } catch {
+        return
+      }
+      window.location.reload()
+    })
   }
-  const onPreloadError = () => appUpdater.whenNotHeld(reloadForChunkError)
   window.addEventListener('vite:preloadError', onPreloadError)
 
   import.meta.hot?.dispose(() => {

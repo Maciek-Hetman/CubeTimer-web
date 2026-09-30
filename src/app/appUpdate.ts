@@ -44,9 +44,12 @@ export function createAppUpdater(env: AppUpdaterEnv): AppUpdater {
     if (!pending || reloading || holds > 0) {
       return
     }
-    // A navigation skips the editing check: the destination has only just mounted, so little can be lost. The
-    // reload happens after the route change, so the new page loads twice.
-    if (!navigating) {
+    // A navigation skips the wake window (the user is moving on anyway) but not the editing check.
+    if (navigating) {
+      if (env.isEditing()) {
+        return
+      }
+    } else {
       const unnoticed = env.isHidden() || env.now() - wokeAt < WAKE_WINDOW_MS
       if (!unnoticed || env.isEditing()) {
         return
@@ -69,7 +72,8 @@ export function createAppUpdater(env: AppUpdaterEnv): AppUpdater {
       tryApply(false)
     },
     navigated() {
-      tryApply(true)
+      // Let the route commit and paint settle first, so the reload doesn't land mid-render of the new page.
+      setTimeout(() => tryApply(true), 0)
     },
     hold() {
       holds += 1
