@@ -188,25 +188,31 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
       await user.click(await screen.findByText('Rapid Penalty'))
 
       const plusTwoBtn = await screen.findByRole('button', { name: '+2' })
-      await user.click(plusTwoBtn)
-      await waitFor(async () => {
-        const updated = await db.solves.get(solve.id)
-        expect(updated?.penalty).toBe('plus_two')
-      })
-
       const dnfBtn = screen.getByRole('button', { name: 'DNF' })
+
+      // Each button toggles relative to the penalty the row last rendered, and the live
+      // query re-renders after the DB write lands. Wait for the row to show each state
+      // before the next click, as a user would, or the click acts on the previous one.
+      async function expectPenalty(penalty: 'none' | 'plus_two' | 'dnf') {
+        await waitFor(async () => {
+          const updated = await db.solves.get(solve.id)
+          expect(updated?.penalty).toBe(penalty)
+        })
+        await waitFor(() => {
+          expect(plusTwoBtn).toHaveAttribute('aria-pressed', String(penalty === 'plus_two'))
+          expect(dnfBtn).toHaveAttribute('aria-pressed', String(penalty === 'dnf'))
+        })
+      }
+
+      await user.click(plusTwoBtn)
+      await expectPenalty('plus_two')
+
       await user.click(dnfBtn)
-      await waitFor(async () => {
-        const updated = await db.solves.get(solve.id)
-        expect(updated?.penalty).toBe('dnf')
-      })
+      await expectPenalty('dnf')
 
       // Toggle DNF again to return to none
       await user.click(dnfBtn)
-      await waitFor(async () => {
-        const updated = await db.solves.get(solve.id)
-        expect(updated?.penalty).toBe('none')
-      })
+      await expectPenalty('none')
     })
 
     it('associates successive saves with the same automatic session', async () => {
