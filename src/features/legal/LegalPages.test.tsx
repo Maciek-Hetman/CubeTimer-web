@@ -21,7 +21,11 @@ describe('legal pages', () => {
   })
 
   it('renders the privacy policy', () => {
-    render(<PrivacyPage />)
+    render(
+      <MemoryRouter>
+        <PrivacyPage />
+      </MemoryRouter>,
+    )
     expect(screen.getByRole('heading', { name: 'Privacy policy' })).toBeInTheDocument()
   })
 

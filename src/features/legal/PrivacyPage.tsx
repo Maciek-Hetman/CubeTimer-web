@@ -22,7 +22,8 @@ export function PrivacyPage() {
         </p>
         <p>
           The server also records technical request data, such as route, response time, and errors, to keep the service
-          running. You can delete your account from the Account page, which deletes it from the server and clears its data from this device.
+          running. You can delete your account from the Account page, which deletes it from the server and clears its
+          data from this device.
         </p>
 
         <h2>Timers and permissions</h2>
