@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAppUpdater, WAKE_WINDOW_MS } from './appUpdate'
 
 const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve))
+const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 function setup() {
   const env = {
@@ -35,13 +36,24 @@ describe('app updater', () => {
     expect(env.reload).toHaveBeenCalledTimes(1)
   })
 
-  it('waits for the next navigation once the user has settled in', () => {
+  it('waits for the next navigation once the user has settled in', async () => {
     const { env, updater } = setup()
     env.time = WAKE_WINDOW_MS
     updater.updateReady()
     expect(env.reload).not.toHaveBeenCalled()
     updater.navigated()
+    await nextTask()
     expect(env.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reload on navigation into a field being typed in', async () => {
+    const { env, updater } = setup()
+    env.time = WAKE_WINDOW_MS
+    updater.updateReady()
+    env.editing = true
+    updater.navigated()
+    await nextTask()
+    expect(env.reload).not.toHaveBeenCalled()
   })
 
   it('reloads while the tab is hidden, but not over a field being typed in', () => {

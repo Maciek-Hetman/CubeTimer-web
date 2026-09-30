@@ -37,6 +37,7 @@ Don't flag these unless the diff actually breaks them.
 
 - **Service worker updates** (`vite.config.ts`, `src/app/registerAppUpdates.ts`, `src/app/appUpdate.ts`). `registerType: 'autoUpdate'` with `injectRegister: false` and explicit `workbox.skipWaiting`/`clientsClaim` is intentional. The plugin only sets those two itself when it injects the registration.
   - `registerSW({ onNeedReload })` is a documented option (`node_modules/vite-plugin-pwa/types/index.d.ts`). In autoUpdate mode the plugin calls it *instead of* `window.location.reload()` once a new worker activates (`node_modules/vite-plugin-pwa/dist/client/build/register.js`). If it's missing, the plugin reloads straight away, even during a solve. Never suggest removing it or replacing it with a `controllerchange` listener. `appUpdater` decides when to reload.
+  - Update holds (`appUpdater.hold()`) cover a solve in progress, including its save, and an open Bluetooth connection, since getting that back after a reload needs a click. A wired timer reopens by itself on load once the mic was allowed (`WiredTimerProvider`), so don't add a hold for it: it is open all session and would block every update.
   - Don't suggest switching to `registerType: 'prompt'`. A new worker would then wait until every tab closes, and open tabs running an older bundle never send it `SKIP_WAITING`.
 
 ## Output

@@ -93,7 +93,7 @@ export function BluetoothTimerProvider({ children }: { children: ReactNode }) {
     }
   }, [active, disconnect])
 
-  // A reload would drop the device connection (and the pairing grant), so hold updates while it is open.
+  // A reload would drop the device connection, and reconnecting needs a click, so hold updates while it is open.
   const holdingUpdate = status !== 'disconnected'
   useEffect(() => (holdingUpdate ? appUpdater.hold() : undefined), [holdingUpdate])
 
