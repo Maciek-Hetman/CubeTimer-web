@@ -190,8 +190,8 @@ const TimerDisplay = React.memo(function TimerDisplay({
       return
     }
     let frame = 0
-    const loop = (now: number) => {
-      const snap = engine.tick(now)
+    const loop = () => {
+      const snap = engine.tick(performance.now())
       if (snap.phase === 'ready') {
         onReady(snap)
         return
