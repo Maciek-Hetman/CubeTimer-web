@@ -29,6 +29,7 @@ import { getAccentColor } from '../../styles/accents'
 import { BluetoothTimerControls } from './BluetoothTimerControls'
 import { WiredTimerControls } from './WiredTimerControls'
 import { loadTimerFont } from '../../styles/timerFonts'
+import { appUpdater } from '../../app/appUpdate'
 
 function isFormTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -285,6 +286,10 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const activePointerRef = useRef<number | null>(null)
   const isSolvingOrPreparing = isTimerBusy(snapshot.phase)
 
+  // Never reload onto a new version in the middle of a solve. The save takes over with its own hold in the same
+  // commit's effects (a released hold settles on a microtask), so there is no gap between finish and save.
+  useEffect(() => (isSolvingOrPreparing ? appUpdater.hold() : undefined), [isSolvingOrPreparing])
+
   useEffect(() => {
     loadTimerFont(settings.timerFont ?? 'jetbrains')
   }, [settings.timerFont])
@@ -352,9 +357,12 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     }
     autoSavedRef.current = true
     const duration = snapshot.finishedMs
-    void finish(duration).catch(() => {
-      setNotice('Could not save solve')
-    })
+    const releaseUpdate = appUpdater.hold()
+    void finish(duration)
+      .catch(() => {
+        setNotice('Could not save solve')
+      })
+      .finally(releaseUpdate)
   }, [finish, snapshot.finishedMs, snapshot.phase])
 
   useEffect(() => {

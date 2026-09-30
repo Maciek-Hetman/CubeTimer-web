@@ -29,6 +29,17 @@ Only in changed lines and code they directly affect:
 
 Don't report formatting, naming taste, or anything lint/typecheck already catches. Don't invent issues to fill a section.
 
+Before you claim a library option is unsupported, a no-op, or behaves a certain way, check its types and source in `node_modules/`, and cite what you found in the finding. If you can't confirm it, leave it out. A finding built on a wrong assumption about a library gets applied by the auto-fix job and breaks working code.
+
+## Known-correct patterns
+
+Don't flag these unless the diff actually breaks them.
+
+- **Service worker updates** (`vite.config.ts`, `src/app/registerAppUpdates.ts`, `src/app/appUpdate.ts`). `registerType: 'autoUpdate'` with `injectRegister: false` and explicit `workbox.skipWaiting`/`clientsClaim` is intentional. The plugin only sets those two itself when it injects the registration.
+  - `registerSW({ onNeedReload })` is a documented option (`node_modules/vite-plugin-pwa/types/index.d.ts`). In autoUpdate mode the plugin calls it *instead of* `window.location.reload()` once a new worker activates (`node_modules/vite-plugin-pwa/dist/client/build/register.js`). If it's missing, the plugin reloads straight away, even during a solve. Never suggest removing it or replacing it with a `controllerchange` listener. `appUpdater` decides when to reload.
+  - Update holds (`appUpdater.hold()`) cover a solve in progress, including its save, and an open Bluetooth connection, since getting that back after a reload needs a click. A wired timer reopens by itself on load once the mic was allowed (`WiredTimerProvider`), so don't add a hold for it: it is open all session and would block every update.
+  - Don't suggest switching to `registerType: 'prompt'`. A new worker would then wait until every tab closes, and open tabs running an older bundle never send it `SKIP_WAITING`.
+
 ## Output
 
 ```

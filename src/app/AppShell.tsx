@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ConflictBanner } from '../features/sync/ConflictBanner'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
@@ -10,6 +10,7 @@ import { CheckIcon, EditWidgetsIcon, SettingsIcon, ShieldIcon, StatsIcon, TimerI
 import { useMediaQuery } from '../ui/useMediaQuery'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { appUpdater } from './appUpdate'
 
 export interface ShellOutletContext {
   widgetEditing: boolean
@@ -44,6 +45,15 @@ export function AppShell() {
   const showSync = !isAuthRoute && !isHome
   const [widgetEditing, setWidgetEditing] = useState(false)
   const effectiveWidgetEditing = isDesktopHome && widgetEditing
+
+  // Moving to another page is a natural point to pick up a deployed update.
+  const visitedPathRef = useRef(location.pathname)
+  useEffect(() => {
+    if (visitedPathRef.current !== location.pathname) {
+      visitedPathRef.current = location.pathname
+      appUpdater.navigated()
+    }
+  }, [location.pathname])
 
   const outletContext = useMemo<ShellOutletContext>(
     () => ({ widgetEditing: effectiveWidgetEditing, setWidgetEditing }),
