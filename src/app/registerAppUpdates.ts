@@ -1,5 +1,5 @@
 import { registerSW } from 'virtual:pwa-register'
-import { appUpdater, setApplyUpdate } from './appUpdate'
+import { appUpdater } from './appUpdate'
 
 // Browsers only look for a new service worker on navigation, which a long-lived timer tab or an installed app
 // rarely does, so check on a timer and whenever the app comes back to the foreground.
@@ -26,20 +26,24 @@ export function registerAppUpdates() {
     registration.update().catch(() => {})
   }
 
-  const updateSW = registerSW({
+  // The worker skips waiting and claims clients, so a new version shows up as a controller change. The plugin's
+  // own reload-on-activation is disabled (prompt mode) and its reload callback is routed through the updater.
+  const hadController = !!navigator.serviceWorker?.controller
+  registerSW({
     immediate: true,
-    // A new version is installed and waiting; apply it (activate the worker, then reload) when it's harmless.
-    onNeedRefresh: () => appUpdater.updateReady(),
+    onNeedRefresh: () => {},
+    onNeedReload: () => appUpdater.updateReady(),
     onRegisteredSW(_swUrl, reg) {
       registration = reg
     },
   })
-  setApplyUpdate(() => {
-    void updateSW(true)
-  })
+  const onControllerChange = () => appUpdater.updateReady()
+  if (hadController) {
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+  }
 
-  window.setInterval(check, UPDATE_CHECK_INTERVAL_MS)
-  document.addEventListener('visibilitychange', () => {
+  const interval = window.setInterval(check, UPDATE_CHECK_INTERVAL_MS)
+  const onVisibility = () => {
     if (document.visibilityState === 'visible') {
       appUpdater.woke()
       if (Date.now() - lastCheck > MIN_FOREGROUND_CHECK_GAP_MS) {
@@ -48,11 +52,12 @@ export function registerAppUpdates() {
     } else {
       appUpdater.hidden()
     }
-  })
+  }
+  document.addEventListener('visibilitychange', onVisibility)
 
   // A page still running an old bundle can ask for a lazy chunk the new deploy removed. Reload onto the new
-  // version, but only once in a while so a chunk that is genuinely broken can't loop.
-  window.addEventListener('vite:preloadError', () => {
+  // version, but only once in a while so a chunk that is genuinely broken can't loop, and never mid-solve.
+  const reloadForChunkError = () => {
     try {
       const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) ?? 0)
       if (Date.now() - last < 60_000) {
@@ -63,5 +68,15 @@ export function registerAppUpdates() {
       return
     }
     window.location.reload()
+  }
+  const onPreloadError = () => appUpdater.whenNotHeld(reloadForChunkError)
+  window.addEventListener('vite:preloadError', onPreloadError)
+
+  import.meta.hot?.dispose(() => {
+    window.clearInterval(interval)
+    document.removeEventListener('visibilitychange', onVisibility)
+    window.removeEventListener('vite:preloadError', onPreloadError)
+    navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange)
+    registered = false
   })
 }

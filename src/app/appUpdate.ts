@@ -29,18 +29,23 @@ export interface AppUpdater {
   navigated(): void
   /** Defers any reload until the returned release function is called. */
   hold(): () => void
+  /** Runs fn now if nothing holds the app, otherwise once the last hold is released. */
+  whenNotHeld(fn: () => void): void
 }
 
 export function createAppUpdater(env: AppUpdaterEnv): AppUpdater {
   let pending = false
   let reloading = false
   let holds = 0
+  let onNotHeld: Array<() => void> = []
   let wokeAt = env.now()
 
   function tryApply(navigating: boolean) {
     if (!pending || reloading || holds > 0) {
       return
     }
+    // A navigation skips the editing check: the destination has only just mounted, so little can be lost. The
+    // reload happens after the route change, so the new page loads twice.
     if (!navigating) {
       const unnoticed = env.isHidden() || env.now() - wokeAt < WAKE_WINDOW_MS
       if (!unnoticed || env.isEditing()) {
@@ -75,7 +80,19 @@ export function createAppUpdater(env: AppUpdaterEnv): AppUpdater {
         }
         released = true
         holds -= 1
+        if (holds === 0) {
+          const queued = onNotHeld
+          onNotHeld = []
+          queued.forEach((fn) => fn())
+        }
         tryApply(false)
+      }
+    },
+    whenNotHeld(fn) {
+      if (holds > 0) {
+        onNotHeld.push(fn)
+      } else {
+        fn()
       }
     },
   }
@@ -94,16 +111,9 @@ function isEditingText(): boolean {
   return active instanceof HTMLTextAreaElement || active.isContentEditable
 }
 
-let applyUpdate: () => void = () => window.location.reload()
-
-/** Replaces how a pending update is applied (e.g. activate the waiting worker, then reload). */
-export function setApplyUpdate(fn: () => void) {
-  applyUpdate = fn
-}
-
 export const appUpdater = createAppUpdater({
   now: () => Date.now(),
-  reload: () => applyUpdate(),
+  reload: () => window.location.reload(),
   isHidden: () => document.visibilityState === 'hidden',
   isEditing: isEditingText,
 })
