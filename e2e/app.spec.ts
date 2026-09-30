@@ -164,7 +164,7 @@ test('shows the desktop widget dashboard and shared header nav', async ({ page }
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
   await expect(page.locator('.desktop-dashboard')).toHaveCount(0)
-  await expect(page.locator('.sync-pill')).toBeVisible()
+  await expect(page.locator('.sync-pill')).toHaveCount(0)
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Timer', exact: true }).click()
   await expect(page.locator('.desktop-dashboard')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent times' }).first()).toBeVisible()

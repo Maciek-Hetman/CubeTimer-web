@@ -6,12 +6,7 @@ export function SyncIndicator() {
   const { user } = useAuth()
   const { syncStatus, pendingMutations, requestSync } = useSync()
   if (!user) {
-    return (
-      <div className="sync-pill" title="Times stay on this device until you sign in">
-        <span className="sync-dot" />
-        Local only
-      </div>
-    )
+    return null
   }
 
   if (!user.email_verified) {
