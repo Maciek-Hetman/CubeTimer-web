@@ -1581,15 +1581,14 @@ input[type='range']::-moz-range-thumb {
 }
 
 .settings-page {
+  container-type: inline-size;
   width: 100%;
-  max-width: 37.5rem;
-  margin: 0 auto;
 }
 
-@media (min-width: 768px) {
-  .settings-page {
-    max-width: 53.75rem;
-  }
+.settings-mobile-header,
+.settings-layout {
+  max-width: 37.5rem;
+  margin-inline: auto;
 }
 
 .settings-mobile-header {
@@ -1620,23 +1619,15 @@ input[type='range']::-moz-range-thumb {
   scroll-margin-top: calc(var(--header-height) + var(--space-4));
 }
 
+/* Tablet and up: section links sit in a row above the settings card, which stays centered. */
 @media (min-width: 768px) {
   .settings-mobile-header {
     display: none;
   }
 
-  .settings-layout {
-    display: grid;
-    grid-template-columns: 11.25rem minmax(0, 1fr);
-    align-items: start;
-    gap: var(--space-5);
-  }
-
   .settings-sidebar {
     display: flex;
     flex-direction: column;
-    position: sticky;
-    top: calc(var(--header-height) + var(--space-4));
   }
 
   .settings-sidebar-header {
@@ -1653,18 +1644,17 @@ input[type='range']::-moz-range-thumb {
 
   .settings-nav {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 0.125rem;
-    border-left: 2px solid var(--border);
-    padding-left: 0;
+    border-bottom: 2px solid var(--border);
     margin: 0;
   }
 
   .settings-nav-link {
     display: block;
     padding: 0.5rem 0.75rem;
-    margin-left: -2px;
-    border-left: 2px solid transparent;
+    margin-bottom: -2px;
+    border-bottom: 2px solid transparent;
     color: var(--text-muted);
     text-decoration: none;
     font-size: var(--text-sm);
@@ -1673,7 +1663,7 @@ input[type='range']::-moz-range-thumb {
       color var(--duration) var(--ease),
       border-color var(--duration) var(--ease),
       background-color var(--duration) var(--ease);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   }
 
   .settings-nav-link:hover {
@@ -1684,8 +1674,51 @@ input[type='range']::-moz-range-thumb {
   .settings-nav-link.active {
     color: var(--accent);
     font-weight: 600;
-    border-left-color: var(--accent);
+    border-bottom-color: var(--accent);
     background: var(--accent-soft);
+  }
+}
+
+/* Wide enough for a link gutter on each side: equal side columns keep the settings card centered.
+   rem in @container is the (scaled) root font size, unlike in @media, so this breakpoint scales with the toolbar. */
+@container (min-width: 66rem) {
+  .settings-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 40rem) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-5);
+    max-width: none;
+  }
+
+  .settings-sidebar {
+    grid-column: 1;
+    width: 11.25rem;
+    position: sticky;
+    top: calc(var(--header-height) + var(--space-4));
+  }
+
+  .settings-content {
+    grid-column: 2;
+  }
+
+  .settings-nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    border-bottom: 0;
+    border-left: 2px solid var(--border);
+  }
+
+  .settings-nav-link {
+    margin-bottom: 0;
+    margin-left: -2px;
+    border-bottom: 0;
+    border-left: 2px solid transparent;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+
+  .settings-nav-link.active {
+    border-bottom-color: transparent;
+    border-left-color: var(--accent);
   }
 }
 
