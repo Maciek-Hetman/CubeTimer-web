@@ -3,7 +3,8 @@ name: PR Review
 # Runs the read-only `reviewer` agent (.claude/agents/reviewer.md) on each PR
 # and posts its findings as a single, updated PR comment. If the review has
 # Critical or Should-fix findings, the `fix` job hands them to the
-# `implementer` agent and pushes the result to the PR branch.
+# `implementer` agent and pushes the result to the PR branch. A pre-push hook
+# blocks that push unless typecheck, lint, and tests pass.
 #
 # The reviewing Claude runs in a job that can only read. Posting happens in a
 # separate job that has pull-requests: write and never runs Claude. The fix job
@@ -193,6 +194,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Gate the fix push on a green build, whatever the session did or
+      # skipped. The hook lives outside the checkout, so the session (which can
+      # only write src/ and run the exact push command, no --no-verify) can't
+      # edit or bypass it.
+      - name: Require checks before pushing
+        run: |
+          set -euo pipefail
+          hooks="$RUNNER_TEMP/git-hooks"
+          mkdir -p "$hooks"
+          cat > "$hooks/pre-push" <<'HOOK'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "pre-push: running typecheck, lint, and tests" >&2
+          if ! { npm run typecheck && npm run lint && npm run test; } >&2; then
+            echo "pre-push: checks failed, push refused" >&2
+            exit 1
+          fi
+          HOOK
+          chmod +x "$hooks/pre-push"
+          git config core.hooksPath "$hooks"
+
       - name: Apply reviewer findings
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -216,8 +238,9 @@ jobs:
             Fix the Critical and Should-fix findings. Ignore Nitpicks.
             1. Run the `implementer` subagent in the foreground and wait for its report before step 2. Spec: "Fix these reviewer findings on an existing PR:" followed by the Critical and Should-fix sections copied verbatim. Don't paraphrase them.
             2. Check `git status --porcelain` and `git diff`. If nothing changed, stop and explain why.
-            3. Run `git add -A`, then commit with exactly this subject line: `${{ env.FIX_COMMIT_PREFIX }} (round ${{ needs.review.outputs.fix_round }})`. In the body, list the findings fixed and any not fixed, with implementer's reason.
-            4. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. If it's rejected because the branch moved, stop: the new commits get their own review.
+            3. Run `npm run test`. If tests fail, run `implementer` again in the foreground with the failing test names and their error output, and tell it to fix the code or update tests whose expectations the fix intentionally changed. Don't delete or skip tests to make them pass. Repeat at most twice. If tests still fail, stop and report the failures without committing.
+            4. Run `git add -A`, then commit with exactly this subject line: `${{ env.FIX_COMMIT_PREFIX }} (round ${{ needs.review.outputs.fix_round }})`. In the body, list the findings fixed and any not fixed, with implementer's reason.
+            5. Push with exactly `git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}`. A pre-push hook runs typecheck, lint, and tests. If it refuses the push, stop and report its failures; don't retry. If the push is rejected because the branch moved, stop: the new commits get their own review.
             Don't run the reviewer yourself; the push triggers a fresh review of the PR.
           # --agent isn't used, for the same reason as in claude.yml. The push
           # rule is the exact command, so no force-push or other branches.
@@ -230,7 +253,7 @@ jobs:
           # must not be able to write workflows or agent definitions.
           claude_args: |
             --max-turns 30
-            --allowedTools "Read,Edit(src/**),Write(src/**),Glob,Grep,Agent(implementer),Bash(npm run typecheck),Bash(npm run lint),Bash(git status:*),Bash(git diff:*),Bash(git add -A),Bash(git commit:*),Bash(git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }})"
+            --allowedTools "Read,Edit(src/**),Write(src/**),Glob,Grep,Agent(implementer),Bash(npm run typecheck),Bash(npm run lint),Bash(npm run test),Bash(git status:*),Bash(git diff:*),Bash(git add -A),Bash(git commit:*),Bash(git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }})"
             --disallowedTools "Agent(browser-verifier),Agent(pipeline),Agent(reviewer)"
 
       # The action exits 0 even when Claude made no commit (a denied tool, or a
@@ -239,12 +262,32 @@ jobs:
       # skips itself, writing no execution file, on a PR that changes a workflow
       # file (it requires them to match the default branch), so the file is
       # optional here.
-      - name: Report if nothing was committed
+      - name: Report if nothing was pushed
         env:
           REVIEWED_SHA: ${{ github.event.pull_request.head.sha }}
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
+          # A commit the pre-push hook refused (or that the session never pushed)
+          # leaves the branch untouched. Fail the job so a red fix never passes
+          # as a green run that did nothing.
+          remote_sha="$(gh api "repos/$GH_REPO/git/ref/heads/$HEAD_REF" --jq .object.sha)"
+          if [ "$(git rev-parse HEAD)" != "$REVIEWED_SHA" ] && [ "$remote_sha" = "$REVIEWED_SHA" ]; then
+            echo "::error::Auto-fix committed but the commit isn't on the branch. See the job summary."
+            {
+              echo '### Auto-fix commit not pushed'
+              echo
+              echo 'Either the pre-push hook refused it (typecheck, lint, or tests failed; see the "Apply reviewer findings" step log) or the session stopped before pushing. Fix the findings by hand or with `@claude`.'
+              if [ -f "${EXECUTION_FILE:-}" ]; then
+                echo
+                jq -r '[.[] | select(.type == "result")] | last | .result // "Claude returned no result message."' "$EXECUTION_FILE"
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           if [ "$(git rev-parse HEAD)" = "$REVIEWED_SHA" ]; then
             echo "::warning::Auto-fix made no commit on top of $REVIEWED_SHA. See the job summary."
             {
