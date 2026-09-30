@@ -187,8 +187,9 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
       renderWithApp(<HistoryPage />)
       await user.click(await screen.findByText('Rapid Penalty'))
 
-      const plusTwoBtn = await screen.findByRole('button', { name: '+2' })
-      const dnfBtn = screen.getByRole('button', { name: 'DNF' })
+      await screen.findByRole('button', { name: '+2' })
+      const plusTwoBtn = () => screen.getByRole('button', { name: '+2' })
+      const dnfBtn = () => screen.getByRole('button', { name: 'DNF' })
 
       // Each button toggles relative to the penalty the row last rendered, and the live
       // query re-renders after the DB write lands. Wait for the row to show each state
@@ -199,19 +200,19 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
           expect(updated?.penalty).toBe(penalty)
         })
         await waitFor(() => {
-          expect(plusTwoBtn).toHaveAttribute('aria-pressed', String(penalty === 'plus_two'))
-          expect(dnfBtn).toHaveAttribute('aria-pressed', String(penalty === 'dnf'))
+          expect(plusTwoBtn()).toHaveAttribute('aria-pressed', String(penalty === 'plus_two'))
+          expect(dnfBtn()).toHaveAttribute('aria-pressed', String(penalty === 'dnf'))
         })
       }
 
-      await user.click(plusTwoBtn)
+      await user.click(plusTwoBtn())
       await expectPenalty('plus_two')
 
-      await user.click(dnfBtn)
+      await user.click(dnfBtn())
       await expectPenalty('dnf')
 
       // Toggle DNF again to return to none
-      await user.click(dnfBtn)
+      await user.click(dnfBtn())
       await expectPenalty('none')
     })
 
