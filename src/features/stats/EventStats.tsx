@@ -63,6 +63,9 @@ export function EventStats({ event }: { event: CubeEvent }) {
   if (!stats) {
     return null
   }
+  if (stats.count === 0 && switching) {
+    return null
+  }
   if (stats.count === 0) {
     return (
       <EmptyState

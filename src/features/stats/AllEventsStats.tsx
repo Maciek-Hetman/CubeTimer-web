@@ -1,4 +1,4 @@
-import { useId, useMemo } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppContext'
@@ -20,8 +20,21 @@ import { plural } from './plural'
 /** The All tab: what every event shares. `events` is undefined while it loads. */
 export function AllEventsStats({ events }: { events: EventSummary[] | undefined }) {
   const { ownerId } = useApp()
-  // Keyed by day so the calendar rolls over at midnight.
-  const todayKey = dayKey(new Date())
+  // Keyed by day; a timer to the next midnight (and tab refocus) rolls it over.
+  const [todayKey, setTodayKey] = useState(() => dayKey(new Date()))
+  useEffect(() => {
+    const now = new Date()
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    const timer = setTimeout(() => setTodayKey(dayKey(new Date())), nextMidnight.getTime() - now.getTime() + 1000)
+    const refresh = () => {
+      if (document.visibilityState === 'visible') setTodayKey(dayKey(new Date()))
+    }
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [todayKey])
   const activity = useLiveQuery(async () => {
     const today = new Date()
     return { today, counts: await countSolvesByDay(ownerId, activityStart(today)) }
