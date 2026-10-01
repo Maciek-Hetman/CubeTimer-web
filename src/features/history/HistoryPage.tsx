@@ -114,7 +114,7 @@ export function HistoryPage() {
   // One pass over all events feeds both the list and the per-event filter totals; the list is filtered in listItems.
   const history = useLiveQuery(async () => {
     if (!ownerId) {
-      return null
+      return { sessions: [] as CubeSession[], summary: { sessions: new Map(), orphans: new Map(), totals: new Map() } as Awaited<ReturnType<typeof countSolvesBySession>> }
     }
     const [sessions, summary] = await Promise.all([listSessions(ownerId), countSolvesBySession(ownerId)])
     return { sessions, summary }
@@ -211,7 +211,11 @@ export function HistoryPage() {
         }
       />
 
-      {!history ? null : totalSolves === 0 ? (
+      {history === undefined ? (
+        <p className="muted" role="status">
+          Loading history…
+        </p>
+      ) : totalSolves === 0 ? (
         <EmptyState
           title="No solves yet"
           action={
