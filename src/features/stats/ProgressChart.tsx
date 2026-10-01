@@ -18,17 +18,21 @@ type SeriesKey = (typeof CHART_SERIES)[number]['key']
 
 export function ProgressChart({
   data,
+  stale = false,
   scale,
   onScaleChange,
 }: {
-  data: ChartPoint[]
+  /** Undefined while the first points load. */
+  data: ChartPoint[] | undefined
+  /** The points belong to the previous scale; shown dimmed until the new ones arrive. */
+  stale?: boolean
   scale: StatsChartScale
   onScaleChange: (scale: StatsChartScale) => void
 }) {
   const headingId = useId()
   const uiScale = useUiScale()
   const [hiddenSeries, setHiddenSeries] = useState<Partial<Record<SeriesKey, boolean>>>({})
-  const xTicks = useMemo(() => solveTicks(data), [data])
+  const xTicks = useMemo(() => data ? solveTicks(data) : undefined, [data])
   const tick = { fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }
 
   const toggleSeries = (key: SeriesKey) =>
@@ -54,63 +58,69 @@ export function ProgressChart({
           ))}
         </div>
       </div>
-      <div className="stats-chart">
-        <div className="stats-chart-canvas">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid vertical={false} stroke="var(--border)" />
-              <XAxis
-                dataKey="index"
-                type="number"
-                domain={['dataMin', 'dataMax']}
-                ticks={xTicks}
-                allowDecimals={false}
-                tickLine={false}
-                axisLine={false}
-                minTickGap={scalePx(24, uiScale)}
-                tick={tick}
-              />
-              <YAxis
-                domain={['auto', 'auto']}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={formatAxisSeconds}
-                tick={tick}
-                width={scalePx(40, uiScale)}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: 'var(--surface)',
-                  borderColor: 'var(--border)',
-                  borderRadius: 'var(--radius-sm)',
-                  boxShadow: 'var(--shadow-md)',
-                  color: 'var(--text)',
-                }}
-                itemStyle={{ color: 'var(--text)' }}
-                labelStyle={{ color: 'var(--text-muted)', fontWeight: 600 }}
-                labelFormatter={(label) => `Solve ${label}`}
-                formatter={(value, name) => [formatChartSeconds(Number(value)), String(name)]}
-                itemSorter={(item) => CHART_SERIES.findIndex((series) => series.key === item.dataKey)}
-              />
-              {CHART_SERIES.map((series) =>
-                hiddenSeries[series.key] ? null : (
-                  <Line
-                    key={series.key}
-                    type="monotone"
-                    dataKey={series.key}
-                    name={series.label}
-                    stroke={series.color}
-                    strokeWidth={series.strokeWidth}
-                    strokeOpacity={series.strokeOpacity}
-                    dot={false}
-                    activeDot={{ r: scalePx(4, uiScale) }}
-                    isAnimationActive={false}
-                  />
-                ),
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="stats-chart" aria-busy={data === undefined || stale || undefined}>
+        {data === undefined ? (
+          <p className="muted stats-chart-loading" role="status">
+            Loading…
+          </p>
+        ) : (
+          <div className="stats-chart-canvas" style={stale ? { opacity: 0.55 } : undefined}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis
+                  dataKey="index"
+                  type="number"
+                  domain={['dataMin', 'dataMax']}
+                  ticks={xTicks}
+                  allowDecimals={false}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={scalePx(24, uiScale)}
+                  tick={tick}
+                />
+                <YAxis
+                  domain={['auto', 'auto']}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={formatAxisSeconds}
+                  tick={tick}
+                  width={scalePx(40, uiScale)}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--surface)',
+                    borderColor: 'var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    boxShadow: 'var(--shadow-md)',
+                    color: 'var(--text)',
+                  }}
+                  itemStyle={{ color: 'var(--text)' }}
+                  labelStyle={{ color: 'var(--text-muted)', fontWeight: 600 }}
+                  labelFormatter={(label) => `Solve ${label}`}
+                  formatter={(value, name) => [formatChartSeconds(Number(value)), String(name)]}
+                  itemSorter={(item) => CHART_SERIES.findIndex((series) => series.key === item.dataKey)}
+                />
+                {CHART_SERIES.map((series) =>
+                  hiddenSeries[series.key] ? null : (
+                    <Line
+                      key={series.key}
+                      type="monotone"
+                      dataKey={series.key}
+                      name={series.label}
+                      stroke={series.color}
+                      strokeWidth={series.strokeWidth}
+                      strokeOpacity={series.strokeOpacity}
+                      dot={false}
+                      activeDot={{ r: scalePx(4, uiScale) }}
+                      isAnimationActive={false}
+                    />
+                  ),
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
       <div className="stats-legend" role="group" aria-label="Chart series visibility">
         {CHART_SERIES.map((series) => {

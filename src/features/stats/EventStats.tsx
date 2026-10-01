@@ -6,7 +6,6 @@ import { listSessions } from '../../data/repositories/sessions'
 import {
   collectChartSeries,
   computeSolveStats,
-  type ChartPoint,
   type SolveStats,
 } from '../../data/repositories/solveStats'
 import { eventLabel, type CubeEvent, type CubeSession, type StatsChartScale } from '../../domain/models'
@@ -18,8 +17,6 @@ import { CurrentAverages, PersonalBests } from './AverageSections'
 import { CurrentSession } from './CurrentSession'
 import { ProgressChart } from './ProgressChart'
 import { StatsLoading } from './StatsLoading'
-
-const NO_CHART_POINTS: ChartPoint[] = []
 
 /** One event's tab: bests, current averages, the session, progress and all-time totals. */
 export function EventStats({ event }: { event: CubeEvent }) {
@@ -56,10 +53,13 @@ export function EventStats({ event }: { event: CubeEvent }) {
   const sessionStats = useSessionStats(ownerId, event, currentSession)
   const previousSessionStats = useSessionStats(ownerId, event, previousSession)
 
-  const chartData = useLiveQuery(
-    async () => collectChartSeries(ownerId, event, chartScale),
+  // Tagged with its inputs so a scale change keeps the previous points, dimmed, until the new ones land.
+  const chartResult = useLiveQuery(
+    async () => ({ event, scale: chartScale, points: await collectChartSeries(ownerId, event, chartScale) }),
     [ownerId, event, chartScale],
   )
+  const chartData = chartResult?.event === event ? chartResult.points : undefined
+  const chartStale = chartResult !== undefined && chartResult.event === event && chartResult.scale !== chartScale
 
   const stats = shown?.stats
   // Switching away from an event without solves has nothing worth holding on screen.
@@ -90,7 +90,8 @@ export function EventStats({ event }: { event: CubeEvent }) {
         previousStats={previousSessionStats}
       />
       <ProgressChart
-        data={chartData ?? NO_CHART_POINTS}
+        data={chartData}
+        stale={chartStale}
         scale={chartScale}
         onScaleChange={(scale) => void updateSettings({ statsChartScale: scale })}
       />

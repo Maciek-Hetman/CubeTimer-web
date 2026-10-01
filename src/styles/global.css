@@ -2072,6 +2072,14 @@ input[type='range']::-moz-range-thumb {
   min-height: 16rem;
 }
 
+.stats-chart-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+
 .stats-chart-canvas {
   position: absolute;
   inset: 0;
