@@ -48,6 +48,7 @@ function EventSwitcher({ selected, withSolves }: { selected: StatsTab; withSolve
             title={empty ? 'No solves yet' : undefined}
           >
             {eventLabel(event)}
+            {empty && <span className="sr-only"> (no solves yet)</span>}
           </Link>
         )
       })}

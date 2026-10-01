@@ -12,6 +12,12 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
   const headingId = useId()
   const summary = `${plural(calendar.total, 'solve')} on ${plural(calendar.activeDays, 'day')} in the last year`
 
+  const busiestDays = calendar.weeks
+    .flat()
+    .filter((day) => day.count > 0)
+    .sort((a, b) => b.count - a.count || b.date.getTime() - a.date.getTime())
+    .slice(0, 5)
+
   // Grid row 1 holds the months and column 1 the weekdays, so days start at row 2, column 2.
   return (
     <Panel role="region" aria-labelledby={headingId} className="stats-activity stack">
@@ -45,6 +51,18 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
           )}
         </div>
       </div>
+      {busiestDays.length > 0 && (
+        <div className="sr-only">
+          <p>Most active days</p>
+          <ul>
+            {busiestDays.map((day) => (
+              <li key={day.key}>
+                {DAY.format(day.date)}: {plural(day.count, 'solve')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="stats-activity-legend" aria-hidden="true">
         Less
         {LEVELS.map((level) => (

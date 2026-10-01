@@ -45,7 +45,11 @@ export function AllEventsStats({ events }: { events: EventSummary[] | undefined 
   )
 
   if (!events || !calendar) {
-    return null
+    return (
+      <Panel role="status" aria-busy="true" className="stack">
+        <p className="muted">Loading stats…</p>
+      </Panel>
+    )
   }
   if (events.length === 0) {
     return (

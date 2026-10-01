@@ -248,9 +248,9 @@ describe('StatsPage', () => {
     expect(within(switcher).getByRole('link', { name: '3x3' })).toHaveAttribute('aria-current', 'page')
     expect(statValues(await screen.findByRole('region', { name: 'Personal bests' }), 'Single')).toEqual(['10.00'])
 
-    await user.click(within(switcher).getByRole('link', { name: '2x2' }))
+    await user.click(within(switcher).getByRole('link', { name: /^2x2/ }))
 
-    expect(within(switcher).getByRole('link', { name: '2x2' })).toHaveAttribute('aria-current', 'page')
+    expect(within(switcher).getByRole('link', { name: /^2x2/ })).toHaveAttribute('aria-current', 'page')
     expect(within(switcher).getByRole('link', { name: '3x3' })).not.toHaveAttribute('aria-current')
     expect(await screen.findByText('1.95')).toBeInTheDocument()
     expect(mocks.setEvent).not.toHaveBeenCalled()
@@ -264,7 +264,7 @@ describe('StatsPage', () => {
     const bests = await screen.findByRole('region', { name: 'Personal bests' })
     expect(statValues(bests, 'Single')).toEqual(['45.12'])
     const switcher = screen.getByRole('navigation', { name: 'Event' })
-    expect(within(switcher).getByRole('link', { name: 'Megaminx' })).toHaveAttribute('aria-current', 'page')
+    expect(within(switcher).getByRole('link', { name: /^Megaminx/ })).toHaveAttribute('aria-current', 'page')
   })
 
   it('shows an event without solves as empty', async () => {
@@ -273,7 +273,7 @@ describe('StatsPage', () => {
     expect(await screen.findByText('No solves yet')).toBeInTheDocument()
     expect(screen.getByText('Solves you time for 4x4 show up here.')).toBeInTheDocument()
     const switcher = screen.getByRole('navigation', { name: 'Event' })
-    expect(within(switcher).getByRole('link', { name: '4x4' })).toHaveClass('empty')
+    expect(within(switcher).getByRole('link', { name: /^4x4/ })).toHaveClass('empty')
     expect(within(switcher).getByRole('link', { name: '3x3' })).not.toHaveClass('empty')
   })
 
@@ -291,7 +291,15 @@ describe('StatsPage', () => {
 
     const switcher = screen.getByRole('navigation', { name: 'Event' })
     const tabs = within(switcher).getAllByRole('link')
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['All', '2x2', '3x3', '4x4', '5x5', 'Megaminx', 'Pyraminx'])
+    expect(tabs.map((tab) => tab.textContent?.replace(' (no solves yet)', ''))).toEqual([
+      'All',
+      '2x2',
+      '3x3',
+      '4x4',
+      '5x5',
+      'Megaminx',
+      'Pyraminx',
+    ])
     await user.click(tabs[0])
 
     expect(tabs[0]).toHaveAttribute('aria-current', 'page')
