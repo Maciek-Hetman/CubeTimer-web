@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import type { EventSummary } from '../../data/repositories/solveStats'
-import { eventLabel } from '../../domain/models'
+import { eventLabel, isCubeEvent } from '../../domain/models'
 import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
 import { Panel } from '../../ui/Panel'
 
@@ -10,7 +10,7 @@ function formatShare(count: number, total: number): string {
   return percent > 0 && percent < 1 ? '<1%' : `${Math.round(percent)}%`
 }
 
-/** Solves, time and bests per event. Each event links to its own tab. */
+/** Solves, time and bests per event. Each event this client knows links to its own tab. */
 export function EventBreakdown({ events }: { events: EventSummary[] }) {
   const headingId = useId()
   const total = events.reduce((sum, entry) => sum + entry.count, 0)
@@ -43,14 +43,19 @@ export function EventBreakdown({ events }: { events: EventSummary[] }) {
             {events.map((entry) => (
               <tr key={entry.event}>
                 <th scope="row">
-                  <Link
-                    to={`?event=${entry.event}`}
-                    replace
-                    // The breakdown sits low on the page; the event's tab starts at the top.
-                    onClick={() => window.scrollTo(0, 0)}
-                  >
-                    {eventLabel(entry.event)}
-                  </Link>
+                  {isCubeEvent(entry.event) ? (
+                    <Link
+                      to={`?event=${entry.event}`}
+                      replace
+                      // The breakdown sits low on the page; the event's tab starts at the top.
+                      onClick={() => window.scrollTo(0, 0)}
+                    >
+                      {eventLabel(entry.event)}
+                    </Link>
+                  ) : (
+                    // A synced solve's event this client doesn't list has no tab to open.
+                    entry.event
+                  )}
                 </th>
                 <td>
                   <span className="stats-breakdown-count">

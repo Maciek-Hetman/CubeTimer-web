@@ -183,6 +183,17 @@ describe('countSolvesByDay', () => {
     const counts = await countSolvesByDay('user-1', new Date(2026, 8, 21))
     expect(Object.fromEntries(counts)).toEqual({ '2026-09-29': 1, '2026-09-30': 3 })
   })
+
+  it('counts events this client does not list, as synced solves can carry them', async () => {
+    const solvedAt = new Date(2026, 8, 30, 12).toISOString()
+    await db.solves.bulkPut([
+      makeSolve('user-1', 's1', 10000, 'none', solvedAt),
+      { ...makeSolve('user-1', 's2', 10000, 'none', solvedAt), event: 'skewb' as CubeEvent },
+    ])
+
+    const counts = await countSolvesByDay('user-1', new Date(2026, 8, 21))
+    expect(Object.fromEntries(counts)).toEqual({ '2026-09-30': 2 })
+  })
 })
 
 describe('bounded solve queries', () => {

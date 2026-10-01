@@ -412,6 +412,19 @@ describe('StatsPage', () => {
     expect(window.scrollTo).toHaveBeenCalled()
   })
 
+  it('lists an event this client does not know without linking it to a tab', async () => {
+    mocks.summaries = [
+      { event: '3x3', count: 1200, totalTime: 2250000, best: 10000, mean: 15000 },
+      { event: 'skewb' as CubeEvent, count: 40, totalTime: 400000, best: 7000, mean: 10000 },
+    ]
+    renderPage('/stats?event=all')
+    const breakdown = await screen.findByRole('region', { name: 'Events' })
+
+    const skewb = within(breakdown).getByRole('rowheader', { name: 'skewb' })
+    expect(within(skewb).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(breakdown).getByRole('link', { name: '3x3' })).toBeInTheDocument()
+  })
+
   it('summarizes the last year of activity', async () => {
     const today = new Date()
     const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1, 12)
