@@ -16,12 +16,13 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
   const headingId = useId()
   const gridRef = useRef<HTMLDivElement>(null)
   const [selectedKey, setSelectedKey] = useState<string>()
+  const [focusKey, setFocusKey] = useState<string>()
   const summary = `${plural(calendar.total, 'solve')} on ${plural(calendar.activeDays, 'day')} in the last year`
 
   // Picking a day re-renders the calendar, so the flat day list is kept per calendar.
   const days = useMemo(() => calendar.weeks.flat(), [calendar])
   const selected = days.find((day) => day.key === selectedKey)
-  const tabKey = selected?.key ?? days[days.length - 1]?.key
+  const tabKey = days.find((day) => day.key === focusKey)?.key ?? selected?.key ?? days[days.length - 1]?.key
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[event.key]
@@ -43,7 +44,7 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
       </div>
       {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything.
           Days are buttons in one roving-tabindex group (a single tab stop, arrow keys move). Clicking,
-          tapping or focusing a day shows its count in the readout below. */}
+          or tapping a day shows its count in the readout below. */}
       <div className="stats-activity-scroll">
         <div
           ref={gridRef}
@@ -78,12 +79,13 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
                 selected={day.key === selectedKey}
                 tabbable={day.key === tabKey}
                 onSelect={setSelectedKey}
+                onFocusDay={setFocusKey}
               />
             )),
           )}
         </div>
       </div>
-      {/* Not a live region: a focused day's label already says the same thing. */}
+      {/* Not a live region: a focused day's label already says the same thing, and focus doesn't select. */}
       <div className="stats-activity-footer">
         <p>{selected ? describe(selected) : 'Select a day to see its solves.'}</p>
         <div className="stats-activity-legend" aria-hidden="true">
@@ -106,6 +108,7 @@ const DayCell = memo(function DayCell({
   selected,
   tabbable,
   onSelect,
+  onFocusDay,
 }: {
   day: ActivityDay
   column: number
@@ -113,6 +116,7 @@ const DayCell = memo(function DayCell({
   selected: boolean
   tabbable: boolean
   onSelect: (key: string) => void
+  onFocusDay: (key: string) => void
 }) {
   const label = describe(day)
   return (
@@ -127,8 +131,8 @@ const DayCell = memo(function DayCell({
       aria-label={label}
       title={label}
       onClick={() => onSelect(day.key)}
-      // Selection follows focus, so the one tab stop moves with the arrow keys.
-      onFocus={() => onSelect(day.key)}
+      // Focus only moves the tab stop with the arrow keys; it doesn't select the day.
+      onFocus={() => onFocusDay(day.key)}
     />
   )
 })

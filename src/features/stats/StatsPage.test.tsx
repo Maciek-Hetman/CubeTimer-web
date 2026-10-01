@@ -495,6 +495,10 @@ describe('StatsPage', () => {
     expect(within(activity).getByText(`No solves on ${formatDay.format(today)}`)).toBeInTheDocument()
     await user.keyboard('{ArrowLeft}')
     expect(document.activeElement).toHaveAccessibleName(`3 solves on ${formatDay.format(lastWeek)}`)
+    // Focus alone doesn't pick a day, so the readout still shows the clicked one.
+    expect(within(activity).getByText(`No solves on ${formatDay.format(today)}`)).toBeInTheDocument()
+    expect(within(activity).queryByText(`3 solves on ${formatDay.format(lastWeek)}`)).not.toBeInTheDocument()
+    await user.keyboard('{Enter}')
     expect(within(activity).getByText(`3 solves on ${formatDay.format(lastWeek)}`)).toBeInTheDocument()
 
     // The tab stop follows focus, so the next key moves on from there.
