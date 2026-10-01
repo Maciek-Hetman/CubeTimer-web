@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppProviders } from './app/AppProviders'
 import { AppShell } from './app/AppShell'
 import { HomePage } from './app/HomePage'
+import { ErrorBoundary, PageErrorBoundary } from './ui/ErrorBoundary'
 
 const AdminLayout = lazy(() => import('./features/admin/AdminLayout').then((m) => ({ default: m.AdminLayout })))
 const AdminOverviewPage = lazy(() => import('./features/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })))
@@ -24,42 +25,46 @@ const AccountPage = lazy(() => import('./features/account/AccountPage').then((m)
 
 export default function App() {
   return (
-    <AppProviders>
-      <BrowserRouter>
-        <Suspense fallback={null}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/stats" element={<StatsPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/account" element={<AccountPage />} />
-              <Route path="/about" element={<AboutPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
-              <Route path="/release-notes" element={<ReleaseNotesPage />} />
-              <Route
-                path="/admin"
-                element={
-                  <AdminRoute>
-                    <AdminLayout />
-                  </AdminRoute>
-                }
-              >
-                <Route index element={<Navigate to="overview" replace />} />
-                <Route path="overview" element={<AdminOverviewPage />} />
-                <Route path="traffic" element={<AdminTrafficPage />} />
-                <Route path="errors" element={<AdminErrorsPage />} />
+    <ErrorBoundary>
+      <AppProviders>
+        <BrowserRouter>
+          <Suspense fallback={null}>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route element={<PageErrorBoundary />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/stats" element={<StatsPage />} />
+                  <Route path="/history" element={<HistoryPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/account" element={<AccountPage />} />
+                  <Route path="/about" element={<AboutPage />} />
+                  <Route path="/privacy" element={<PrivacyPage />} />
+                  <Route path="/release-notes" element={<ReleaseNotesPage />} />
+                  <Route
+                    path="/admin"
+                    element={
+                      <AdminRoute>
+                        <AdminLayout />
+                      </AdminRoute>
+                    }
+                  >
+                    <Route index element={<Navigate to="overview" replace />} />
+                    <Route path="overview" element={<AdminOverviewPage />} />
+                    <Route path="traffic" element={<AdminTrafficPage />} />
+                    <Route path="errors" element={<AdminErrorsPage />} />
+                  </Route>
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/verify-email" element={<VerifyEmailPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
               </Route>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </AppProviders>
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </AppProviders>
+    </ErrorBoundary>
   )
 }
