@@ -44,6 +44,7 @@ function useTodayKey(): string {
 export function AllEventsStats({ events }: { events: EventSummary[] | undefined }) {
   const { ownerId } = useApp()
   const todayKey = useTodayKey()
+  // todayKey isn't read inside; it's a dependency so the calendar starts over at midnight.
   const activity = useLiveQuery(async () => {
     const today = new Date()
     return { today, counts: await countSolvesByDay(ownerId, activityStart(today)) }

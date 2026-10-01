@@ -43,8 +43,8 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
         <p className="muted">{summary}</p>
       </div>
       {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything.
-          Days are buttons in one roving-tabindex group (a single tab stop, arrow keys move). Clicking,
-          or tapping a day shows its count in the readout below. */}
+          Days are buttons in one roving-tabindex group (a single tab stop, arrow keys move). Clicking or
+          tapping a day, or pressing Enter on it, shows its count in the readout below. */}
       <div className="stats-activity-scroll">
         <div
           ref={gridRef}

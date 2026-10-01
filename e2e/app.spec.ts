@@ -259,7 +259,8 @@ test('hides account solves once a stored session is revoked', async ({ page }) =
   await page.reload()
   await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible({ timeout: 8000 })
   await page.goto('/stats')
-  await expect(page.getByText('No solves yet')).toBeVisible()
+  // The heading: the stats switcher's empty events also say "no solves yet" to screen readers.
+  await expect(page.getByRole('heading', { name: 'No solves yet' })).toBeVisible()
   await expect(page.locator('.stat-card')).toHaveCount(0)
 
   const currentOwner = await page.evaluate(() =>
