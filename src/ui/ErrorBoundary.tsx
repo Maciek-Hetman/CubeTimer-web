@@ -26,7 +26,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
       <div role="alert">
         <EmptyState
           title="Something went wrong"
-          description="We couldn't load your local data. Reloading the page usually fixes this."
+          description="An unexpected error occurred. Reloading the page usually fixes this."
           action={
             <Button type="button" variant="primary" onClick={() => location.reload()}>
               Reload
@@ -38,13 +38,13 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
   }
 }
 
-// Layout route for page content: keyed by pathname so navigating away clears a caught error,
-// and it forwards the shell's outlet context to the pages below it.
+// Layout route for page content: keyed by top-level section so navigating to another section clears a caught error
+// (nested routes like /admin/* keep their layout mounted), and it forwards the shell's outlet context to the pages below it.
 export function PageErrorBoundary() {
   const { pathname } = useLocation()
   const context = useOutletContext()
   return (
-    <ErrorBoundary key={pathname}>
+    <ErrorBoundary key={pathname.split('/')[1]}>
       <Outlet context={context} />
     </ErrorBoundary>
   )

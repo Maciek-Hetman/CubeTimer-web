@@ -72,7 +72,7 @@ describe('ErrorBoundary', () => {
     )
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Something went wrong' })).toBeInTheDocument()
-    expect(screen.getByText(/couldn't load your local data/i)).toBeInTheDocument()
+    expect(screen.getByText(/an unexpected error occurred\. reloading the page usually fixes this\./i)).toBeInTheDocument()
     expect(consoleError).toHaveBeenCalledWith(
       'Render error caught by ErrorBoundary',
       expect.objectContaining({ message: 'IndexedDB is closed' }),
