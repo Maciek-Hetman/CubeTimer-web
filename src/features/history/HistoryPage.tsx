@@ -21,6 +21,7 @@ import { Select } from '../../ui/Select'
 import { EyeIcon, ChevronDownIcon, TrashIcon, PencilIcon, ShareIcon } from '../../ui/NavIcons'
 import { listSessions } from '../../data/repositories/sessions'
 import {
+  countSolvesByEvent,
   countSolvesBySession,
   listOrphanSolves,
   listSolvesForSession,
@@ -80,7 +81,13 @@ export function HistoryPage() {
   const [previewSolve, setPreviewSolve] = useState<Solve | null>(null)
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set())
-  const [page, setPage] = useState(1)
+  // Page is tied to the filter it was chosen under, so any filter change (back/forward, URL edit) resets it.
+  const [pageState, setPageState] = useState<{ filter: EventFilter; page: number }>({
+    filter: eventFilter,
+    page: 1,
+  })
+  const page = pageState.filter === eventFilter ? pageState.page : 1
+  const setPage = (next: number) => setPageState({ filter: eventFilter, page: next })
 
   const toggleSession = (sessionId: string) => {
     setExpandedSessions((prev) => {
@@ -103,19 +110,22 @@ export function HistoryPage() {
       },
       { replace: true },
     )
-    setPage(1)
   }
 
-  // Covers every event so the filter can show per-event counts and switch without a reload.
+  // The list is scoped to the filtered event; per-event totals for the filter come from cheap index counts.
   const history = useLiveQuery(
     async () => {
       if (!ownerId) {
         return null
       }
-      const [sessions, summary] = await Promise.all([listSessions(ownerId), countSolvesBySession(ownerId)])
-      return { sessions, summary }
+      const [sessions, summary, totals] = await Promise.all([
+        listSessions(ownerId),
+        countSolvesBySession(ownerId, eventFilter === ALL_EVENTS ? undefined : eventFilter),
+        countSolvesByEvent(ownerId),
+      ])
+      return { sessions, summary, totals }
     },
-    [ownerId],
+    [ownerId, eventFilter],
   )
 
   const listItems = useMemo(() => {
@@ -170,7 +180,7 @@ export function HistoryPage() {
     return items
   }, [history, eventFilter])
 
-  const totals = history?.summary.totals
+  const totals = history?.totals
   const totalSolves = totals ? [...totals.values()].reduce((sum, count) => sum + count, 0) : 0
   const filteredSolves = eventFilter === ALL_EVENTS ? totalSolves : (totals?.get(eventFilter) ?? 0)
   const filterOptions = [
