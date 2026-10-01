@@ -197,6 +197,10 @@ export function effectiveTimeMs(solve: Pick<Solve, 'durationMs' | 'penalty'>): n
   return solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
 }
 
+export function isCubeEvent(value: unknown): value is CubeEvent {
+  return typeof value === 'string' && (EVENTS as readonly string[]).includes(value)
+}
+
 export function eventLabel(event: CubeEvent): string {
   switch (event) {
     case 'megaminx':

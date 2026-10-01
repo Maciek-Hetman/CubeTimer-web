@@ -1,7 +1,7 @@
 import { averageFromValues, trimCount } from './averages'
 
-// Integers up to 2^46 keep any sum of 100 of them exact (< 2^53)
-const EXACT_LIMIT = 2 ** 46
+// Integers up to 2^43 keep any sum of 1000 of them (the widest window) exact (< 2^53)
+const EXACT_LIMIT = 2 ** 43
 
 function isExact(value: number): boolean {
   return Number.isInteger(value) && Math.abs(value) <= EXACT_LIMIT
