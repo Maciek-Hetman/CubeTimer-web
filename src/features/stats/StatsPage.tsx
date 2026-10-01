@@ -15,18 +15,28 @@ import { EventStats } from './EventStats'
 type StatsTab = CubeEvent | 'all'
 
 export function StatsPage() {
-  // Each query below throws while rendering if IndexedDB fails it; that lands here.
+  const { settings, ownerId } = useApp()
+  const [searchParams] = useSearchParams()
+  // Any tab can show without moving the timer off the event it's on.
+  const requested = searchParams.get('event')
+  const tab: StatsTab = requested === 'all' ? 'all' : isCubeEvent(requested) ? requested : settings.event
+
+  // Each query below throws while rendering if IndexedDB fails it; that lands here. Picking another
+  // tab from the error screen tries again, without remounting the page on every ordinary switch.
   return (
-    <ErrorBoundary fallback={(error, retry) => <StatsError error={error} onRetry={retry} />}>
-      <StatsTabs />
+    <ErrorBoundary
+      resetKey={`${ownerId}:${tab}`}
+      fallback={(error, retry) => <StatsError tab={tab} error={error} onRetry={retry} />}
+    >
+      <StatsTabs tab={tab} />
     </ErrorBoundary>
   )
 }
 
-function StatsError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+function StatsError({ tab, error, onRetry }: { tab: StatsTab; error: unknown; onRetry: () => void }) {
   return (
     <div className="stack">
-      <PageHeader title="Stats" />
+      <PageHeader title="Stats" actions={<EventSwitcher selected={tab} withSolves={null} />} />
       <Alert tone="error">
         {error instanceof Error && error.message ? `Couldn't load your stats: ${error.message}` : "Couldn't load your stats."}
       </Alert>
@@ -37,13 +47,8 @@ function StatsError({ error, onRetry }: { error: unknown; onRetry: () => void })
   )
 }
 
-function StatsTabs() {
-  const { settings, ownerId } = useApp()
-  const [searchParams] = useSearchParams()
-  // Any tab can show without moving the timer off the event it's on.
-  const requested = searchParams.get('event')
-  const tab: StatsTab = requested === 'all' ? 'all' : isCubeEvent(requested) ? requested : settings.event
-
+function StatsTabs({ tab }: { tab: StatsTab }) {
+  const { ownerId } = useApp()
   // Feeds the All tab, and tells the switcher which events have no solves yet.
   const events = useLiveQuery(() => summarizeEvents(ownerId), [ownerId])
   const withSolves = useMemo(() => (events ? new Set(events.map((entry) => entry.event)) : null), [events])

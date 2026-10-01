@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ActivityCalendar as Calendar, ActivityLevel } from '../../domain/stats/activity'
 import { Panel } from '../../ui/Panel'
 import { plural } from './plural'
@@ -16,13 +16,16 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
     `${day.count === 0 ? 'No solves' : plural(day.count, 'solve')} on ${DAY.format(day.date)}`
   const summary = `${plural(calendar.total, 'solve')} on ${plural(calendar.activeDays, 'day')} in the last year`
 
-  const busiestDays = calendar.weeks
-    .flat()
-    .filter((day) => day.count > 0)
-    .sort((a, b) => b.count - a.count || b.date.getTime() - a.date.getTime())
-    .slice(0, 5)
-
-  const days = calendar.weeks.flat()
+  // Picking a day re-renders the calendar, so the day lists are kept per calendar.
+  const days = useMemo(() => calendar.weeks.flat(), [calendar])
+  const busiestDays = useMemo(
+    () =>
+      days
+        .filter((day) => day.count > 0)
+        .sort((a, b) => b.count - a.count || b.date.getTime() - a.date.getTime())
+        .slice(0, 5),
+    [days],
+  )
   const selected = days.find((day) => day.key === selectedKey)
   const tabKey = selected?.key ?? days[days.length - 1]?.key
 
@@ -30,6 +33,7 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
     const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[event.key]
     if (step === undefined) return
     const current = days.findIndex((day) => day.key === tabKey)
+    // This week stops at today, so a step past it lands on today.
     const next = days[Math.min(days.length - 1, Math.max(0, current + step))]
     if (!next) return
     event.preventDefault()
@@ -51,7 +55,7 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
           ref={gridRef}
           className="stats-activity-grid"
           role="group"
-          aria-label={`Solves per day: ${summary}`}
+          aria-label="Solves per day"
           onKeyDown={onKeyDown}
         >
           {/* Each day's label carries its full date, so the month and weekday labels are visual only. */}

@@ -307,6 +307,18 @@ describe('StatsPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('keeps the event switcher on the error screen, and tries again on the tab picked there', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const user = userEvent.setup()
+    mocks.dayCountsError = new Error('Connection to Indexed Database server lost')
+    renderPage('/stats?event=all')
+    await screen.findByRole('alert')
+
+    await user.click(within(screen.getByRole('navigation', { name: 'Event' })).getByRole('link', { name: '3x3' }))
+    expect(await screen.findByRole('region', { name: 'Current averages' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('shows an event without solves as empty', async () => {
     renderPage('/stats?event=4x4')
 
@@ -460,7 +472,7 @@ describe('StatsPage', () => {
     const activity = await screen.findByRole('region', { name: 'Activity' })
 
     expect(within(activity).getByText('42 solves on 2 days in the last year')).toBeInTheDocument()
-    expect(within(activity).getByRole('group', { name: 'Solves per day: 42 solves on 2 days in the last year' })).toBeInTheDocument()
+    expect(within(activity).getByRole('group', { name: 'Solves per day' })).toBeInTheDocument()
   })
 
   it('reads out a picked day, and moves a week at a time with the arrow keys from one tab stop', async () => {
@@ -471,7 +483,7 @@ describe('StatsPage', () => {
     mocks.dayCounts = new Map([[dayKey(lastWeek), 3]])
     renderPage('/stats?event=all')
     const activity = await screen.findByRole('region', { name: 'Activity' })
-    const grid = within(activity).getByRole('group', { name: /^Solves per day/ })
+    const grid = within(activity).getByRole('group', { name: 'Solves per day' })
     expect(within(activity).getByText('Select a day to see its solves.')).toBeInTheDocument()
 
     // Today holds the grid's only tab stop until another day is picked.
