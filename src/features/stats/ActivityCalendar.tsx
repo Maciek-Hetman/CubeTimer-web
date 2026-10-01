@@ -12,6 +12,7 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
   const headingId = useId()
   const gridRef = useRef<HTMLDivElement>(null)
   const [selectedKey, setSelectedKey] = useState<string>()
+  const [focusedKey, setFocusedKey] = useState<string>()
   const describe = (day: Calendar['weeks'][number][number]) =>
     `${day.count === 0 ? 'No solves' : plural(day.count, 'solve')} on ${DAY.format(day.date)}`
   const summary = `${plural(calendar.total, 'solve')} on ${plural(calendar.activeDays, 'day')} in the last year`
@@ -24,12 +25,13 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
 
   const days = calendar.weeks.flat()
   const selected = days.find((day) => day.key === selectedKey)
-  const tabKey = selected?.key ?? days[days.length - 1]?.key
+  const tabKey = focusedKey ?? selected?.key ?? days[days.length - 1]?.key
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[event.key]
     if (step === undefined) return
-    const current = days.findIndex((day) => day.key === tabKey)
+    const fromKey = (event.target as HTMLElement).closest<HTMLElement>('[data-key]')?.dataset.key
+    const current = days.findIndex((day) => day.key === (fromKey ?? tabKey))
     const next = days[Math.min(days.length - 1, Math.max(0, current + step))]
     if (!next) return
     event.preventDefault()
@@ -77,13 +79,14 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
                 style={{ gridColumn: weekIndex + 2, gridRow: dayIndex + 2 }}
                 aria-label={describe(day)}
                 title={describe(day)}
+                onFocus={() => setFocusedKey(day.key)}
                 onClick={() => setSelectedKey(day.key)}
               />
             )),
           )}
         </div>
       </div>
-      <p className="muted stats-activity-readout" aria-live="polite">
+      <p className="muted stats-activity-readout">
         {selected ? describe(selected) : 'Tap a day to see its solves.'}
       </p>
       {busiestDays.length > 0 && (
