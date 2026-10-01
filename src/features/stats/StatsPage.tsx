@@ -4,6 +4,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppContext'
 import { summarizeEvents } from '../../data/repositories/solveStats'
 import { EVENTS, eventLabel, isCubeEvent, type CubeEvent } from '../../domain/models'
+import { Alert } from '../../ui/Alert'
+import { Button } from '../../ui/Button'
+import { ErrorBoundary } from '../../ui/ErrorBoundary'
 import { PageHeader } from '../../ui/PageHeader'
 import { AllEventsStats } from './AllEventsStats'
 import { EventStats } from './EventStats'
@@ -12,6 +15,29 @@ import { EventStats } from './EventStats'
 type StatsTab = CubeEvent | 'all'
 
 export function StatsPage() {
+  // Each query below throws while rendering if IndexedDB fails it; that lands here.
+  return (
+    <ErrorBoundary fallback={(error, retry) => <StatsError error={error} onRetry={retry} />}>
+      <StatsTabs />
+    </ErrorBoundary>
+  )
+}
+
+function StatsError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  return (
+    <div className="stack">
+      <PageHeader title="Stats" />
+      <Alert tone="error">
+        {error instanceof Error && error.message ? `Couldn't load your stats: ${error.message}` : "Couldn't load your stats."}
+      </Alert>
+      <div className="row">
+        <Button onClick={onRetry}>Try again</Button>
+      </div>
+    </div>
+  )
+}
+
+function StatsTabs() {
   const { settings, ownerId } = useApp()
   const [searchParams] = useSearchParams()
   // Any tab can show without moving the timer off the event it's on.

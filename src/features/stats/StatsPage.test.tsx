@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => ({
   dayCounts: new Map<string, number>(),
   /** Events whose stats query never settles, to hold a tab in its loading state. */
   pending: new Set<CubeEvent>(),
+  /** Fails the activity query, as IndexedDB can. */
+  dayCountsError: null as Error | null,
 }))
 
 vi.mock('../../app/AppContext', () => ({
@@ -59,7 +61,10 @@ vi.mock('../../data/repositories/solveStats', async () => {
         : Promise.resolve((sessionId ? mocks.sessionStats[sessionId] : mocks.eventStats[event]) ?? actual.EMPTY_SOLVE_STATS),
     collectChartSeries: async () => [],
     summarizeEvents: async () => mocks.summaries,
-    countSolvesByDay: async () => mocks.dayCounts,
+    countSolvesByDay: async () => {
+      if (mocks.dayCountsError) throw mocks.dayCountsError
+      return mocks.dayCounts
+    },
   }
 })
 
@@ -145,6 +150,7 @@ describe('StatsPage', () => {
     mocks.summaries = [{ event: '3x3', count: 1200, totalTime: 2250000, best: 10000, mean: 15000 }]
     mocks.dayCounts = new Map()
     mocks.pending = new Set()
+    mocks.dayCountsError = null
     mocks.updateSettings.mockReset()
     mocks.setEvent.mockReset()
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
@@ -281,6 +287,24 @@ describe('StatsPage', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('Loading stats…')
     expect(screen.queryByText('No solves yet')).not.toBeInTheDocument()
+  })
+
+  it('shows a failed query as an error with a retry, not an endless loading panel', async () => {
+    // React reports the error the page's boundary catches.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const user = userEvent.setup()
+    mocks.dayCountsError = new Error('Connection to Indexed Database server lost')
+    renderPage('/stats?event=all')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't load your stats: Connection to Indexed Database server lost",
+    )
+    expect(screen.queryByText('Loading stats…')).not.toBeInTheDocument()
+
+    mocks.dayCountsError = null
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('region', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('shows an event without solves as empty', async () => {
