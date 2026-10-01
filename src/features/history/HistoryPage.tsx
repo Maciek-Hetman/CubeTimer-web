@@ -80,7 +80,7 @@ export function HistoryPage() {
   const [previewSolve, setPreviewSolve] = useState<Solve | null>(null)
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set())
-  // Page is tied to the filter it was chosen under, so any filter change (back/forward, URL edit) resets it.
+  // Page is tied to the filter it was chosen under, so changing the filter (dropdown or URL) resets it.
   const [pageState, setPageState] = useState<{ filter: EventFilter; page: number }>({
     filter: eventFilter,
     page: 1,
