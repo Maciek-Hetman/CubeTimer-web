@@ -388,7 +388,7 @@ describe('Tier 2: Boundary & Corner Cases E2E Tests', () => {
 
       renderWithApp(<HistoryPage />)
       expect(await screen.findByText('Uncategorized Solves')).toBeInTheDocument()
-      expect(screen.getByText('No session')).toBeInTheDocument()
+      expect(screen.getByText('3x3 · No session')).toBeInTheDocument()
       expect(await screen.findByLabelText('1 solve, mean 13.50')).toBeInTheDocument()
     })
 

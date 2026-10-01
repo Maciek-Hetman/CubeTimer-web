@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppContext'
 import {
+  EVENTS,
   effectiveTimeMs,
   eventLabel,
   normalizeTimingDevice,
@@ -16,7 +17,9 @@ import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
 import { EmptyState } from '../../ui/EmptyState'
 import { PageHeader } from '../../ui/PageHeader'
+import { Select } from '../../ui/Select'
 import { EyeIcon, ChevronDownIcon, TrashIcon, PencilIcon, ShareIcon } from '../../ui/NavIcons'
+import { listSessions } from '../../data/repositories/sessions'
 import {
   countSolvesBySession,
   listOrphanSolves,
@@ -43,22 +46,33 @@ const PENALTY_LABELS: Record<Solve['penalty'], string> = {
   dnf: 'DNF',
 }
 
+type EventFilter = CubeEvent | 'all'
+
+const ALL_EVENTS = 'all'
+
+function parseEventFilter(value: string | null): EventFilter | null {
+  if (value === ALL_EVENTS) {
+    return ALL_EVENTS
+  }
+  return EVENTS.find((event) => event === value) ?? null
+}
+
 function formatSessionDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export function HistoryPage() {
   const {
-    solveStats,
-    sessions,
     settings,
-    currentSession,
     ownerId,
     updateSolvePenalty,
     deleteSolve,
     removeSession,
     renameSession,
   } = useApp()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Without an explicit filter, show the event the timer is on.
+  const eventFilter = parseEventFilter(searchParams.get('event')) ?? settings.event
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [pendingSessionDelete, setPendingSessionDelete] = useState<CubeSession | null>(null)
   const [pendingSessionRename, setPendingSessionRename] = useState<CubeSession | null>(null)
@@ -66,7 +80,13 @@ export function HistoryPage() {
   const [previewSolve, setPreviewSolve] = useState<Solve | null>(null)
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set())
-  const [page, setPage] = useState(1)
+  // Page is tied to the filter it was chosen under, so changing the filter (dropdown or URL) resets it.
+  const [pageState, setPageState] = useState<{ filter: EventFilter; page: number }>({
+    filter: eventFilter,
+    page: 1,
+  })
+  const page = pageState.filter === eventFilter ? pageState.page : 1
+  const setPage = (next: number) => setPageState({ filter: eventFilter, page: next })
 
   const toggleSession = (sessionId: string) => {
     setExpandedSessions((prev) => {
@@ -80,58 +100,90 @@ export function HistoryPage() {
     })
   }
 
-  const sessionSummary = useLiveQuery(
-    async () =>
-      ownerId
-        ? countSolvesBySession(ownerId, settings.event)
-        : {
-            counts: new Map<string, number>(),
-            averages: new Map<string, number | null>(),
-            orphanCount: 0,
-            orphanAvgTime: null,
-            devices: new Map<string, TimingDevice[]>(),
-            orphanDevices: [],
-          },
-    [ownerId, settings.event],
-  )
+  const changeEventFilter = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('event', value)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  // One pass over all events feeds both the list and the per-event filter totals; the list is filtered in listItems.
+  const history = useLiveQuery(async () => {
+    if (!ownerId) {
+      return { sessions: [] as CubeSession[], summary: { sessions: new Map(), orphans: new Map(), totals: new Map() } as Awaited<ReturnType<typeof countSolvesBySession>> }
+    }
+    const [sessions, summary] = await Promise.all([listSessions(ownerId), countSolvesBySession(ownerId)])
+    return { sessions, summary }
+  }, [ownerId])
 
   const listItems = useMemo(() => {
+    if (!history) {
+      return []
+    }
+    const { sessions, summary } = history
+    const matches = (event: CubeEvent) => eventFilter === ALL_EVENTS || event === eventFilter
     const items: Array<{
       id: string
       title: string
       subtitle: string
+      event: CubeEvent
       solveCount: number
       avgTime: number | null
       devices: TimingDevice[]
       session: CubeSession | null
-    }> = [...sessions]
-      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
-      .map((session) => ({
+    }> = []
+    // listSessions returns newest first.
+    for (const session of sessions) {
+      const group = summary.sessions.get(session.id)
+      if (!group || !matches(session.event)) {
+        continue
+      }
+      items.push({
         id: session.id,
         title: session.name || 'Unnamed Session',
         subtitle: `${eventLabel(session.event)} · ${formatSessionDate(session.startedAt)}`,
-        solveCount: sessionSummary?.counts.get(session.id) ?? 0,
-        avgTime: sessionSummary?.averages.get(session.id) ?? null,
-        devices: sessionSummary?.devices.get(session.id) ?? [],
+        event: session.event,
+        solveCount: group.count,
+        avgTime: group.avgTime,
+        devices: group.devices,
         session,
-      }))
-      .filter((item) => sessionSummary === undefined || item.solveCount > 0)
-    if ((sessionSummary?.orphanCount ?? 0) > 0) {
+      })
+    }
+    for (const event of EVENTS) {
+      const group = summary.orphans.get(event)
+      if (!group || !matches(event)) {
+        continue
+      }
       items.push({
-        id: 'orphan',
+        id: `orphan:${event}`,
         title: 'Uncategorized Solves',
-        subtitle: 'No session',
-        solveCount: sessionSummary?.orphanCount ?? 0,
-        avgTime: sessionSummary?.orphanAvgTime ?? null,
-        devices: sessionSummary?.orphanDevices ?? [],
+        subtitle: `${eventLabel(event)} · No session`,
+        event,
+        solveCount: group.count,
+        avgTime: group.avgTime,
+        devices: group.devices,
         session: null,
       })
     }
     return items
-  }, [sessions, sessionSummary])
+  }, [history, eventFilter])
+
+  const totals = history?.summary.totals
+  const totalSolves = totals ? [...totals.values()].reduce((sum, count) => sum + count, 0) : 0
+  const filteredSolves = eventFilter === ALL_EVENTS ? totalSolves : (totals?.get(eventFilter) ?? 0)
+  const filterOptions = [
+    { value: ALL_EVENTS, label: `All events (${totalSolves})` },
+    ...EVENTS.map((event) => ({ value: event, label: `${eventLabel(event)} (${totals?.get(event) ?? 0})` })),
+  ]
 
   const totalPages = Math.max(1, Math.ceil(listItems.length / PAGE_SIZE))
-  const currentItems = listItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // Deleting sessions can leave the stored page past the end.
+  const currentPage = Math.min(page, totalPages)
+  const currentItems = listItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const openPreview = (solve: Solve) => {
     void import('cubing/twisty').then(() => setPreviewSolve(solve))
@@ -146,16 +198,39 @@ export function HistoryPage() {
     <div className="stack narrow-page">
       <PageHeader
         title="History"
-        subtitle={`${eventLabel(settings.event)}${currentSession ? ` · ${currentSession.name}` : ''}`}
+        actions={
+          totalSolves > 0 ? (
+            <Select
+              size="small"
+              aria-label="Filter by event"
+              value={eventFilter}
+              onChange={changeEventFilter}
+              options={filterOptions}
+            />
+          ) : null
+        }
       />
 
-      {solveStats.count === 0 ? (
+      {history === undefined ? (
+        <p className="muted" role="status">
+          Loading history…
+        </p>
+      ) : totalSolves === 0 ? (
         <EmptyState
           title="No solves yet"
           action={
             <Link className="btn primary" to="/">
               Open timer
             </Link>
+          }
+        />
+      ) : listItems.length === 0 ? (
+        <EmptyState
+          title={`No ${eventFilter === ALL_EVENTS ? '' : `${eventLabel(eventFilter)} `}solves yet`}
+          action={
+            <Button type="button" onClick={() => changeEventFilter(ALL_EVENTS)}>
+              Show all events
+            </Button>
           }
         />
       ) : (
@@ -168,7 +243,7 @@ export function HistoryPage() {
                   key={item.id}
                   ownerId={ownerId}
                   session={item.session}
-                  event={settings.event}
+                  event={item.event}
                   title={item.title}
                   subtitle={item.subtitle}
                   solveCount={item.solveCount}
@@ -189,16 +264,16 @@ export function HistoryPage() {
               <div className="history-pagination">
                 <Button
                   type="button"
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(currentPage - 1)}
                 >
                   Previous
                 </Button>
-                <span className="muted">Page {page} of {totalPages}</span>
+                <span className="muted">Page {currentPage} of {totalPages}</span>
                 <Button
                   type="button"
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage(currentPage + 1)}
                 >
                   Next
                 </Button>
@@ -206,8 +281,8 @@ export function HistoryPage() {
             )}
           </div>
           <p className="muted history-footer">
-            {listItems.length} {listItems.length === 1 ? 'session' : 'sessions'} · {solveStats.count}{' '}
-            {solveStats.count === 1 ? 'solve' : 'solves'}
+            {listItems.length} {listItems.length === 1 ? 'session' : 'sessions'} · {filteredSolves}{' '}
+            {filteredSolves === 1 ? 'solve' : 'solves'}
           </p>
         </>
       )}

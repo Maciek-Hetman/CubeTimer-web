@@ -4,6 +4,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { db, getOrCreateSettings } from '../data/db'
 import { newSession, putSession } from '../data/repositories/sessions'
+import type { CubeEvent } from '../domain/models'
 import { AuthProvider } from './AuthProvider'
 import { SettingsProvider } from './SettingsProvider'
 import { SyncProvider } from './SyncProvider'
@@ -239,6 +240,44 @@ describe('SolvesContext & SolvesProvider', () => {
       expect(target?.kind).toBe('automatic')
       const settings = await getOrCreateSettings(ownerId)
       expect(settings.currentSessionIds[event]).toBe(solve.sessionId)
+    })
+
+    it('starts a new session when the event changes, keeping each session to one event', async () => {
+      const { result } = await ready()
+      const ownerId = result.current.auth.ownerId!
+      const setEvent = async (event: CubeEvent) => {
+        const settings = await getOrCreateSettings(ownerId)
+        await db.settings.put({ ...settings, event })
+      }
+
+      await setEvent('3x3')
+      const first3x3 = await save(result)
+      const second3x3 = await save(result)
+      await setEvent('5x5')
+      const first5x5 = await save(result)
+      const second5x5 = await save(result)
+      await setEvent('3x3')
+      const back3x3 = await save(result)
+
+      expect(second3x3.sessionId).toBe(first3x3.sessionId)
+      expect(second5x5.sessionId).toBe(first5x5.sessionId)
+      expect(first5x5.sessionId).not.toBe(first3x3.sessionId)
+      // Back on 3x3 within the inactivity gap, the open 3x3 session continues.
+      expect(back3x3.sessionId).toBe(first3x3.sessionId)
+
+      const session3x3 = await db.sessions.get(first3x3.sessionId!)
+      const session5x5 = await db.sessions.get(first5x5.sessionId!)
+      expect(session3x3?.event).toBe('3x3')
+      expect(session5x5?.event).toBe('5x5')
+      expect(first5x5.event).toBe('5x5')
+      const solves = await db.solves.toArray()
+      const sessions = await db.sessions.toArray()
+      expect(sessions).toHaveLength(2)
+      for (const solve of solves) {
+        expect(sessions.find((session) => session.id === solve.sessionId)?.event).toBe(solve.event)
+      }
+      const settings = await getOrCreateSettings(ownerId)
+      expect(settings.currentSessionIds).toEqual({ '3x3': session3x3!.id, '5x5': session5x5!.id })
     })
 
     it('clears a current id once its session is tombstoned', async () => {

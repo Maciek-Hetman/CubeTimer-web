@@ -10,14 +10,20 @@ interface SolvesQueryOptions {
   limit?: number
 }
 
-interface SolvesBySessionSummary {
-  counts: Map<string, number>
-  averages: Map<string, number | null>
-  orphanCount: number
-  orphanAvgTime: number | null
-  /** Timing devices used per session, in first-seen order. */
-  devices: Map<string, TimingDevice[]>
-  orphanDevices: TimingDevice[]
+export interface SolveGroupSummary {
+  count: number
+  /** Mean of the non-DNF solves, or null when every solve is a DNF. */
+  avgTime: number | null
+  /** Timing devices used, in first-seen order. */
+  devices: TimingDevice[]
+}
+
+export interface SolvesBySessionSummary {
+  sessions: Map<string, SolveGroupSummary>
+  /** Solves that belong to no session, grouped by event. */
+  orphans: Map<CubeEvent, SolveGroupSummary>
+  /** Solve count per event. */
+  totals: Map<CubeEvent, number>
 }
 
 export async function listSolves(
@@ -136,68 +142,65 @@ export async function listOrphanSolves(
   )
 }
 
+interface GroupAccumulator {
+  count: number
+  validCount: number
+  totalMs: number
+  devices: Set<TimingDevice>
+}
+
+function accumulate<K>(groups: Map<K, GroupAccumulator>, key: K, solve: Solve): void {
+  let acc = groups.get(key)
+  if (!acc) {
+    acc = { count: 0, validCount: 0, totalMs: 0, devices: new Set() }
+    groups.set(key, acc)
+  }
+  acc.count += 1
+  acc.devices.add(normalizeTimingDevice(solve.timingDevice))
+  const effective = effectiveTimeMs(solve)
+  if (effective !== null) {
+    acc.validCount += 1
+    acc.totalMs += effective
+  }
+}
+
+function summarize<K>(groups: Map<K, GroupAccumulator>): Map<K, SolveGroupSummary> {
+  const out = new Map<K, SolveGroupSummary>()
+  for (const [key, acc] of groups.entries()) {
+    out.set(key, {
+      count: acc.count,
+      avgTime: acc.validCount > 0 ? acc.totalMs / acc.validCount : null,
+      devices: [...acc.devices],
+    })
+  }
+  return out
+}
+
+/** Per-session and per-event solve summaries; every event unless `event` is given. */
 export async function countSolvesBySession(
   ownerId: string,
-  event: CubeEvent,
+  event?: CubeEvent,
 ): Promise<SolvesBySessionSummary> {
-  const sessionAcc = new Map<string, { count: number; validCount: number; totalMs: number }>()
-  let orphanCount = 0
-  let orphanValidCount = 0
-  let orphanTotalMs = 0
-  const deviceSets = new Map<string, Set<TimingDevice>>()
-  const orphanDeviceSet = new Set<TimingDevice>()
+  const sessions = new Map<string, GroupAccumulator>()
+  const orphans = new Map<CubeEvent, GroupAccumulator>()
+  const totals = new Map<CubeEvent, number>()
 
-  await db.solves
-    .where('[ownerId+event]')
-    .equals([ownerId, event])
-    .each((solve) => {
-      if (solve.deletedAt) {
-        return
-      }
-      const effective = effectiveTimeMs(solve)
-      const device = normalizeTimingDevice(solve.timingDevice)
-      if (solve.sessionId) {
-        let devices = deviceSets.get(solve.sessionId)
-        if (!devices) {
-          devices = new Set()
-          deviceSets.set(solve.sessionId, devices)
-        }
-        devices.add(device)
-        let acc = sessionAcc.get(solve.sessionId)
-        if (!acc) {
-          acc = { count: 0, validCount: 0, totalMs: 0 }
-          sessionAcc.set(solve.sessionId, acc)
-        }
-        acc.count += 1
-        if (effective !== null) {
-          acc.validCount += 1
-          acc.totalMs += effective
-        }
-      } else {
-        orphanCount += 1
-        orphanDeviceSet.add(device)
-        if (effective !== null) {
-          orphanValidCount += 1
-          orphanTotalMs += effective
-        }
-      }
-    })
+  const collection = event
+    ? db.solves.where('[ownerId+event]').equals([ownerId, event])
+    : db.solves.where('ownerId').equals(ownerId)
+  await collection.each((solve) => {
+    if (solve.deletedAt) {
+      return
+    }
+    totals.set(solve.event, (totals.get(solve.event) ?? 0) + 1)
+    if (solve.sessionId) {
+      accumulate(sessions, solve.sessionId, solve)
+    } else {
+      accumulate(orphans, solve.event, solve)
+    }
+  })
 
-  const counts = new Map<string, number>()
-  const averages = new Map<string, number | null>()
-  for (const [sessionId, acc] of sessionAcc.entries()) {
-    counts.set(sessionId, acc.count)
-    averages.set(sessionId, acc.validCount > 0 ? acc.totalMs / acc.validCount : null)
-  }
-
-  const orphanAvgTime = orphanValidCount > 0 ? orphanTotalMs / orphanValidCount : null
-
-  const devices = new Map<string, TimingDevice[]>()
-  for (const [sessionId, set] of deviceSets.entries()) {
-    devices.set(sessionId, [...set])
-  }
-
-  return { counts, averages, orphanCount, orphanAvgTime, devices, orphanDevices: [...orphanDeviceSet] }
+  return { sessions: summarize(sessions), orphans: summarize(orphans), totals }
 }
 
 export async function putSolve(
