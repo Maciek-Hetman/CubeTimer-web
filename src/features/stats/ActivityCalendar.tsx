@@ -45,7 +45,7 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
       </div>
       {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything.
           Days are buttons in one roving-tabindex group (a single tab stop, arrow keys move). Tapping,
-          clicking or focusing a day shows its count in the readout below. */}
+          or clicking a day shows its count in the readout below. */}
       <div className="stats-activity-scroll">
         <div
           ref={gridRef}
@@ -78,7 +78,6 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
                 aria-label={describe(day)}
                 title={describe(day)}
                 onClick={() => setSelectedKey(day.key)}
-                onFocus={() => setSelectedKey(day.key)}
               />
             )),
           )}
