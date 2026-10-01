@@ -2234,8 +2234,19 @@ button.stats-activity-day[data-selected] {
   outline-offset: 1px;
 }
 
-.stats-activity-readout {
-  min-height: 1.5em;
+/* The selected day's readout on the left, the legend on the right. */
+.stats-activity-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.stats-activity-footer p {
+  margin: 0;
 }
 
 /* Steps checked for every accent in both themes: each shade clears the panel at 2:1 or better
@@ -2259,10 +2270,8 @@ button.stats-activity-day[data-selected] {
 .stats-activity-legend {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 0.1875rem;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  margin-left: auto;
 }
 
 .stats-activity-legend .stats-activity-day {

@@ -463,6 +463,35 @@ describe('StatsPage', () => {
     expect(within(activity).getByRole('group', { name: 'Solves per day: 42 solves on 2 days in the last year' })).toBeInTheDocument()
   })
 
+  it('reads out a picked day, and moves a week at a time with the arrow keys from one tab stop', async () => {
+    const user = userEvent.setup()
+    const formatDay = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    const today = new Date()
+    const lastWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7, 12)
+    mocks.dayCounts = new Map([[dayKey(lastWeek), 3]])
+    renderPage('/stats?event=all')
+    const activity = await screen.findByRole('region', { name: 'Activity' })
+    const grid = within(activity).getByRole('group', { name: /^Solves per day/ })
+    expect(within(activity).getByText('Select a day to see its solves.')).toBeInTheDocument()
+
+    // Today holds the grid's only tab stop until another day is picked.
+    const tabStops = within(grid).getAllByRole('button').filter((day) => day.tabIndex === 0)
+    expect(tabStops).toHaveLength(1)
+    expect(tabStops[0]).toHaveAccessibleName(`No solves on ${formatDay.format(today)}`)
+
+    await user.click(tabStops[0])
+    expect(within(activity).getByText(`No solves on ${formatDay.format(today)}`)).toBeInTheDocument()
+    await user.keyboard('{ArrowLeft}')
+    expect(document.activeElement).toHaveAccessibleName(`3 solves on ${formatDay.format(lastWeek)}`)
+    expect(within(activity).getByText(`3 solves on ${formatDay.format(lastWeek)}`)).toBeInTheDocument()
+
+    // The tab stop follows focus, so the next key moves on from there.
+    const dayBefore = new Date(lastWeek.getFullYear(), lastWeek.getMonth(), lastWeek.getDate() - 1, 12)
+    await user.keyboard('{ArrowUp}')
+    expect(document.activeElement).toHaveAccessibleName(`No solves on ${formatDay.format(dayBefore)}`)
+    expect(document.activeElement).toHaveAttribute('tabindex', '0')
+  })
+
   it('compares the current session with the one before it, not the one after', async () => {
     const newer = session('s3', '30 sept 2026 evening', '2026-09-30T18:00:00Z')
     const current = session('s2', '27 sept 2026 evening', '2026-09-27T18:00:00Z')

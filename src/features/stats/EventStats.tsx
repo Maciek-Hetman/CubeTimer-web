@@ -30,7 +30,8 @@ export function EventStats({ event }: { event: CubeEvent }) {
     async () => ({ event, stats: await computeSolveStats(ownerId, event) }),
     [ownerId, event],
   )
-  // The app keeps the timer's event summarized already, so that can show while this query catches up.
+  // The app keeps the timer's whole event summarized (the same computeSolveStats call), so that can
+  // show while this query catches up.
   const appStats = event === settings.event && solveStats.count > 0 ? { event, stats: solveStats } : undefined
   const shown = live?.event === event ? live : (appStats ?? live)
   // Switching events keeps the last event on screen, dimmed, until the new one arrives.

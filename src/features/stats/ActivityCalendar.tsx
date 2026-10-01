@@ -12,7 +12,6 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
   const headingId = useId()
   const gridRef = useRef<HTMLDivElement>(null)
   const [selectedKey, setSelectedKey] = useState<string>()
-  const [focusedKey, setFocusedKey] = useState<string>()
   const describe = (day: Calendar['weeks'][number][number]) =>
     `${day.count === 0 ? 'No solves' : plural(day.count, 'solve')} on ${DAY.format(day.date)}`
   const summary = `${plural(calendar.total, 'solve')} on ${plural(calendar.activeDays, 'day')} in the last year`
@@ -25,13 +24,12 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
 
   const days = calendar.weeks.flat()
   const selected = days.find((day) => day.key === selectedKey)
-  const tabKey = focusedKey ?? selected?.key ?? days[days.length - 1]?.key
+  const tabKey = selected?.key ?? days[days.length - 1]?.key
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[event.key]
     if (step === undefined) return
-    const fromKey = (event.target as HTMLElement).closest<HTMLElement>('[data-key]')?.dataset.key
-    const current = days.findIndex((day) => day.key === (fromKey ?? tabKey))
+    const current = days.findIndex((day) => day.key === tabKey)
     const next = days[Math.min(days.length - 1, Math.max(0, current + step))]
     if (!next) return
     event.preventDefault()
@@ -46,8 +44,8 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
         <p className="muted">{summary}</p>
       </div>
       {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything.
-          Days are buttons in one roving-tabindex group (a single tab stop, arrow keys move). Tapping,
-          or clicking a day shows its count in the readout below. */}
+          Days are buttons in one roving-tabindex group (a single tab stop, arrow keys move). Clicking,
+          tapping or focusing a day shows its count in the readout below. */}
       <div className="stats-activity-scroll">
         <div
           ref={gridRef}
@@ -56,13 +54,19 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
           aria-label={`Solves per day: ${summary}`}
           onKeyDown={onKeyDown}
         >
+          {/* Each day's label carries its full date, so the month and weekday labels are visual only. */}
           {calendar.months.map((month) => (
-            <span key={`${month.week}-${month.label}`} className="stats-activity-month" style={{ gridColumn: month.week + 2 }}>
+            <span
+              key={`${month.week}-${month.label}`}
+              className="stats-activity-month"
+              style={{ gridColumn: month.week + 2 }}
+              aria-hidden="true"
+            >
               {month.label}
             </span>
           ))}
           {WEEKDAYS.map((label, row) => (
-            <span key={row} className="stats-activity-weekday" style={{ gridRow: row + 2 }}>
+            <span key={row} className="stats-activity-weekday" style={{ gridRow: row + 2 }} aria-hidden="true">
               {label}
             </span>
           ))}
@@ -79,16 +83,14 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
                 style={{ gridColumn: weekIndex + 2, gridRow: dayIndex + 2 }}
                 aria-label={describe(day)}
                 title={describe(day)}
-                onFocus={() => setFocusedKey(day.key)}
                 onClick={() => setSelectedKey(day.key)}
+                // Selection follows focus, so the one tab stop moves with the arrow keys.
+                onFocus={() => setSelectedKey(day.key)}
               />
             )),
           )}
         </div>
       </div>
-      <p className="muted stats-activity-readout">
-        {selected ? describe(selected) : 'Tap a day to see its solves.'}
-      </p>
       {busiestDays.length > 0 && (
         <div className="sr-only">
           <p>Most active days</p>
@@ -101,12 +103,16 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
           </ul>
         </div>
       )}
-      <div className="stats-activity-legend" aria-hidden="true">
-        Less
-        {LEVELS.map((level) => (
-          <span key={level} className="stats-activity-day" data-level={level} />
-        ))}
-        More
+      {/* Not a live region: a focused day's label already says the same thing. */}
+      <div className="stats-activity-footer">
+        <p>{selected ? describe(selected) : 'Select a day to see its solves.'}</p>
+        <div className="stats-activity-legend" aria-hidden="true">
+          Less
+          {LEVELS.map((level) => (
+            <span key={level} className="stats-activity-day" data-level={level} />
+          ))}
+          More
+        </div>
       </div>
     </Panel>
   )
