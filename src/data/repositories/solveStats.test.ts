@@ -174,17 +174,37 @@ describe('bounded solve queries', () => {
 
     const summary = await countSolvesBySession(owner, '3x3')
 
-    expect(summary.counts.get('session-1')).toBe(3)
-    expect(summary.averages.get('session-1')).toBe(20000)
+    expect(summary.sessions.get('session-1')).toMatchObject({ count: 3, avgTime: 20000 })
+    expect(summary.sessions.get('session-2')).toMatchObject({ count: 3, avgTime: 11000 })
+    expect(summary.sessions.get('session-3')).toMatchObject({ count: 2, avgTime: null })
+    expect(summary.orphans.get('3x3')).toMatchObject({ count: 2, avgTime: 20000 })
+    expect(summary.totals.get('3x3')).toBe(10)
+  })
 
-    expect(summary.counts.get('session-2')).toBe(3)
-    expect(summary.averages.get('session-2')).toBe(11000)
+  it('summarizes every event when no event is given, keeping orphans apart per event', async () => {
+    const owner = 'user-1'
+    const now = '2026-01-01T12:00:00.000Z'
+    await putSolve(makeSolve(owner, 'session-3x3', 10000, 'none', now, '3x3'), { enqueue: false })
+    await putSolve(makeSolve(owner, 'session-5x5', 60000, 'none', now, '5x5'), { enqueue: false })
+    await putSolve(makeSolve(owner, 'session-5x5', 70000, 'none', now, '5x5'), { enqueue: false })
+    await putSolve(makeSolve(owner, null, 12000, 'none', now, '3x3'), { enqueue: false })
+    await putSolve(makeSolve(owner, null, 5000, 'none', now, '2x2'), { enqueue: false })
+    await putSolve(makeSolve('user-2', 'session-x', 1000, 'none', now, '3x3'), { enqueue: false })
 
-    expect(summary.counts.get('session-3')).toBe(2)
-    expect(summary.averages.get('session-3')).toBeNull()
+    const all = await countSolvesBySession(owner)
 
-    expect(summary.orphanCount).toBe(2)
-    expect(summary.orphanAvgTime).toBe(20000)
+    expect(all.sessions.get('session-3x3')).toMatchObject({ count: 1, avgTime: 10000 })
+    expect(all.sessions.get('session-5x5')).toMatchObject({ count: 2, avgTime: 65000 })
+    expect(all.orphans.get('3x3')).toMatchObject({ count: 1, avgTime: 12000 })
+    expect(all.orphans.get('2x2')).toMatchObject({ count: 1, avgTime: 5000 })
+    expect(all.totals.get('3x3')).toBe(2)
+    expect(all.totals.get('5x5')).toBe(2)
+    expect(all.totals.get('2x2')).toBe(1)
+    expect(all.sessions.has('session-x')).toBe(false)
+
+    const only5x5 = await countSolvesBySession(owner, '5x5')
+    expect([...only5x5.sessions.keys()]).toEqual(['session-5x5'])
+    expect(only5x5.orphans.size).toBe(0)
   })
 })
 

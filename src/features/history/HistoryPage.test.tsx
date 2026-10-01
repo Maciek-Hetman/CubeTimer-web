@@ -236,6 +236,104 @@ describe('HistoryPage', () => {
     expect(updatedSession?.name).toBe('Renamed Session')
   })
 
+  describe('event filter', () => {
+    async function seedEvents() {
+      const ownerId = await ensureGuestOwner()
+      const cube3 = newSession({
+        ownerId,
+        name: 'Three Session',
+        event: '3x3',
+        kind: 'automatic',
+        startedAt: '2026-01-01T12:00:00.000Z',
+      })
+      const cube5 = newSession({
+        ownerId,
+        name: 'Five Session',
+        event: '5x5',
+        kind: 'automatic',
+        startedAt: '2026-01-01T12:01:00.000Z',
+      })
+      await putSession(cube3, { enqueue: false, baseVersion: 0 })
+      await putSession(cube5, { enqueue: false, baseVersion: 0 })
+      const solves = [
+        { sessionId: cube3.id, event: '3x3', durationMs: 10000 },
+        { sessionId: cube5.id, event: '5x5', durationMs: 60000 },
+        { sessionId: cube5.id, event: '5x5', durationMs: 70000 },
+        { sessionId: null, event: '2x2', durationMs: 4000 },
+      ] as const
+      for (const [i, solve] of solves.entries()) {
+        await putSolve(
+          newSolve({ ownerId, ...solve, penalty: 'none', scramble: 'R U', solvedAt: `2026-01-01T12:0${i}:00.000Z` }),
+          { enqueue: false, baseVersion: 0 },
+        )
+      }
+    }
+
+    function sessionTitles() {
+      return screen.queryAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
+    }
+
+    it("defaults to the timer's event and lists only its sessions", async () => {
+      await seedEvents()
+      renderHistory()
+
+      expect(await screen.findByText('Three Session')).toBeInTheDocument()
+      expect(sessionTitles()).toEqual(['Three Session'])
+      expect(screen.getByRole('combobox', { name: 'Filter by event' })).toHaveValue('3x3')
+      expect(screen.getByText('1 session · 1 solve')).toBeInTheDocument()
+    })
+
+    it('switches between one event and all events', async () => {
+      const user = userEvent.setup()
+      await seedEvents()
+      renderHistory()
+      const filter = await screen.findByRole('combobox', { name: 'Filter by event' })
+      await screen.findByText('Three Session')
+
+      await user.selectOptions(filter, '5x5')
+      expect(await screen.findByText('Five Session')).toBeInTheDocument()
+      expect(sessionTitles()).toEqual(['Five Session'])
+      expect(screen.getByLabelText('2 solves, mean 1:05.00')).toBeInTheDocument()
+      expect(screen.getByText('1 session · 2 solves')).toBeInTheDocument()
+
+      await user.selectOptions(filter, 'all')
+      await waitFor(() => {
+        expect(sessionTitles()).toEqual(['Five Session', 'Three Session', 'Uncategorized Solves'])
+      })
+      expect(screen.getByText('2x2 · No session')).toBeInTheDocument()
+      expect(screen.getByText('3 sessions · 4 solves')).toBeInTheDocument()
+    })
+
+    it('shows per-event solve counts in the filter', async () => {
+      await seedEvents()
+      renderHistory()
+      const filter = await screen.findByRole('combobox', { name: 'Filter by event' })
+
+      await waitFor(() => {
+        expect(within(filter).getByRole('option', { name: 'All events (4)' })).toBeInTheDocument()
+      })
+      expect(within(filter).getByRole('option', { name: '5x5 (2)' })).toBeInTheDocument()
+      expect(within(filter).getByRole('option', { name: '4x4 (0)' })).toBeInTheDocument()
+    })
+
+    it('offers to show all events when the filtered event has no solves', async () => {
+      const user = userEvent.setup()
+      await seedEvents()
+      renderHistory()
+      const filter = await screen.findByRole('combobox', { name: 'Filter by event' })
+      await screen.findByText('Three Session')
+
+      await user.selectOptions(filter, '4x4')
+      expect(await screen.findByText('No 4x4 solves yet')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Show all events' }))
+      await waitFor(() => {
+        expect(sessionTitles()).toHaveLength(3)
+      })
+      expect(filter).toHaveValue('all')
+    })
+  })
+
   it('renames a session by submitting form with enter key', async () => {
     const user = userEvent.setup()
     const ownerId = await ensureGuestOwner()
