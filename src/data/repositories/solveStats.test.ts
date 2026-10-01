@@ -12,8 +12,10 @@ import {
 import {
   collectChartSeries,
   computeSolveStats,
+  countSolvesByDay,
   DEFAULT_CHART_POINTS,
   downsampleChartPoints,
+  summarizeEvents,
   type ChartPoint,
 } from './solveStats'
 import {
@@ -119,6 +121,78 @@ describe('solveStats streaming aggregation', () => {
     expect(stats.count).toBe(0)
     expect(stats.best).toBeNull()
     expect(stats.totalTime).toBe(0)
+  })
+})
+
+describe('summarizeEvents', () => {
+  beforeEach(resetDb)
+
+  it('totals each event, busiest first, skipping tombstones and other owners', async () => {
+    const at = '2026-01-01T12:00:00.000Z'
+    await db.solves.bulkPut([
+      makeSolve('user-1', 's1', 10000, 'none', at),
+      makeSolve('user-1', 's1', 12000, 'plus_two', at),
+      makeSolve('user-1', 's1', 9000, 'dnf', at),
+      makeSolve('user-1', 's2', 2000, 'none', at, '2x2'),
+      makeSolve('user-1', 's2', 3000, 'none', at, '2x2'),
+      { ...makeSolve('user-1', 's2', 1000, 'none', at, '2x2'), deletedAt: at },
+      makeSolve('user-1', 's3', 40000, 'none', at, 'megaminx'),
+      makeSolve('user-2', 's9', 500, 'none', at),
+    ])
+
+    expect(await summarizeEvents('user-1')).toEqual([
+      { event: '3x3', count: 3, totalTime: 33000, best: 10000, mean: 12000 },
+      { event: '2x2', count: 2, totalTime: 5000, best: 2000, mean: 2500 },
+      { event: 'megaminx', count: 1, totalTime: 40000, best: 40000, mean: 40000 },
+    ])
+  })
+
+  it('gives every event the same mean the full stats do', async () => {
+    const owner = 'user-1'
+    await seedDataset(owner, 'session-1', 130)
+    const [summary] = await summarizeEvents(owner)
+    const stats = await computeSolveStats(owner, '3x3')
+    expect(summary.mean).toBe(stats.mean)
+    expect(summary.best).toBe(stats.best)
+    expect(summary.totalTime).toBe(stats.totalTime)
+  })
+
+  it('leaves out an event whose every solve is a DNF as having no best or mean', async () => {
+    await db.solves.bulkPut([makeSolve('user-1', 's1', 9000, 'dnf', '2026-01-01T12:00:00.000Z', '4x4')])
+    expect(await summarizeEvents('user-1')).toEqual([
+      { event: '4x4', count: 1, totalTime: 9000, best: null, mean: null },
+    ])
+  })
+})
+
+describe('countSolvesByDay', () => {
+  beforeEach(resetDb)
+
+  it('counts solves per local day across events, from the start date on', async () => {
+    const local = (day: number, hour: number) => new Date(2026, 8, day, hour, 30).toISOString()
+    await db.solves.bulkPut([
+      makeSolve('user-1', 's1', 10000, 'none', local(29, 23)),
+      makeSolve('user-1', 's1', 10000, 'none', local(30, 0)),
+      makeSolve('user-1', 's1', 10000, 'dnf', local(30, 23)),
+      makeSolve('user-1', 's2', 2000, 'none', local(30, 12), '2x2'),
+      { ...makeSolve('user-1', 's1', 10000, 'none', local(30, 13)), deletedAt: local(30, 14) },
+      makeSolve('user-2', 's9', 10000, 'none', local(30, 15)),
+      makeSolve('user-1', 's0', 10000, 'none', local(20, 12)),
+    ])
+
+    const counts = await countSolvesByDay('user-1', new Date(2026, 8, 21))
+    expect(Object.fromEntries(counts)).toEqual({ '2026-09-29': 1, '2026-09-30': 3 })
+  })
+
+  it('counts events this client does not list, as synced solves can carry them', async () => {
+    const solvedAt = new Date(2026, 8, 30, 12).toISOString()
+    await db.solves.bulkPut([
+      makeSolve('user-1', 's1', 10000, 'none', solvedAt),
+      { ...makeSolve('user-1', 's2', 10000, 'none', solvedAt), event: 'skewb' as CubeEvent },
+    ])
+
+    const counts = await countSolvesByDay('user-1', new Date(2026, 8, 21))
+    expect(Object.fromEntries(counts)).toEqual({ '2026-09-30': 2 })
   })
 })
 

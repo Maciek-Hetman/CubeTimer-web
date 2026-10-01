@@ -31,6 +31,11 @@ export function formatAverage(ms: number | null): string {
   return formatDuration(ms)
 }
 
+/** Time spent at a glance: hours and minutes once it's an hour or more, otherwise formatTotalTime. */
+export function formatTimeSpent(ms: number): string {
+  return ms >= 3_600_000 ? formatTotalTime(ms - (ms % 60_000)) : formatTotalTime(ms)
+}
+
 export function formatTotalTime(ms: number): string {
   if (ms === 0) return '0s'
   const totalSeconds = Math.floor(ms / 1000)

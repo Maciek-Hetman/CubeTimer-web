@@ -1,320 +1,89 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppContext'
-import { eventLabel, STATS_CHART_SCALES, STATS_CHART_SCALE_LABELS, type StatsChartScale } from '../../domain/models'
-import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
-import { collectChartSeries, computeSolveStats } from '../../data/repositories/solveStats'
+import { summarizeEvents } from '../../data/repositories/solveStats'
+import { EVENTS, eventLabel, isCubeEvent, type CubeEvent } from '../../domain/models'
+import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
-import { EmptyState } from '../../ui/EmptyState'
+import { ErrorBoundary } from '../../ui/ErrorBoundary'
 import { PageHeader } from '../../ui/PageHeader'
-import { Panel } from '../../ui/Panel'
-import { StatGrid } from '../../ui/StatGrid'
-import { scalePx, useUiScale } from '../../ui/useUiScale'
+import { AllEventsStats } from './AllEventsStats'
+import { EventStats } from './EventStats'
 
-const CHART_SERIES = [
-  { key: 'time', label: 'Time', color: 'var(--accent)', strokeWidth: 1 },
-  { key: 'ao5', label: 'Ao5', color: 'var(--chart-ao5)', strokeWidth: 2 },
-  { key: 'ao12', label: 'Ao12', color: 'var(--chart-ao12)', strokeWidth: 2 },
-] as const
+/** A tab per event, plus All for what they share. */
+type StatsTab = CubeEvent | 'all'
 
-function DeltaBadge({ delta }: { delta: number | null }) {
-  if (delta === null || isNaN(delta)) return null
-  const isImprovement = delta < 0
-  const color = isImprovement ? 'var(--ready)' : 'var(--danger)'
-  const sign = isImprovement ? '-' : '+'
-  const absDelta = Math.abs(delta)
+export function StatsPage() {
+  const { settings, ownerId } = useApp()
+  const [searchParams] = useSearchParams()
+  // Any tab can show without moving the timer off the event it's on.
+  const requested = searchParams.get('event')
+  const tab: StatsTab = requested === 'all' ? 'all' : isCubeEvent(requested) ? requested : settings.event
+
+  // Each query below throws while rendering if IndexedDB fails it; that lands here. Picking another
+  // tab from the error screen tries again, without remounting the page on every ordinary switch.
   return (
-    <span style={{ color, fontSize: '0.85em', marginLeft: 'var(--space-2)', fontWeight: 600 }}>
-      {sign}{formatAverage(absDelta)}
-    </span>
+    <ErrorBoundary
+      resetKey={`${ownerId}:${tab}`}
+      fallback={(error, retry) => <StatsError tab={tab} error={error} onRetry={retry} />}
+    >
+      <StatsTabs tab={tab} />
+    </ErrorBoundary>
   )
 }
 
-export function StatsPage() {
-  const { solveStats, sessions, settings, updateSettings, currentSession, ownerId } = useApp()
-  const uiScale = useUiScale()
-  const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({})
-
-  const chartScale: StatsChartScale = settings.statsChartScale ?? 'all'
-
-  const toggleSeries = (key: string) =>
-    setHiddenSeries((prev) => ({ ...prev, [key]: !prev[key] }))
-
-  const previousSession = useMemo(() => {
-    if (!currentSession) return null
-    const currentIndex = sessions.findIndex((s) => s.id === currentSession.id)
-    if (currentIndex > 0) {
-      return sessions[currentIndex - 1]
-    }
-    return null
-  }, [sessions, currentSession])
-
-  const sessionStats = useLiveQuery(
-    async () =>
-      currentSession ? computeSolveStats(ownerId, settings.event, currentSession.id) : null,
-    [ownerId, settings.event, currentSession?.id],
+function StatsError({ tab, error, onRetry }: { tab: StatsTab; error: unknown; onRetry: () => void }) {
+  return (
+    <div className="stack">
+      <PageHeader title="Stats" actions={<EventSwitcher selected={tab} withSolves={null} />} />
+      <Alert tone="error">
+        {error instanceof Error && error.message ? `Couldn't load your stats: ${error.message}` : "Couldn't load your stats."}
+      </Alert>
+      <div className="row">
+        <Button onClick={onRetry}>Try again</Button>
+      </div>
+    </div>
   )
+}
 
-  const previousSessionStats = useLiveQuery(
-    async () =>
-      previousSession ? computeSolveStats(ownerId, settings.event, previousSession.id) : null,
-    [ownerId, settings.event, previousSession?.id],
-  )
-
-  const chartData = useLiveQuery(
-    async () => collectChartSeries(ownerId, settings.event, chartScale),
-    [ownerId, settings.event, chartScale],
-  )
-
-  const sessionSummary = useMemo(
-    () => ({
-      count: sessionStats?.count ?? 0,
-      best: sessionStats?.best ?? null,
-      mean: sessionStats?.mean ?? null,
-      stdDev: sessionStats?.stdDev ?? null,
-      totalTime: sessionStats?.totalTime ?? 0,
-      ao5: sessionStats?.ao5 ?? null,
-      ao50: sessionStats?.ao50 ?? null,
-      ao100: sessionStats?.ao100 ?? null,
-    }),
-    [sessionStats],
-  )
-
-  const previousSessionSummary = useMemo(
-    () => ({
-      best: previousSessionStats?.best ?? null,
-      mean: previousSessionStats?.mean ?? null,
-      stdDev: previousSessionStats?.stdDev ?? null,
-      ao5: previousSessionStats?.ao5 ?? null,
-      ao50: previousSessionStats?.ao50 ?? null,
-      ao100: previousSessionStats?.ao100 ?? null,
-    }),
-    [previousSessionStats],
-  )
-
-  const getDelta = (current: number | null, previous: number | null) => {
-    if (current === null || previous === null) return null
-    return current - previous
-  }
+function StatsTabs({ tab }: { tab: StatsTab }) {
+  const { ownerId } = useApp()
+  // Feeds the All tab, and tells the switcher which events have no solves yet.
+  const events = useLiveQuery(() => summarizeEvents(ownerId), [ownerId])
+  const withSolves = useMemo(() => (events ? new Set(events.map((entry) => entry.event)) : null), [events])
 
   return (
     <div className="stack">
-      <PageHeader
-        title="Stats"
-        subtitle={`${eventLabel(settings.event)}${currentSession ? ` · ${currentSession.name}` : ''}`}
-      />
-
-      {solveStats.count === 0 ? (
-        <EmptyState
-          title="No solves yet"
-          action={
-            <Link className="btn primary" to="/">
-              Open timer
-            </Link>
-          }
-        />
-      ) : (
-        <>
-          <div className="row wrap" style={{ gap: 'var(--space-4)' }}>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Time</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.best)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao5</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo5)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao12</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo12)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao50</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo50)}
-              </div>
-            </Panel>
-            <Panel style={{ flex: 1, minWidth: '9.375rem' }}>
-              <div className="muted" style={{ fontSize: '0.9em' }}>PB Ao100</div>
-              <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: 'var(--accent)' }}>
-                {formatAverage(solveStats.bestAo100)}
-              </div>
-            </Panel>
-          </div>
-
-          <Panel className="stack">
-            <div className="row wrap" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <h2 style={{ margin: 0 }}>Times Graph</h2>
-              <div className="segmented" role="group" aria-label="Graph scale">
-                {STATS_CHART_SCALES.map((scale) => (
-                  <Button
-                    key={scale}
-                    type="button"
-                    className="compact"
-                    variant={chartScale === scale ? 'primary' : 'default'}
-                    aria-pressed={chartScale === scale}
-                    onClick={() => void updateSettings({ statsChartScale: scale })}
-                  >
-                    {STATS_CHART_SCALE_LABELS[scale]}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div style={{ width: '100%', height: '15.625rem' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData ?? []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  {CHART_SERIES.map(
-                    (series) =>
-                      !hiddenSeries[series.key] && (
-                        <Line
-                          key={series.key}
-                          type="monotone"
-                          dataKey={series.key}
-                          name={series.label}
-                          stroke={series.color}
-                          strokeWidth={series.strokeWidth}
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                      ),
-                  )}
-                  <XAxis
-                    dataKey="index"
-                    stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }}
-                  />
-                  <YAxis
-                    stroke="var(--border)"
-                    tick={{ fill: 'var(--text-muted)', fontSize: scalePx(12, uiScale) }}
-                    width={scalePx(40, uiScale)}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--surface)',
-                      borderColor: 'var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      boxShadow: 'var(--shadow-md)',
-                      color: 'var(--text)',
-                    }}
-                    itemStyle={{ color: 'var(--text)' }}
-                    labelStyle={{ color: 'var(--text-muted)', fontWeight: 600 }}
-                    labelFormatter={(label) => `Solve ${label}`}
-                    formatter={(value, name) => [`${Number(value).toFixed(2)}s`, String(name)]}
-                  />
-                  <Legend wrapperStyle={{ color: 'var(--text-muted)' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="segmented" role="group" aria-label="Chart series visibility">
-              {CHART_SERIES.map((series) => {
-                const hidden = Boolean(hiddenSeries[series.key])
-                return (
-                  <Button
-                    key={series.key}
-                    type="button"
-                    variant={hidden ? 'default' : 'primary'}
-                    aria-pressed={!hidden}
-                    onClick={() => toggleSeries(series.key)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        display: 'inline-block',
-                        width: '0.625rem',
-                        height: '0.625rem',
-                        marginRight: '0.375rem',
-                        borderRadius: '50%',
-                        backgroundColor: series.color,
-                        opacity: hidden ? 0.35 : 1,
-                      }}
-                    />
-                    {series.label}
-                  </Button>
-                )
-              })}
-            </div>
-          </Panel>
-
-          <div className="row wrap" style={{ gap: 'var(--space-4)', alignItems: 'flex-start' }}>
-            <Panel className="stack" style={{ flex: 1, minWidth: '15.625rem' }}>
-              <h2>All-time</h2>
-              <StatGrid
-                items={[
-                  ['Solves', String(solveStats.count)],
-                  ['Total Time', formatTotalTime(solveStats.totalTime)],
-                  ['Worst', formatAverage(solveStats.worst)],
-                  ['Mean', formatAverage(solveStats.mean)],
-                  ['Std Dev', formatAverage(solveStats.stdDev)],
-                  ['Ao5', formatAverage(solveStats.ao5)],
-                  ['Ao12', formatAverage(solveStats.ao12)],
-                  ['Ao50', formatAverage(solveStats.ao50)],
-                  ['Ao100', formatAverage(solveStats.ao100)],
-                ]}
-              />
-            </Panel>
-
-            <Panel className="stack" style={{ flex: 1, minWidth: '15.625rem' }}>
-              <h2>Current session</h2>
-              <StatGrid
-                items={[
-                  ['Solves', String(sessionSummary.count)],
-                  ['Total Time', formatTotalTime(sessionSummary.totalTime)],
-                  [
-                    'Best',
-                    <span key="best">
-                      {formatAverage(sessionSummary.best)}
-                      {previousSessionSummary.best !== null && <DeltaBadge delta={getDelta(sessionSummary.best, previousSessionSummary.best)} />}
-                    </span>,
-                  ],
-                  [
-                    'Mean',
-                    <span key="mean">
-                      {formatAverage(sessionSummary.mean)}
-                      {previousSessionSummary.mean !== null && <DeltaBadge delta={getDelta(sessionSummary.mean, previousSessionSummary.mean)} />}
-                    </span>,
-                  ],
-                  [
-                    'Std Dev',
-                    <span key="stdDev">
-                      {formatAverage(sessionSummary.stdDev)}
-                      {previousSessionSummary.stdDev !== null && <DeltaBadge delta={getDelta(sessionSummary.stdDev, previousSessionSummary.stdDev)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao5',
-                    <span key="ao5">
-                      {formatAverage(sessionSummary.ao5)}
-                      {previousSessionSummary.ao5 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao5, previousSessionSummary.ao5)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao50',
-                    <span key="ao50">
-                      {formatAverage(sessionSummary.ao50)}
-                      {previousSessionSummary.ao50 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao50, previousSessionSummary.ao50)} />}
-                    </span>,
-                  ],
-                  [
-                    'Ao100',
-                    <span key="ao100">
-                      {formatAverage(sessionSummary.ao100)}
-                      {previousSessionSummary.ao100 !== null && <DeltaBadge delta={getDelta(sessionSummary.ao100, previousSessionSummary.ao100)} />}
-                    </span>,
-                  ],
-                ]}
-              />
-            </Panel>
-          </div>
-        </>
-      )}
+      <PageHeader title="Stats" actions={<EventSwitcher selected={tab} withSolves={withSolves} />} />
+      {tab === 'all' ? <AllEventsStats events={events} /> : <EventStats event={tab} />}
     </div>
+  )
+}
+
+function EventSwitcher({ selected, withSolves }: { selected: StatsTab; withSolves: ReadonlySet<CubeEvent> | null }) {
+  return (
+    <nav className="stats-events" aria-label="Event">
+      <Link to="?event=all" replace className="all" aria-current={selected === 'all' ? 'page' : undefined}>
+        All
+      </Link>
+      {EVENTS.map((event) => {
+        const empty = withSolves !== null && !withSolves.has(event)
+        return (
+          <Link
+            key={event}
+            to={`?event=${event}`}
+            replace
+            aria-current={event === selected ? 'page' : undefined}
+            className={empty ? 'empty' : undefined}
+            title={empty ? 'No solves yet' : undefined}
+          >
+            {eventLabel(event)}
+            {/* The dimming is visual only, so say it too. The comma survives name trimming; a space wouldn't. */}
+            {empty ? <span className="sr-only">, no solves yet</span> : null}
+          </Link>
+        )
+      })}
+    </nav>
   )
 }

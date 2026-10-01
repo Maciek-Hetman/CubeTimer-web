@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import type { CubeEvent, Solve, StatsChartScale } from '../../domain/models'
 import { effectiveTimeMs } from '../../domain/models'
+import { dayKey } from '../../domain/stats/activity'
 import { averageFromValues } from '../../domain/stats/averages'
 import { RollingAverage } from '../../domain/stats/rollingAverage'
 import { db } from '../db'
@@ -8,6 +9,7 @@ import { db } from '../db'
 export interface SolveStats {
   count: number
   dnfCount: number
+  plusTwoCount: number
   best: number | null
   worst: number | null
   mean: number | null
@@ -18,16 +20,23 @@ export interface SolveStats {
   ao25: number | null
   ao50: number | null
   ao100: number | null
+  ao250: number | null
+  ao500: number | null
+  ao1000: number | null
   bestAo5: number | null
   bestAo12: number | null
   bestAo25: number | null
   bestAo50: number | null
   bestAo100: number | null
+  bestAo250: number | null
+  bestAo500: number | null
+  bestAo1000: number | null
 }
 
 export const EMPTY_SOLVE_STATS: SolveStats = {
   count: 0,
   dnfCount: 0,
+  plusTwoCount: 0,
   best: null,
   worst: null,
   mean: null,
@@ -38,17 +47,55 @@ export const EMPTY_SOLVE_STATS: SolveStats = {
   ao25: null,
   ao50: null,
   ao100: null,
+  ao250: null,
+  ao500: null,
+  ao1000: null,
   bestAo5: null,
   bestAo12: null,
   bestAo25: null,
   bestAo50: null,
   bestAo100: null,
+  bestAo250: null,
+  bestAo500: null,
+  bestAo1000: null,
 }
 
-const AO_WINDOWS = [5, 12, 25, 50, 100] as const
-const CURRENT_FIELDS = ['ao5', 'ao12', 'ao25', 'ao50', 'ao100'] as const
-const BEST_FIELDS = ['bestAo5', 'bestAo12', 'bestAo25', 'bestAo50', 'bestAo100'] as const
-const CURRENT_WINDOW_CAP = 100
+export const AO_WINDOWS = [5, 12, 25, 50, 100, 250, 500, 1000] as const
+export type AoWindow = (typeof AO_WINDOWS)[number]
+
+const CURRENT_FIELD = {
+  5: 'ao5',
+  12: 'ao12',
+  25: 'ao25',
+  50: 'ao50',
+  100: 'ao100',
+  250: 'ao250',
+  500: 'ao500',
+  1000: 'ao1000',
+} as const satisfies Record<AoWindow, keyof SolveStats>
+
+const BEST_FIELD = {
+  5: 'bestAo5',
+  12: 'bestAo12',
+  25: 'bestAo25',
+  50: 'bestAo50',
+  100: 'bestAo100',
+  250: 'bestAo250',
+  500: 'bestAo500',
+  1000: 'bestAo1000',
+} as const satisfies Record<AoWindow, keyof SolveStats>
+
+const CURRENT_WINDOW_CAP = AO_WINDOWS[AO_WINDOWS.length - 1]
+
+/** The latest average of `n`: null until there are `n` solves, and when it's a DNF. */
+export function currentAverage(stats: SolveStats, n: AoWindow): number | null {
+  return stats[CURRENT_FIELD[n]]
+}
+
+/** The best average of `n` so far: null until there are `n` solves, and when every one was a DNF. */
+export function bestAverage(stats: SolveStats, n: AoWindow): number | null {
+  return stats[BEST_FIELD[n]]
+}
 
 export const DEFAULT_CHART_POINTS = 500
 
@@ -123,11 +170,16 @@ export function summarizeSolves(solvesNewestFirst: Solve[]): SolveStats {
   let mean = 0
   let m2 = 0
   let counted = 0
+  // Exact for integer times, and the same sum summarizeEvents takes, so the two means agree.
+  let sum = 0
 
   for (const solve of solvesNewestFirst) {
     const effective = effectiveTimeMs(solve)
     stats.count += 1
     stats.totalTime += solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+    if (solve.penalty === 'plus_two') {
+      stats.plusTwoCount += 1
+    }
     if (solve.penalty === 'dnf') {
       stats.dnfCount += 1
     } else if (effective !== null) {
@@ -138,6 +190,7 @@ export function summarizeSolves(solvesNewestFirst: Solve[]): SolveStats {
       if (stats.worst === null || effective > stats.worst) {
         stats.worst = effective
       }
+      sum += effective
       const delta = effective - mean
       mean += delta / counted
       m2 += delta * (effective - mean)
@@ -156,16 +209,87 @@ export function summarizeSolves(solvesNewestFirst: Solve[]): SolveStats {
     }
   }
 
-  stats.mean = counted > 0 ? mean : null
+  stats.mean = counted > 0 ? sum / counted : null
   stats.stdDev = counted > 0 ? Math.sqrt(m2 / counted) : null
   for (let i = 0; i < AO_WINDOWS.length; i += 1) {
     const n = AO_WINDOWS[i]
-    stats[BEST_FIELDS[i]] = bests[i]
+    stats[BEST_FIELD[n]] = bests[i]
     if (currentWindow.length >= n) {
-      stats[CURRENT_FIELDS[i]] = averageFromValues(currentWindow.slice(0, n), n)
+      stats[CURRENT_FIELD[n]] = averageFromValues(currentWindow.slice(0, n), n)
     }
   }
   return stats
+}
+
+export interface EventSummary {
+  event: CubeEvent
+  count: number
+  totalTime: number
+  best: number | null
+  mean: number | null
+}
+
+/** Totals for every event with solves, busiest first. One pass, no rolling averages. */
+export async function summarizeEvents(ownerId: string): Promise<EventSummary[]> {
+  const totals = new Map<CubeEvent, EventSummary & { counted: number; sum: number }>()
+  await db.solves
+    .where('ownerId')
+    .equals(ownerId)
+    .each((solve) => {
+      if (solve.deletedAt) {
+        return
+      }
+      let entry = totals.get(solve.event)
+      if (!entry) {
+        entry = { event: solve.event, count: 0, totalTime: 0, best: null, mean: null, counted: 0, sum: 0 }
+        totals.set(solve.event, entry)
+      }
+      entry.count += 1
+      entry.totalTime += solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+      const effective = effectiveTimeMs(solve)
+      if (effective !== null) {
+        entry.counted += 1
+        entry.sum += effective
+        if (entry.best === null || effective < entry.best) {
+          entry.best = effective
+        }
+      }
+    })
+  return Array.from(totals.values(), ({ counted, sum, ...summary }) => ({
+    ...summary,
+    mean: counted > 0 ? sum / counted : null,
+  })).sort((a, b) => b.count - a.count)
+}
+
+/** Non-deleted solves per local day (YYYY-MM-DD), across every event, from `since` on. */
+export async function countSolvesByDay(ownerId: string, since: Date): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  const from = since.toISOString()
+  // Synced solves can carry events this client doesn't list, so the owner's events come from the index.
+  const events: string[] = []
+  await db.solves
+    .where('[ownerId+event]')
+    .between([ownerId, Dexie.minKey], [ownerId, Dexie.maxKey])
+    .eachUniqueKey((key) => {
+      events.push((key as [string, string])[1])
+    })
+  // A range per event on [ownerId+event+solvedAt] then reads only this owner's solves since `since`.
+  // solvedAt is UTC ISO, so its strings sort by time: the order loadSolvesOldestFirst relies on too.
+  await Promise.all(
+    events.map((event) =>
+      db.solves
+        .where('[ownerId+event+solvedAt]')
+        .between([ownerId, event, from], [ownerId, event, Dexie.maxKey])
+        .each((solve) => {
+          if (solve.deletedAt) {
+            return
+          }
+          const key = dayKey(new Date(solve.solvedAt))
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }),
+    ),
+  )
+  return counts
 }
 
 /**

@@ -3,13 +3,21 @@ import { Outlet, useLocation, useOutletContext } from 'react-router-dom'
 import { Button } from './Button'
 import { EmptyState } from './EmptyState'
 
+interface ErrorBoundaryProps {
+  children: ReactNode
+  /** Replaces the default "Something went wrong" screen; `retry` renders the children again. */
+  fallback?: (error: unknown, retry: () => void) => ReactNode
+  /** Changing this while the fallback shows tries the children again, e.g. after picking another tab. */
+  resetKey?: string
+}
+
 interface ErrorBoundaryState {
   error: unknown
   hasError: boolean
 }
 
 // Render errors (e.g. a failed Dexie query rethrown by useLiveQuery) would otherwise unmount the whole root.
-export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null, hasError: false }
 
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
@@ -20,8 +28,19 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
     console.error('Render error caught by ErrorBoundary', error, info.componentStack)
   }
 
+  componentDidUpdate(previous: ErrorBoundaryProps) {
+    if (this.state.hasError && previous.resetKey !== this.props.resetKey) {
+      this.retry()
+    }
+  }
+
+  retry = () => {
+    this.setState({ error: null, hasError: false })
+  }
+
   render() {
     if (!this.state.hasError) return this.props.children
+    if (this.props.fallback) return this.props.fallback(this.state.error, this.retry)
     return (
       <div role="alert">
         <EmptyState

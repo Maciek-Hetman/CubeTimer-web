@@ -1785,3 +1785,597 @@ input[type='range']::-moz-range-thumb {
   text-align: center;
   color: var(--danger);
 }
+
+/* Stats page. Event tabs: bests and current averages first, the session beside the graph, all-time totals last.
+   The All tab has what events share: an overview, the activity calendar and the per-event breakdown. */
+.stats-layout {
+  display: grid;
+  gap: var(--space-4);
+  transition: opacity var(--duration) var(--ease);
+}
+
+/* Switching events keeps the last event on screen until the new one has loaded. */
+.stats-layout.switching {
+  opacity: 0.55;
+}
+
+@media (min-width: 900px) {
+  .stats-layout {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .stats-bests,
+  .stats-current {
+    grid-column: span 3;
+  }
+
+  .stats-session {
+    grid-column: span 2;
+  }
+
+  .stats-progress {
+    grid-column: span 4;
+  }
+
+  .stats-all-time {
+    grid-column: 1 / -1;
+  }
+}
+
+.stats-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.stats-panel-header p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.stats-events,
+.stats-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.125rem;
+  padding: 0.1875rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.stats-events a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 0.375rem;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.stats-events a.empty {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* All isn't an event, so a hairline sets it apart from them. */
+.stats-events a.all {
+  position: relative;
+  margin-right: 0.3125rem;
+}
+
+.stats-events a.all::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  right: -0.25rem;
+  bottom: 25%;
+  border-right: 1px solid var(--border);
+}
+
+.stats-events a:hover {
+  color: var(--accent);
+}
+
+.stats-events a[aria-current='page'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Bests and current averages: two big figures or three, then the longer averages in a row. */
+.stats-bests,
+.stats-current {
+  container-type: inline-size;
+}
+
+.stats-headline {
+  container-type: inline-size;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.stats-headline > div,
+.stats-compact > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.stats-headline dt,
+.stats-compact dt {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.stats-headline dd,
+.stats-compact dd {
+  margin: 0;
+}
+
+/* Sized off the list (cqi), so a minute-long time like 1:02.34 still fits its column. */
+.stats-headline-value {
+  font-size: 2.25rem;
+  font-size: clamp(1.375rem, 8.5cqi, 2.75rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.stats-bests .stats-headline-value {
+  color: var(--accent);
+}
+
+.stats-headline .stats-headline-value.pending,
+.stats-compact dd.pending {
+  color: var(--text-muted);
+}
+
+.stats-headline-note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.stats-compact {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-2);
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.stats-compact dt {
+  font-size: var(--text-xs);
+}
+
+.stats-compact dd {
+  font-size: 1.0625rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+@container (max-width: 26rem) {
+  .stats-compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.stats-session {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stats-session-header p {
+  margin: 0.125rem 0 0;
+  font-size: var(--text-sm);
+}
+
+.stats-session-meta,
+.stats-session-empty {
+  margin: 0;
+}
+
+.stats-session-meta {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.stats-session-list {
+  display: grid;
+  margin: 0;
+}
+
+.stats-session-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 4.5rem;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.stats-session-list dt {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.stats-session-list dd {
+  margin: 0;
+}
+
+.stats-session-value {
+  font-family: var(--mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  text-align: right;
+}
+
+.stats-delta {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: right;
+}
+
+.stats-delta.better {
+  color: var(--success);
+}
+
+.stats-delta.worse {
+  color: var(--danger);
+}
+
+.stats-delta.same {
+  color: var(--text-muted);
+}
+
+.stats-session-note {
+  margin: auto 0 0;
+  font-size: var(--text-xs);
+}
+
+.stats-range .btn {
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.stats-range .btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.stats-range .btn[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* The canvas is taken out of flow so the chart fills whatever height the row settles on. */
+.stats-chart {
+  position: relative;
+  flex: 1;
+  min-height: 16rem;
+}
+
+.stats-chart-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+
+.stats-chart-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.stats-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.stats-legend .btn {
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  background: transparent;
+  font-size: var(--text-sm);
+}
+
+.stats-legend .btn:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.stats-legend .btn[aria-pressed='false'] {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.stats-legend-key {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 0.1875rem;
+  border-radius: 999px;
+}
+
+.stats-legend .btn[aria-pressed='false'] .stats-legend-key {
+  opacity: 0.35;
+}
+
+.stats-all-time {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stats-all-time h2 {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.stats-all-time .stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+}
+
+.stats-all-time .stat-card {
+  padding: 0;
+  background: none;
+}
+
+.stats-rate-count {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+@media (min-width: 900px) {
+  .stats-all-time {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-5);
+  }
+
+  .stats-all-time .stat-grid {
+    flex: 1;
+  }
+}
+
+/* The All tab: what every event shares. The zero minimum lets the calendar and the
+   breakdown scroll inside their panels instead of widening the page on a phone. */
+.stats-all {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.stats-overview {
+  container-type: inline-size;
+}
+
+.stats-overview .stats-headline {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@container (max-width: 36rem) {
+  .stats-overview .stats-headline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Activity: a year of days, a week per column, Monday on top. */
+.stats-activity-scroll {
+  overflow-x: auto;
+  direction: rtl;
+}
+
+/* At least as wide as its weeks need, so on a phone it overflows into the scroller instead of clipping. */
+.stats-activity-grid {
+  direction: ltr;
+  display: grid;
+  grid-template-columns: auto repeat(53, minmax(0.625rem, 1fr));
+  gap: 0.1875rem;
+  width: max-content;
+  min-width: 100%;
+  padding-bottom: 0.125rem;
+}
+
+.stats-activity-month,
+.stats-activity-weekday {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* Zero width: the name spills over the next weeks instead of widening its own column. */
+.stats-activity-month {
+  grid-row: 1;
+  width: 0;
+  padding-bottom: 0.125rem;
+}
+
+/* Zero line height keeps the labels from stretching rows past the square cells.
+   Sticky, so the weekdays stay put while a phone scrolls the weeks under them. */
+.stats-activity-weekday {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  padding-right: var(--space-1);
+  background: var(--surface);
+  line-height: 0;
+}
+
+.stats-activity-day {
+  aspect-ratio: 1;
+  border-radius: 0.125rem;
+  background: var(--surface-muted);
+}
+
+button.stats-activity-day {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+button.stats-activity-day[data-selected] {
+  outline: 2px solid var(--text, currentColor);
+  outline-offset: 1px;
+}
+
+/* The selected day's readout on the left, the legend on the right. */
+.stats-activity-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.stats-activity-footer p {
+  margin: 0;
+}
+
+/* Steps checked for every accent in both themes: each shade clears the panel at 2:1 or better
+   and reads as a step from its neighbours. */
+.stats-activity-day[data-level='1'] {
+  background: color-mix(in srgb, var(--accent) 44%, var(--surface-muted));
+}
+
+.stats-activity-day[data-level='2'] {
+  background: color-mix(in srgb, var(--accent) 62%, var(--surface-muted));
+}
+
+.stats-activity-day[data-level='3'] {
+  background: color-mix(in srgb, var(--accent) 78%, var(--surface-muted));
+}
+
+.stats-activity-day[data-level='4'] {
+  background: var(--accent);
+}
+
+.stats-activity-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.1875rem;
+  margin-left: auto;
+}
+
+.stats-activity-legend .stats-activity-day {
+  width: 0.75rem;
+}
+
+.stats-activity-legend .stats-activity-day:first-of-type {
+  margin-left: var(--space-1);
+}
+
+.stats-activity-legend .stats-activity-day:last-of-type {
+  margin-right: var(--space-1);
+}
+
+/* Events: one row per event, busiest first. */
+.stats-breakdown-scroll {
+  overflow-x: auto;
+}
+
+.stats-breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.stats-breakdown-table th,
+.stats-breakdown-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.stats-breakdown-table th:first-child,
+.stats-breakdown-table td:first-child {
+  padding-left: 0;
+}
+
+.stats-breakdown-table th:last-child,
+.stats-breakdown-table td:last-child {
+  padding-right: 0;
+}
+
+.stats-breakdown-table thead th {
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stats-breakdown-table thead th:nth-child(2) {
+  width: 45%;
+}
+
+.stats-breakdown-table tbody tr + tr > * {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.stats-breakdown-table .num {
+  text-align: right;
+}
+
+.stats-breakdown-table td {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-breakdown-table tbody th a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.stats-breakdown-table tbody th a:hover {
+  color: var(--accent);
+}
+
+.stats-breakdown-count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stats-breakdown-bar {
+  flex: 1;
+  min-width: 5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.stats-breakdown-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}

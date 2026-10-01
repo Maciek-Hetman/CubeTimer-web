@@ -62,23 +62,45 @@ function expectClose(actual: number | null, expected: number | null) {
   }
 }
 
-const CURRENT = { 5: 'ao5', 12: 'ao12', 25: 'ao25', 50: 'ao50', 100: 'ao100' } as const
-const BEST = { 5: 'bestAo5', 12: 'bestAo12', 25: 'bestAo25', 50: 'bestAo50', 100: 'bestAo100' } as const
+const CURRENT = {
+  5: 'ao5',
+  12: 'ao12',
+  25: 'ao25',
+  50: 'ao50',
+  100: 'ao100',
+  250: 'ao250',
+  500: 'ao500',
+  1000: 'ao1000',
+} as const
+const BEST = {
+  5: 'bestAo5',
+  12: 'bestAo12',
+  25: 'bestAo25',
+  50: 'bestAo50',
+  100: 'bestAo100',
+  250: 'bestAo250',
+  500: 'bestAo500',
+  1000: 'bestAo1000',
+} as const
 
 describe('summarizeSolves', () => {
   it('matches the array-based reference for randomized histories', () => {
     const rand = mulberry32(7)
-    for (const count of [0, 4, 5, 6, 11, 12, 13, 24, 25, 26, 49, 50, 51, 99, 100, 101, 350]) {
+    const counts = [0, 4, 5, 6, 11, 12, 13, 24, 25, 26, 49, 50, 51, 99, 100, 101, 350]
+    counts.push(249, 250, 251, 499, 500, 501, 999, 1000, 1001)
+    for (const count of counts) {
       for (const range of [5, 15000]) {
         const newestFirst = randomSolves(rand, count, range).reverse()
         const stats = summarizeSolves(newestFirst)
         expect(stats.count).toBe(count)
+        expect(stats.dnfCount).toBe(newestFirst.filter((solve) => solve.penalty === 'dnf').length)
+        expect(stats.plusTwoCount).toBe(newestFirst.filter((solve) => solve.penalty === 'plus_two').length)
         expect(stats.best).toBe(bestSingle(newestFirst))
         expect(stats.worst).toBe(worstSingle(newestFirst))
         expect(stats.totalTime).toBe(totalTime(newestFirst))
         expectClose(stats.mean, meanOfSolves(newestFirst))
         expectClose(stats.stdDev, standardDeviation(newestFirst))
-        for (const n of [5, 12, 25, 50, 100] as const) {
+        for (const n of [5, 12, 25, 50, 100, 250, 500, 1000] as const) {
           expect(stats[CURRENT[n]]).toBe(averageOfN(newestFirst, n))
           expect(stats[BEST[n]]).toBe(bestAverageOfN(newestFirst, n))
         }
