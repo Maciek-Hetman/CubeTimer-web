@@ -9,6 +9,17 @@ export interface Release {
 /** Newest first. Add an entry here before pushing a new version tag. */
 export const RELEASES: Release[] = [
   {
+    version: 'v0.5.0',
+    date: '2026-10-01',
+    changes: [
+      'A redesigned Stats page with a tab per event and an All tab for stats across events.',
+      'Personal bests and current averages now go up to Ao1000.',
+      'An activity calendar of solves per day, and a breakdown of solves by event.',
+      'A failed screen now shows an error with a reload button instead of a blank page.',
+      'CubeTimer Web is now free software under the GPL-3.0-or-later license.',
+    ],
+  },
+  {
     version: 'v0.4.0',
     date: '2026-09-30',
     changes: [
