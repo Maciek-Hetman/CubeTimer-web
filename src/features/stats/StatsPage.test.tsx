@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   sessions: {} as Partial<Record<CubeEvent, CubeSession[]>>,
   summaries: [] as EventSummary[],
   dayCounts: new Map<string, number>(),
+  /** Events whose stats query never settles, to hold a tab in its loading state. */
+  pending: new Set<CubeEvent>(),
 }))
 
 vi.mock('../../app/AppContext', () => ({
@@ -51,8 +53,10 @@ vi.mock('../../data/repositories/solveStats', async () => {
   )
   return {
     ...actual,
-    computeSolveStats: async (_ownerId: string, event: CubeEvent, sessionId?: string) =>
-      (sessionId ? mocks.sessionStats[sessionId] : mocks.eventStats[event]) ?? actual.EMPTY_SOLVE_STATS,
+    computeSolveStats: (_ownerId: string, event: CubeEvent, sessionId?: string) =>
+      !sessionId && mocks.pending.has(event)
+        ? new Promise<never>(() => {})
+        : Promise.resolve((sessionId ? mocks.sessionStats[sessionId] : mocks.eventStats[event]) ?? actual.EMPTY_SOLVE_STATS),
     collectChartSeries: async () => [],
     summarizeEvents: async () => mocks.summaries,
     countSolvesByDay: async () => mocks.dayCounts,
@@ -140,6 +144,7 @@ describe('StatsPage', () => {
     mocks.sessions = {}
     mocks.summaries = [{ event: '3x3', count: 1200, totalTime: 2250000, best: 10000, mean: 15000 }]
     mocks.dayCounts = new Map()
+    mocks.pending = new Set()
     mocks.updateSettings.mockReset()
     mocks.setEvent.mockReset()
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
@@ -268,6 +273,14 @@ describe('StatsPage', () => {
     expect(statValues(bests, 'Single')).toEqual(['45.12'])
     const switcher = screen.getByRole('navigation', { name: 'Event' })
     expect(within(switcher).getByRole('link', { name: 'Megaminx' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('shows a loading panel, not an empty state, until an event tab has its stats', async () => {
+    mocks.pending = new Set(['4x4'])
+    renderPage('/stats?event=4x4')
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading stats…')
+    expect(screen.queryByText('No solves yet')).not.toBeInTheDocument()
   })
 
   it('shows an event without solves as empty', async () => {

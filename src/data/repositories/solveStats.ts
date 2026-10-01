@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
 import type { CubeEvent, Solve, StatsChartScale } from '../../domain/models'
-import { effectiveTimeMs } from '../../domain/models'
+import { effectiveTimeMs, EVENTS } from '../../domain/models'
 import { dayKey } from '../../domain/stats/activity'
 import { averageFromValues } from '../../domain/stats/averages'
 import { RollingAverage } from '../../domain/stats/rollingAverage'
@@ -261,24 +261,25 @@ export async function summarizeEvents(ownerId: string): Promise<EventSummary[]> 
   })).sort((a, b) => b.count - a.count)
 }
 
-/**
- * Non-deleted solves per local day (YYYY-MM-DD), across every event, from `since` on.
- * There's no [ownerId+solvedAt] index, so this walks the solvedAt range and drops other
- * owners' solves as it goes. A device holds one or two owners (a guest and an account),
- * so that costs little next to a schema version for a new index.
- */
+/** Non-deleted solves per local day (YYYY-MM-DD), across every event, from `since` on. */
 export async function countSolvesByDay(ownerId: string, since: Date): Promise<Map<string, number>> {
   const counts = new Map<string, number>()
-  await db.solves
-    .where('solvedAt')
-    .aboveOrEqual(since.toISOString())
-    .each((solve) => {
-      if (solve.ownerId !== ownerId || solve.deletedAt) {
-        return
-      }
-      const key = dayKey(new Date(solve.solvedAt))
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    })
+  const from = since.toISOString()
+  // A range per event on [ownerId+event+solvedAt] reads only this owner's solves since `since`.
+  await Promise.all(
+    EVENTS.map((event) =>
+      db.solves
+        .where('[ownerId+event+solvedAt]')
+        .between([ownerId, event, from], [ownerId, event, Dexie.maxKey])
+        .each((solve) => {
+          if (solve.deletedAt) {
+            return
+          }
+          const key = dayKey(new Date(solve.solvedAt))
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }),
+    ),
+  )
   return counts
 }
 

@@ -25,7 +25,9 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
         <h2 id={headingId}>Activity</h2>
         <p className="muted">{summary}</p>
       </div>
-      {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything. */}
+      {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything.
+          A day's own count is a hover detail (its title). Assistive tech gets the summary label and
+          the most active days listed below; 371 focusable cells would bury keyboard users instead. */}
       <div className="stats-activity-scroll">
         <div className="stats-activity-grid" role="img" aria-label={`Solves per day: ${summary}`}>
           {calendar.months.map((month) => (

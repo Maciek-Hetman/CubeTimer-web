@@ -17,6 +17,7 @@ import { StatGrid } from '../../ui/StatGrid'
 import { CurrentAverages, PersonalBests } from './AverageSections'
 import { CurrentSession } from './CurrentSession'
 import { ProgressChart } from './ProgressChart'
+import { StatsLoading } from './StatsLoading'
 
 const NO_CHART_POINTS: ChartPoint[] = []
 
@@ -60,11 +61,9 @@ export function EventStats({ event }: { event: CubeEvent }) {
   )
 
   const stats = shown?.stats
-  if (!stats) {
-    return null
-  }
-  if (stats.count === 0 && switching) {
-    return null
+  // Switching away from an event without solves has nothing worth holding on screen.
+  if (!stats || (stats.count === 0 && switching)) {
+    return <StatsLoading />
   }
   if (stats.count === 0) {
     return (

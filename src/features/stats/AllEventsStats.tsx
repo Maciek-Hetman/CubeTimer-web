@@ -16,6 +16,7 @@ import { ActivityCalendar } from './ActivityCalendar'
 import { EventBreakdown } from './EventBreakdown'
 import { HeadlineStats } from './HeadlineStats'
 import { plural } from './plural'
+import { StatsLoading } from './StatsLoading'
 
 /**
  * Today's dayKey, kept current: a timer rolls it over a moment after midnight, and returning
@@ -53,11 +54,7 @@ export function AllEventsStats({ events }: { events: EventSummary[] | undefined 
   )
 
   if (!events || !calendar) {
-    return (
-      <Panel role="status" aria-busy="true" className="stack">
-        <p className="muted">Loading stats…</p>
-      </Panel>
-    )
+    return <StatsLoading />
   }
   if (events.length === 0) {
     return (
