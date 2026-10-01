@@ -50,6 +50,15 @@ export function ScrambleProvider({ children }: { children: ReactNode }) {
     }
   }, [ready, settings.event, loadScramble])
 
+  // A scramble still generating when the provider goes away must not set state: once a test's
+  // environment is torn down, React throws "window is not defined" on the update.
+  useEffect(
+    () => () => {
+      scrambleRequest.current += 1
+    },
+    [],
+  )
+
   const value = useMemo<ScrambleContextValue>(
     () => ({
       scramble,
