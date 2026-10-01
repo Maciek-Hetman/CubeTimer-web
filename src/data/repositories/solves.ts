@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
 import type { CubeEvent, Solve, SolveInput, TimingDevice } from '../../domain/models'
-import { EVENTS, createId, effectiveTimeMs, normalizeTimingDevice, nowIso } from '../../domain/models'
+import { createId, effectiveTimeMs, normalizeTimingDevice, nowIso } from '../../domain/models'
 import { db } from '../db'
 import { enqueueMutation } from './outbox'
 
@@ -201,24 +201,6 @@ export async function countSolvesBySession(
   })
 
   return { sessions: summarize(sessions), orphans: summarize(orphans), totals }
-}
-
-/** Live (non-deleted) solve count per event, without reading solve bodies into aggregates. */
-export async function countSolvesByEvent(ownerId: string): Promise<Map<CubeEvent, number>> {
-  const entries = await Promise.all(
-    EVENTS.map(
-      async (event) =>
-        [
-          event,
-          await db.solves
-            .where('[ownerId+event]')
-            .equals([ownerId, event])
-            .filter((solve) => !solve.deletedAt)
-            .count(),
-        ] as const,
-    ),
-  )
-  return new Map(entries)
 }
 
 export async function putSolve(

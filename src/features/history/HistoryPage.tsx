@@ -21,7 +21,6 @@ import { Select } from '../../ui/Select'
 import { EyeIcon, ChevronDownIcon, TrashIcon, PencilIcon, ShareIcon } from '../../ui/NavIcons'
 import { listSessions } from '../../data/repositories/sessions'
 import {
-  countSolvesByEvent,
   countSolvesBySession,
   listOrphanSolves,
   listSolvesForSession,
@@ -112,21 +111,14 @@ export function HistoryPage() {
     )
   }
 
-  // The list is scoped to the filtered event; per-event totals for the filter come from cheap index counts.
-  const history = useLiveQuery(
-    async () => {
-      if (!ownerId) {
-        return null
-      }
-      const [sessions, summary, totals] = await Promise.all([
-        listSessions(ownerId),
-        countSolvesBySession(ownerId, eventFilter === ALL_EVENTS ? undefined : eventFilter),
-        countSolvesByEvent(ownerId),
-      ])
-      return { sessions, summary, totals }
-    },
-    [ownerId, eventFilter],
-  )
+  // One pass over all events feeds both the list and the per-event filter totals; the list is filtered in listItems.
+  const history = useLiveQuery(async () => {
+    if (!ownerId) {
+      return null
+    }
+    const [sessions, summary] = await Promise.all([listSessions(ownerId), countSolvesBySession(ownerId)])
+    return { sessions, summary }
+  }, [ownerId])
 
   const listItems = useMemo(() => {
     if (!history) {
@@ -180,7 +172,7 @@ export function HistoryPage() {
     return items
   }, [history, eventFilter])
 
-  const totals = history?.totals
+  const totals = history?.summary.totals
   const totalSolves = totals ? [...totals.values()].reduce((sum, count) => sum + count, 0) : 0
   const filteredSolves = eventFilter === ALL_EVENTS ? totalSolves : (totals?.get(eventFilter) ?? 0)
   const filterOptions = [
