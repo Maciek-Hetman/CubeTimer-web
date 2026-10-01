@@ -8,20 +8,21 @@ import {
 } from '../../data/repositories/solveStats'
 import { formatAverage } from '../../domain/stats/formatTime'
 import { Panel } from '../../ui/Panel'
+import { HeadlineStats, type HeadlineStat } from './HeadlineStats'
 
 /** Ao5 and Ao12 get the big treatment; the longer averages sit in a compact row under them. */
 const HEADLINE_WINDOWS: AoWindow[] = [5, 12]
 const LONGER_WINDOWS = AO_WINDOWS.filter((n) => !HEADLINE_WINDOWS.includes(n))
 
-interface Stat {
-  label: string
-  /** Null until there are enough solves for it. */
-  value: string | null
+interface Stat extends HeadlineStat {
   needs: number
 }
 
+/** Null until there are enough solves for it, then the time (or DNF). */
 function stat(label: string, value: number | null, count: number, needs: number): Stat {
-  return { label, value: count < needs ? null : formatAverage(value), needs }
+  return count < needs
+    ? { label, value: null, note: `Needs ${needs} solves`, needs }
+    : { label, value: formatAverage(value), needs }
 }
 
 export function PersonalBests({ stats }: { stats: SolveStats }) {
@@ -52,22 +53,6 @@ export function CurrentAverages({ stats }: { stats: SolveStats }) {
       <HeadlineStats items={headline} />
       <CompactStats items={longer} />
     </Panel>
-  )
-}
-
-function HeadlineStats({ items }: { items: Stat[] }) {
-  return (
-    <dl className="stats-headline">
-      {items.map((item) => (
-        <div key={item.label}>
-          <dt>{item.label}</dt>
-          <dd className={item.value === null ? 'stats-headline-value pending' : 'stats-headline-value'}>
-            {item.value ?? '—'}
-          </dd>
-          {item.value === null ? <dd className="stats-headline-note">Needs {item.needs} solves</dd> : null}
-        </div>
-      ))}
-    </dl>
   )
 }
 

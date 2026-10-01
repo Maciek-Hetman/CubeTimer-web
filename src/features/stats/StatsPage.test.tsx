@@ -267,35 +267,81 @@ describe('StatsPage', () => {
     expect(within(switcher).getByRole('link', { name: 'Megaminx' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('shows an event without solves as empty, with every event still listed below', async () => {
+  it('shows an event without solves as empty', async () => {
     renderPage('/stats?event=4x4')
 
     expect(await screen.findByText('No solves yet')).toBeInTheDocument()
     expect(screen.getByText('Solves you time for 4x4 show up here.')).toBeInTheDocument()
-    expect(await screen.findByRole('region', { name: 'Events' })).toBeInTheDocument()
     const switcher = screen.getByRole('navigation', { name: 'Event' })
     expect(within(switcher).getByRole('link', { name: '4x4' })).toHaveClass('empty')
     expect(within(switcher).getByRole('link', { name: '3x3' })).not.toHaveClass('empty')
   })
 
+  it('keeps what events share on an All tab, first in the switcher', async () => {
+    const user = userEvent.setup()
+    mocks.summaries = [
+      { event: '3x3', count: 1200, totalTime: 2250000, best: 10000, mean: 15000 },
+      { event: '2x2', count: 300, totalTime: 1260000, best: 1950, mean: 4200 },
+    ]
+    renderPage()
+    await screen.findByRole('region', { name: 'Personal bests' })
+    for (const name of ['Overview', 'Activity', 'Events']) {
+      expect(screen.queryByRole('region', { name })).not.toBeInTheDocument()
+    }
+
+    const switcher = screen.getByRole('navigation', { name: 'Event' })
+    const tabs = within(switcher).getAllByRole('link')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['All', '2x2', '3x3', '4x4', '5x5', 'Megaminx', 'Pyraminx'])
+    await user.click(tabs[0])
+
+    expect(tabs[0]).toHaveAttribute('aria-current', 'page')
+    const overview = await screen.findByRole('region', { name: 'Overview' })
+    expect(statValues(overview, 'Solves')).toEqual(['1,500', 'in 2 events'])
+    expect(statValues(overview, 'Time spent cubing')).toEqual(['58m 30s', 'Sum of solve times'])
+    expect(screen.getByRole('region', { name: 'Activity' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Events' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Personal bests' })).not.toBeInTheDocument()
+    expect(mocks.setEvent).not.toHaveBeenCalled()
+  })
+
+  it('counts practice days and the current streak on the All tab', async () => {
+    const today = new Date()
+    const daysAgo = (n: number) => dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - n, 12))
+    // Yesterday and the day before, plus a day on its own last week; nothing yet today.
+    mocks.dayCounts = new Map([
+      [daysAgo(1), 5],
+      [daysAgo(2), 3],
+      [daysAgo(10), 7],
+    ])
+    renderPage('/stats?event=all')
+    const overview = await screen.findByRole('region', { name: 'Overview' })
+
+    expect(statValues(overview, 'Days practiced')).toEqual(['3', 'in the last year'])
+    expect(statValues(overview, 'Current streak')).toEqual(['2 days', 'Longest 2 days'])
+  })
+
   it('shows only the empty state when there are no solves at all', async () => {
     mocks.eventStats = {}
     mocks.summaries = []
-    renderPage()
+    const { unmount } = renderPage()
 
     expect(await screen.findByText('No solves yet')).toBeInTheDocument()
+    unmount()
+
+    renderPage('/stats?event=all')
+    expect(await screen.findByText('Solves you time in any event show up here.')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Overview' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Events' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Activity' })).not.toBeInTheDocument()
   })
 
-  it('breaks solves down by event, busiest first, each linking to its stats', async () => {
+  it('breaks solves down by event, busiest first, each linking to its tab', async () => {
     const user = userEvent.setup()
     mocks.summaries = [
       { event: '3x3', count: 1200, totalTime: 2250000, best: 10000, mean: 15000 },
       { event: '2x2', count: 300, totalTime: 1260000, best: 1950, mean: 4200 },
       { event: 'pyraminx', count: 3, totalTime: 30000, best: 8000, mean: 10000 },
     ]
-    renderPage()
+    renderPage('/stats?event=all')
     const breakdown = await screen.findByRole('region', { name: 'Events' })
 
     const rows = within(breakdown).getAllByRole('row').slice(1)
@@ -308,7 +354,6 @@ describe('StatsPage', () => {
       '15.00',
     ])
     expect(within(rows[2]).getByText('<1%')).toBeInTheDocument()
-    expect(within(rows[0]).getByRole('link', { name: '3x3' })).toHaveAttribute('aria-current', 'page')
 
     await user.click(within(rows[1]).getByRole('link', { name: '2x2' }))
     expect(within(screen.getByRole('navigation', { name: 'Event' })).getByRole('link', { name: '2x2' })).toHaveAttribute(
@@ -325,7 +370,7 @@ describe('StatsPage', () => {
       [dayKey(today), 40],
       [dayKey(yesterday), 2],
     ])
-    renderPage()
+    renderPage('/stats?event=all')
     const activity = await screen.findByRole('region', { name: 'Activity' })
 
     expect(within(activity).getByText('42 solves on 2 days in the last year')).toBeInTheDocument()

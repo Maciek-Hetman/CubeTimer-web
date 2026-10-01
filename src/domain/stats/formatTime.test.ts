@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAverage, formatDuration, formatSolveTime } from './formatTime'
+import { formatAverage, formatDuration, formatSolveTime, formatTimeSpent } from './formatTime'
 
 describe('formatDuration', () => {
   it('formats sub-minute times', () => {
@@ -21,5 +21,18 @@ describe('formatSolveTime', () => {
 describe('formatAverage', () => {
   it('uses DNF for null averages', () => {
     expect(formatAverage(null)).toBe('DNF')
+  })
+})
+
+describe('formatTimeSpent', () => {
+  it('drops seconds once it reaches an hour', () => {
+    expect(formatTimeSpent(178_151_000)).toBe('49h 29m')
+    expect(formatTimeSpent(7_200_000)).toBe('2h')
+  })
+
+  it('keeps seconds under an hour', () => {
+    expect(formatTimeSpent(3_599_000)).toBe('59m 59s')
+    expect(formatTimeSpent(45_000)).toBe('45s')
+    expect(formatTimeSpent(0)).toBe('0s')
   })
 })

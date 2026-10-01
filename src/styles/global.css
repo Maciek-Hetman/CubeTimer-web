@@ -1786,7 +1786,8 @@ input[type='range']::-moz-range-thumb {
   color: var(--danger);
 }
 
-/* Stats page: bests and current averages first, the session beside the graph, all-time totals, then every event. */
+/* Stats page. Event tabs: bests and current averages first, the session beside the graph, all-time totals last.
+   The All tab has what events share: an overview, the activity calendar and the per-event breakdown. */
 .stats-layout {
   display: grid;
   gap: var(--space-4);
@@ -1858,6 +1859,21 @@ input[type='range']::-moz-range-thumb {
 .stats-events a.empty {
   color: var(--text-muted);
   font-weight: 500;
+}
+
+/* All isn't an event, so a hairline sets it apart from them. */
+.stats-events a.all {
+  position: relative;
+  margin-right: 0.3125rem;
+}
+
+.stats-events a.all::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  right: -0.25rem;
+  bottom: 25%;
+  border-right: 1px solid var(--border);
 }
 
 .stats-events a:hover {
@@ -2133,33 +2149,27 @@ input[type='range']::-moz-range-thumb {
   }
 }
 
-/* Everything below the event-scoped stats covers every event. */
-.stats-group {
-  display: flex;
-  flex-direction: column;
+/* The All tab: what every event shares. The zero minimum lets the calendar and the
+   breakdown scroll inside their panels instead of widening the page on a phone. */
+.stats-all {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
-  margin-top: var(--space-4);
 }
 
-.stats-group-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.stats-overview {
+  container-type: inline-size;
 }
 
-.stats-group-title::after {
-  content: '';
-  flex: 1;
-  border-top: 1px solid var(--border);
+.stats-overview .stats-headline {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.stats-group h3 {
-  margin: 0;
-  font-size: var(--text-lg);
+@container (max-width: 36rem) {
+  .stats-overview .stats-headline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Activity: a year of days, a week per column, Monday on top. */
@@ -2312,8 +2322,7 @@ input[type='range']::-moz-range-thumb {
   text-decoration: none;
 }
 
-.stats-breakdown-table tbody th a:hover,
-.stats-breakdown-table tbody th a[aria-current='page'] {
+.stats-breakdown-table tbody th a:hover {
   color: var(--accent);
 }
 

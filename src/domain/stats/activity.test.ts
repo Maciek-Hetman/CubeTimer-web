@@ -103,6 +103,27 @@ describe('buildActivityCalendar', () => {
     expect([...levels].sort()).toEqual([1, 2, 3, 4])
   })
 
+  it('counts the current streak up to today, or yesterday while today is still empty', () => {
+    const days = (...keys: string[]) => new Map(keys.map((key) => [key, 5]))
+    // A five-day run in June, then the last three days before today.
+    const june = ['2026-06-10', '2026-06-11', '2026-06-12', '2026-06-13', '2026-06-14']
+    const recent = ['2026-09-27', '2026-09-28', '2026-09-29']
+
+    const notYetToday = buildActivityCalendar(days(...june, ...recent), TODAY)
+    expect(notYetToday.currentStreak).toBe(3)
+    expect(notYetToday.longestStreak).toBe(5)
+
+    const today = buildActivityCalendar(days(...june, ...recent, '2026-09-30'), TODAY)
+    expect(today.currentStreak).toBe(4)
+
+    const broken = buildActivityCalendar(days(...june, '2026-09-27', '2026-09-28'), TODAY)
+    expect(broken.currentStreak).toBe(0)
+    expect(broken.longestStreak).toBe(5)
+
+    const none = buildActivityCalendar(new Map(), TODAY)
+    expect([none.currentStreak, none.longestStreak]).toEqual([0, 0])
+  })
+
   describe('across daylight saving changes', () => {
     afterEach(() => {
       vi.unstubAllEnvs()

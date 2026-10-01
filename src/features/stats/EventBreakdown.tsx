@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import type { EventSummary } from '../../data/repositories/solveStats'
-import { eventLabel, type CubeEvent } from '../../domain/models'
+import { eventLabel } from '../../domain/models'
 import { formatAverage, formatTotalTime } from '../../domain/stats/formatTime'
 import { Panel } from '../../ui/Panel'
 
@@ -10,15 +10,15 @@ function formatShare(count: number, total: number): string {
   return percent > 0 && percent < 1 ? '<1%' : `${Math.round(percent)}%`
 }
 
-/** Solves, time and bests per event. Each event links to its stats. */
-export function EventBreakdown({ events, selected }: { events: EventSummary[]; selected: CubeEvent }) {
+/** Solves, time and bests per event. Each event links to its own tab. */
+export function EventBreakdown({ events }: { events: EventSummary[] }) {
   const headingId = useId()
   const total = events.reduce((sum, entry) => sum + entry.count, 0)
   const busiest = Math.max(1, ...events.map((entry) => entry.count))
 
   return (
     <Panel role="region" aria-labelledby={headingId} className="stats-breakdown stack">
-      <h3 id={headingId}>Events</h3>
+      <h2 id={headingId}>Events</h2>
       <div className="stats-breakdown-scroll">
         <table className="stats-breakdown-table">
           <thead>
@@ -40,36 +40,32 @@ export function EventBreakdown({ events, selected }: { events: EventSummary[]; s
             </tr>
           </thead>
           <tbody>
-            {events.map((entry) => {
-              const current = entry.event === selected
-              return (
-                <tr key={entry.event} className={current ? 'current' : undefined}>
-                  <th scope="row">
-                    <Link
-                      to={`?event=${entry.event}`}
-                      replace
-                      aria-current={current ? 'page' : undefined}
-                      // The event's stats are at the top of the page.
-                      onClick={() => window.scrollTo(0, 0)}
-                    >
-                      {eventLabel(entry.event)}
-                    </Link>
-                  </th>
-                  <td>
-                    <span className="stats-breakdown-count">
-                      <span className="stats-breakdown-bar" aria-hidden="true">
-                        <span style={{ width: `${(entry.count / busiest) * 100}%` }} />
-                      </span>
-                      {entry.count.toLocaleString()}
+            {events.map((entry) => (
+              <tr key={entry.event}>
+                <th scope="row">
+                  <Link
+                    to={`?event=${entry.event}`}
+                    replace
+                    // The breakdown sits low on the page; the event's tab starts at the top.
+                    onClick={() => window.scrollTo(0, 0)}
+                  >
+                    {eventLabel(entry.event)}
+                  </Link>
+                </th>
+                <td>
+                  <span className="stats-breakdown-count">
+                    <span className="stats-breakdown-bar" aria-hidden="true">
+                      <span style={{ width: `${(entry.count / busiest) * 100}%` }} />
                     </span>
-                  </td>
-                  <td className="num">{formatShare(entry.count, total)}</td>
-                  <td className="num">{formatTotalTime(entry.totalTime)}</td>
-                  <td className="num">{formatAverage(entry.best)}</td>
-                  <td className="num">{formatAverage(entry.mean)}</td>
-                </tr>
-              )
-            })}
+                    {entry.count.toLocaleString()}
+                  </span>
+                </td>
+                <td className="num">{formatShare(entry.count, total)}</td>
+                <td className="num">{formatTotalTime(entry.totalTime)}</td>
+                <td className="num">{formatAverage(entry.best)}</td>
+                <td className="num">{formatAverage(entry.mean)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

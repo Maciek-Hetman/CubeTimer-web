@@ -34,6 +34,9 @@ export interface ActivityCalendar {
   months: Array<{ label: string; week: number }>
   total: number
   activeDays: number
+  /** Consecutive days with solves up to today, or up to yesterday while today has none yet. */
+  currentStreak: number
+  longestStreak: number
 }
 
 /**
@@ -73,6 +76,21 @@ export function buildActivityCalendar(counts: ReadonlyMap<string, number>, today
     if (key === todayKey) break
   }
 
+  let longestStreak = 0
+  let run = 0
+  for (const day of days) {
+    run = day.count > 0 ? run + 1 : 0
+    longestStreak = Math.max(longestStreak, run)
+  }
+  // Today without solves yet doesn't end the streak; it only ends once a whole day goes by.
+  let last = days.length - 1
+  if (last >= 0 && days[last].count === 0) last -= 1
+  let currentStreak = 0
+  while (last >= 0 && days[last].count > 0) {
+    currentStreak += 1
+    last -= 1
+  }
+
   const busy = busyDay(days.map((day) => day.count))
   const weeks: ActivityDay[][] = []
   for (let i = 0; i < days.length; i += 7) {
@@ -83,5 +101,7 @@ export function buildActivityCalendar(counts: ReadonlyMap<string, number>, today
     months: months.filter((month) => month.week + MONTH_LABEL_WEEKS <= weeks.length),
     total,
     activeDays,
+    currentStreak,
+    longestStreak,
   }
 }

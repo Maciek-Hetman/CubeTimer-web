@@ -1,26 +1,22 @@
-import { useId, useMemo } from 'react'
-import { buildActivityCalendar, type ActivityLevel } from '../../domain/stats/activity'
+import { useId } from 'react'
+import type { ActivityCalendar as Calendar, ActivityLevel } from '../../domain/stats/activity'
 import { Panel } from '../../ui/Panel'
+import { plural } from './plural'
 
 /** Monday first. Unlabelled rows still get a cell, so the pinned column covers every row. */
 const WEEKDAYS = ['Mon', '', 'Wed', '', 'Fri', '', '']
 const LEVELS: ActivityLevel[] = [0, 1, 2, 3, 4]
 const DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 
-function plural(count: number, word: string): string {
-  return `${count.toLocaleString()} ${count === 1 ? word : `${word}s`}`
-}
-
-export function ActivityCalendar({ counts, today }: { counts: ReadonlyMap<string, number>; today: Date }) {
+export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
   const headingId = useId()
-  const calendar = useMemo(() => buildActivityCalendar(counts, today), [counts, today])
   const summary = `${plural(calendar.total, 'solve')} on ${plural(calendar.activeDays, 'day')} in the last year`
 
   // Grid row 1 holds the months and column 1 the weekdays, so days start at row 2, column 2.
   return (
     <Panel role="region" aria-labelledby={headingId} className="stats-activity stack">
       <div className="stats-panel-header">
-        <h3 id={headingId}>Activity</h3>
+        <h2 id={headingId}>Activity</h2>
         <p className="muted">{summary}</p>
       </div>
       {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything. */}
