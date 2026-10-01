@@ -261,7 +261,12 @@ export async function summarizeEvents(ownerId: string): Promise<EventSummary[]> 
   })).sort((a, b) => b.count - a.count)
 }
 
-/** Non-deleted solves per local day (YYYY-MM-DD), across every event, from `since` on. */
+/**
+ * Non-deleted solves per local day (YYYY-MM-DD), across every event, from `since` on.
+ * There's no [ownerId+solvedAt] index, so this walks the solvedAt range and drops other
+ * owners' solves as it goes. A device holds one or two owners (a guest and an account),
+ * so that costs little next to a schema version for a new index.
+ */
 export async function countSolvesByDay(ownerId: string, since: Date): Promise<Map<string, number>> {
   const counts = new Map<string, number>()
   await db.solves

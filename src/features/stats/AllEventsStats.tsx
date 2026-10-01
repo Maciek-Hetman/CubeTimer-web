@@ -17,10 +17,11 @@ import { EventBreakdown } from './EventBreakdown'
 import { HeadlineStats } from './HeadlineStats'
 import { plural } from './plural'
 
-/** The All tab: what every event shares. `events` is undefined while it loads. */
-export function AllEventsStats({ events }: { events: EventSummary[] | undefined }) {
-  const { ownerId } = useApp()
-  // Keyed by day; a timer to the next midnight (and tab refocus) rolls it over.
+/**
+ * Today's dayKey, kept current: a timer rolls it over a moment after midnight, and returning
+ * to the tab catches up when the machine slept through it and the timer never fired.
+ */
+function useTodayKey(): string {
   const [todayKey, setTodayKey] = useState(() => dayKey(new Date()))
   useEffect(() => {
     const now = new Date()
@@ -35,6 +36,13 @@ export function AllEventsStats({ events }: { events: EventSummary[] | undefined 
       document.removeEventListener('visibilitychange', refresh)
     }
   }, [todayKey])
+  return todayKey
+}
+
+/** The All tab: what every event shares. `events` is undefined while it loads. */
+export function AllEventsStats({ events }: { events: EventSummary[] | undefined }) {
+  const { ownerId } = useApp()
+  const todayKey = useTodayKey()
   const activity = useLiveQuery(async () => {
     const today = new Date()
     return { today, counts: await countSolvesByDay(ownerId, activityStart(today)) }

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -148,6 +148,7 @@ describe('StatsPage', () => {
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('renders graph scale options and highlights active scale', async () => {
@@ -242,15 +243,16 @@ describe('StatsPage', () => {
   it("opens on the timer's event and switches events without changing it", async () => {
     const user = userEvent.setup()
     mocks.eventStats = { ...mocks.eventStats, '2x2': { ...EMPTY_SOLVE_STATS, count: 30, best: 1950, mean: 4200 } }
+    mocks.summaries = [...mocks.summaries, { event: '2x2', count: 30, totalTime: 126000, best: 1950, mean: 4200 }]
     renderPage()
 
     const switcher = screen.getByRole('navigation', { name: 'Event' })
     expect(within(switcher).getByRole('link', { name: '3x3' })).toHaveAttribute('aria-current', 'page')
     expect(statValues(await screen.findByRole('region', { name: 'Personal bests' }), 'Single')).toEqual(['10.00'])
 
-    await user.click(within(switcher).getByRole('link', { name: /^2x2/ }))
+    await user.click(within(switcher).getByRole('link', { name: '2x2' }))
 
-    expect(within(switcher).getByRole('link', { name: /^2x2/ })).toHaveAttribute('aria-current', 'page')
+    expect(within(switcher).getByRole('link', { name: '2x2' })).toHaveAttribute('aria-current', 'page')
     expect(within(switcher).getByRole('link', { name: '3x3' })).not.toHaveAttribute('aria-current')
     expect(await screen.findByText('1.95')).toBeInTheDocument()
     expect(mocks.setEvent).not.toHaveBeenCalled()
@@ -259,12 +261,13 @@ describe('StatsPage', () => {
 
   it('reads the event from the URL', async () => {
     mocks.eventStats = { ...mocks.eventStats, megaminx: { ...THREE_BY_THREE, best: 45120 } }
+    mocks.summaries = [...mocks.summaries, { event: 'megaminx', count: 1200, totalTime: 9000000, best: 45120, mean: 60000 }]
     renderPage('/stats?event=megaminx')
 
     const bests = await screen.findByRole('region', { name: 'Personal bests' })
     expect(statValues(bests, 'Single')).toEqual(['45.12'])
     const switcher = screen.getByRole('navigation', { name: 'Event' })
-    expect(within(switcher).getByRole('link', { name: /^Megaminx/ })).toHaveAttribute('aria-current', 'page')
+    expect(within(switcher).getByRole('link', { name: 'Megaminx' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('shows an event without solves as empty', async () => {
@@ -273,7 +276,8 @@ describe('StatsPage', () => {
     expect(await screen.findByText('No solves yet')).toBeInTheDocument()
     expect(screen.getByText('Solves you time for 4x4 show up here.')).toBeInTheDocument()
     const switcher = screen.getByRole('navigation', { name: 'Event' })
-    expect(within(switcher).getByRole('link', { name: /^4x4/ })).toHaveClass('empty')
+    // Dimmed, and said out loud for screen readers.
+    expect(await within(switcher).findByRole('link', { name: '4x4, no solves yet' })).toHaveClass('empty')
     expect(within(switcher).getByRole('link', { name: '3x3' })).not.toHaveClass('empty')
   })
 
@@ -290,15 +294,16 @@ describe('StatsPage', () => {
     }
 
     const switcher = screen.getByRole('navigation', { name: 'Event' })
+    await within(switcher).findByRole('link', { name: '4x4, no solves yet' })
     const tabs = within(switcher).getAllByRole('link')
-    expect(tabs.map((tab) => tab.textContent?.replace(' (no solves yet)', ''))).toEqual([
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
       'All',
       '2x2',
       '3x3',
-      '4x4',
-      '5x5',
-      'Megaminx',
-      'Pyraminx',
+      '4x4, no solves yet',
+      '5x5, no solves yet',
+      'Megaminx, no solves yet',
+      'Pyraminx, no solves yet',
     ])
     await user.click(tabs[0])
 
@@ -326,6 +331,29 @@ describe('StatsPage', () => {
 
     expect(statValues(overview, 'Days practiced')).toEqual(['3', 'in the last year'])
     expect(statValues(overview, 'Current streak')).toEqual(['2 days', 'Longest 2 days'])
+  })
+
+  it('rolls the All tab over to a new day at midnight, and on return to a tab that slept through it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    // Wednesday 30 September 2026, half a minute to midnight.
+    vi.setSystemTime(new Date(2026, 8, 30, 23, 59, 30))
+    const { container } = renderPage('/stats?event=all')
+    await screen.findByRole('region', { name: 'Activity' })
+    const days = () => Array.from(container.querySelectorAll('.stats-activity-day[title]'), (day) => day.getAttribute('title'))
+    // en-GB writes September as "Sept" in current ICU and "Sep" in older builds.
+    expect(days().at(-1)).toMatch(/30 Sept? 2026/)
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000)
+    })
+    await waitFor(() => expect(days().at(-1)).toContain('1 Oct 2026'))
+
+    // A machine asleep past midnight fires no timer; coming back to the tab catches up.
+    vi.setSystemTime(new Date(2026, 9, 2, 8, 0))
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => expect(days().at(-1)).toContain('2 Oct 2026'))
   })
 
   it('shows only the empty state when there are no solves at all', async () => {

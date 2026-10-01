@@ -48,7 +48,8 @@ function EventSwitcher({ selected, withSolves }: { selected: StatsTab; withSolve
             title={empty ? 'No solves yet' : undefined}
           >
             {eventLabel(event)}
-            {empty && <span className="sr-only"> (no solves yet)</span>}
+            {/* The dimming is visual only, so say it too. The comma survives name trimming; a space wouldn't. */}
+            {empty ? <span className="sr-only">, no solves yet</span> : null}
           </Link>
         )
       })}
