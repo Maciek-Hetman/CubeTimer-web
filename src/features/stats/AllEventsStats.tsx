@@ -10,6 +10,7 @@ import {
   type ActivityCalendar as Calendar,
 } from '../../domain/stats/activity'
 import { formatTimeSpent } from '../../domain/stats/formatTime'
+import { Alert } from '../../ui/Alert'
 import { EmptyState } from '../../ui/EmptyState'
 import { Panel } from '../../ui/Panel'
 import { ActivityCalendar } from './ActivityCalendar'
@@ -46,14 +47,18 @@ export function AllEventsStats({ events }: { events: EventSummary[] | undefined 
   const todayKey = useTodayKey()
   const activity = useLiveQuery(async () => {
     const today = new Date()
-    return { today, counts: await countSolvesByDay(ownerId, activityStart(today)) }
+    try {
+      return { today, counts: await countSolvesByDay(ownerId, activityStart(today)), failed: false }
+    } catch {
+      return { today, counts: new Map<string, number>(), failed: true }
+    }
   }, [ownerId, todayKey])
   const calendar = useMemo(
-    () => (activity ? buildActivityCalendar(activity.counts, activity.today) : undefined),
+    () => (activity && !activity.failed ? buildActivityCalendar(activity.counts, activity.today) : undefined),
     [activity],
   )
 
-  if (!events || !calendar) {
+  if (!events || !activity) {
     return <StatsLoading />
   }
   if (events.length === 0) {
@@ -67,6 +72,14 @@ export function AllEventsStats({ events }: { events: EventSummary[] | undefined 
           </Link>
         }
       />
+    )
+  }
+  if (!calendar) {
+    return (
+      <div className="stats-all">
+        <Alert tone="error">Couldn't load your activity calendar. Check your browser storage and try again.</Alert>
+        <EventBreakdown events={events} />
+      </div>
     )
   }
   return (
