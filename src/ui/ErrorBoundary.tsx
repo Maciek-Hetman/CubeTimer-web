@@ -38,13 +38,13 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
   }
 }
 
-// Layout route for page content: keyed by top-level section so navigating to another section clears a caught error
-// (nested routes like /admin/* keep their layout mounted), and it forwards the shell's outlet context to the pages below it.
+// Layout route for page content: keyed by full pathname so any navigation clears a caught error
+// (a failure in one /admin/* tab must not block the others), and it forwards the shell's outlet context to the pages below it.
 export function PageErrorBoundary() {
   const { pathname } = useLocation()
   const context = useOutletContext()
   return (
-    <ErrorBoundary key={pathname.split('/')[1]}>
+    <ErrorBoundary key={pathname}>
       <Outlet context={context} />
     </ErrorBoundary>
   )
