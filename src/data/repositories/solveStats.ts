@@ -264,23 +264,31 @@ export async function summarizeEvents(ownerId: string): Promise<EventSummary[]> 
 /** Non-deleted solves per local day (YYYY-MM-DD), across every event, from `since` on. */
 export async function countSolvesByDay(ownerId: string, since: Date): Promise<Map<string, number>> {
   const counts = new Map<string, number>()
-  const fromMs = since.getTime()
-  // Synced solvedAt strings are stored as received and may not be UTC ISO, so a string range on the
-  // index could misplace them. Scan the owner's solves and compare parsed dates instead.
+  const from = since.toISOString()
+  // Synced solves can carry events this client doesn't list, so the owner's events come from the index.
+  const events: string[] = []
   await db.solves
-    .where('ownerId')
-    .equals(ownerId)
-    .each((solve) => {
-      if (solve.deletedAt) {
-        return
-      }
-      const solvedAt = new Date(solve.solvedAt)
-      if (!(solvedAt.getTime() >= fromMs)) {
-        return
-      }
-      const key = dayKey(solvedAt)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
+    .where('[ownerId+event]')
+    .between([ownerId, Dexie.minKey], [ownerId, Dexie.maxKey])
+    .eachUniqueKey((key) => {
+      events.push((key as [string, string])[1])
     })
+  // A range per event on [ownerId+event+solvedAt] then reads only this owner's solves since `since`.
+  // solvedAt is UTC ISO, so its strings sort by time: the order loadSolvesOldestFirst relies on too.
+  await Promise.all(
+    events.map((event) =>
+      db.solves
+        .where('[ownerId+event+solvedAt]')
+        .between([ownerId, event, from], [ownerId, event, Dexie.maxKey])
+        .each((solve) => {
+          if (solve.deletedAt) {
+            return
+          }
+          const key = dayKey(new Date(solve.solvedAt))
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }),
+    ),
+  )
   return counts
 }
 
