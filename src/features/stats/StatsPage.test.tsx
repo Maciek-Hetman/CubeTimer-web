@@ -460,7 +460,7 @@ describe('StatsPage', () => {
     const activity = await screen.findByRole('region', { name: 'Activity' })
 
     expect(within(activity).getByText('42 solves on 2 days in the last year')).toBeInTheDocument()
-    expect(within(activity).getByRole('img', { name: 'Solves per day: 42 solves on 2 days in the last year' })).toBeInTheDocument()
+    expect(within(activity).getByRole('group', { name: 'Solves per day: 42 solves on 2 days in the last year' })).toBeInTheDocument()
   })
 
   it('compares the current session with the one before it, not the one after', async () => {

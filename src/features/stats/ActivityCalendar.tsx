@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useRef, useState, type KeyboardEvent } from 'react'
 import type { ActivityCalendar as Calendar, ActivityLevel } from '../../domain/stats/activity'
 import { Panel } from '../../ui/Panel'
 import { plural } from './plural'
@@ -10,6 +10,10 @@ const DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric',
 
 export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
   const headingId = useId()
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [selectedKey, setSelectedKey] = useState<string>()
+  const describe = (day: Calendar['weeks'][number][number]) =>
+    `${day.count === 0 ? 'No solves' : plural(day.count, 'solve')} on ${DAY.format(day.date)}`
   const summary = `${plural(calendar.total, 'solve')} on ${plural(calendar.activeDays, 'day')} in the last year`
 
   const busiestDays = calendar.weeks
@@ -17,6 +21,20 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
     .filter((day) => day.count > 0)
     .sort((a, b) => b.count - a.count || b.date.getTime() - a.date.getTime())
     .slice(0, 5)
+
+  const days = calendar.weeks.flat()
+  const selected = days.find((day) => day.key === selectedKey)
+  const tabKey = selected?.key ?? days[days.length - 1]?.key
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[event.key]
+    if (step === undefined) return
+    const current = days.findIndex((day) => day.key === tabKey)
+    const next = days[Math.min(days.length - 1, Math.max(0, current + step))]
+    if (!next) return
+    event.preventDefault()
+    gridRef.current?.querySelector<HTMLElement>(`[data-key="${next.key}"]`)?.focus()
+  }
 
   // Grid row 1 holds the months and column 1 the weekdays, so days start at row 2, column 2.
   return (
@@ -26,10 +44,16 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
         <p className="muted">{summary}</p>
       </div>
       {/* Scrolls on narrow screens; rtl makes it start at the latest weeks without measuring anything.
-          A day's own count is a hover detail (its title). Assistive tech gets the summary label and
-          the most active days listed below; 371 focusable cells would bury keyboard users instead. */}
+          Days are buttons in one roving-tabindex group (a single tab stop, arrow keys move). Tapping,
+          clicking or focusing a day shows its count in the readout below. */}
       <div className="stats-activity-scroll">
-        <div className="stats-activity-grid" role="img" aria-label={`Solves per day: ${summary}`}>
+        <div
+          ref={gridRef}
+          className="stats-activity-grid"
+          role="group"
+          aria-label={`Solves per day: ${summary}`}
+          onKeyDown={onKeyDown}
+        >
           {calendar.months.map((month) => (
             <span key={`${month.week}-${month.label}`} className="stats-activity-month" style={{ gridColumn: month.week + 2 }}>
               {month.label}
@@ -42,17 +66,27 @@ export function ActivityCalendar({ calendar }: { calendar: Calendar }) {
           ))}
           {calendar.weeks.map((week, weekIndex) =>
             week.map((day, dayIndex) => (
-              <span
+              <button
+                type="button"
                 key={day.key}
+                data-key={day.key}
                 className="stats-activity-day"
                 data-level={day.level}
+                data-selected={day.key === selectedKey || undefined}
+                tabIndex={day.key === tabKey ? 0 : -1}
                 style={{ gridColumn: weekIndex + 2, gridRow: dayIndex + 2 }}
-                title={`${day.count === 0 ? 'No solves' : plural(day.count, 'solve')} on ${DAY.format(day.date)}`}
+                aria-label={describe(day)}
+                title={describe(day)}
+                onClick={() => setSelectedKey(day.key)}
+                onFocus={() => setSelectedKey(day.key)}
               />
             )),
           )}
         </div>
       </div>
+      <p className="muted stats-activity-readout" aria-live="polite">
+        {selected ? describe(selected) : 'Tap a day to see its solves.'}
+      </p>
       {busiestDays.length > 0 && (
         <div className="sr-only">
           <p>Most active days</p>
