@@ -56,9 +56,13 @@ const SYSTEM_KEYS = new Set([
   'Tab',
 ])
 
+// Multimedia keys (play/pause, volume, track skip, browser/launch buttons) belong to the OS, not the timer.
+const MULTIMEDIA_KEY = /^(Media|Audio|Volume|Browser|Launch)/
+
 function isSystemKey(event: KeyboardEvent): boolean {
   return (
     SYSTEM_KEYS.has(event.key) ||
+    MULTIMEDIA_KEY.test(event.key) ||
     /^F\d{1,2}$/.test(event.key) ||
     event.altKey ||
     event.ctrlKey ||

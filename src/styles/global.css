@@ -800,6 +800,10 @@ input[type='range']::-moz-range-thumb {
     background-color var(--duration) var(--ease);
 }
 
+.timer-display:focus-visible {
+  outline: none;
+}
+
 .timer-idle {
   color: var(--accent);
 }
