@@ -468,12 +468,18 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       return
     }
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') {
+        // Tabbing to the timer is keyboard navigation: bring its focus ring back.
+        document.body.classList.remove('timer-keys')
+      }
       if (isFormTarget(event.target) || isSystemKey(event)) {
         return
       }
       if (controls === 'space' && event.code !== 'Space') {
         return
       }
+      // Browsers treat keys pressed on a focused button as keyboard focus and draw a ring around the timer.
+      document.body.classList.add('timer-keys')
       event.preventDefault()
       if (event.repeat) {
         return
@@ -502,6 +508,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      document.body.classList.remove('timer-keys')
     }
   }, [engine, controls, useExternalTimer])
 

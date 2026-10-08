@@ -13,7 +13,7 @@ export const RELEASES: Release[] = [
     date: '2026-10-08',
     changes: [
       'The timer no longer reacts to multimedia keys (play/pause, volume, track skip).',
-      'Removed the border that sometimes appeared around the timer.',
+      'The border that appeared around the timer after using the keyboard is gone. It only shows when you Tab to the timer.',
     ],
   },
   {

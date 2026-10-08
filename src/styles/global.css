@@ -805,6 +805,11 @@ input[type='range']::-moz-range-thumb {
   outline-offset: -4px;
 }
 
+/* Timing with the keyboard is not focus navigation; the ring returns on the next Tab. */
+body.timer-keys .timer-display:focus-visible {
+  outline: none;
+}
+
 .timer-idle {
   color: var(--accent);
 }
