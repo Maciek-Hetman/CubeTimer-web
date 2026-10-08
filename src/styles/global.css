@@ -801,7 +801,8 @@ input[type='range']::-moz-range-thumb {
 }
 
 .timer-display:focus-visible {
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
 }
 
 .timer-idle {
