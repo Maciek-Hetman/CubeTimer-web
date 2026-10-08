@@ -213,6 +213,30 @@ describe('TimerPage', () => {
     expect(screen.getByRole('button', { name: 'Timer' })).toHaveClass('timer-idle')
   })
 
+  it('ignores multimedia keys', async () => {
+    renderTimer('desktop')
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Hold any key to start/i))
+
+    for (const key of ['MediaPlayPause', 'MediaTrackNext', 'AudioVolumeUp', 'AudioVolumeMute', 'LaunchMail']) {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: key, key })
+      window.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(false)
+    }
+    expect(screen.getByRole('button', { name: 'Timer' })).toHaveClass('timer-idle')
+  })
+
+  it('hides the timer focus ring while timing with keys until the next Tab', async () => {
+    renderTimer('desktop')
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Hold any key to start/i))
+
+    fireEvent.keyDown(window, { code: 'KeyJ', key: 'j' })
+    expect(document.body).toHaveClass('timer-keys')
+    fireEvent.keyUp(window, { code: 'KeyJ', key: 'j' })
+
+    fireEvent.keyDown(window, { code: 'Tab', key: 'Tab' })
+    expect(document.body).not.toHaveClass('timer-keys')
+  })
+
   it('regenerates scramble from the compact action', async () => {
     const user = userEvent.setup()
     renderTimer()
