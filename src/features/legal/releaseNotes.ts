@@ -9,6 +9,14 @@ export interface Release {
 /** Newest first. Add an entry here before pushing a new version tag. */
 export const RELEASES: Release[] = [
   {
+    version: 'v0.5.1',
+    date: '2026-10-08',
+    changes: [
+      'The timer no longer reacts to multimedia keys (play/pause, volume, track skip).',
+      'Removed the border that sometimes appeared around the timer.',
+    ],
+  },
+  {
     version: 'v0.5.0',
     date: '2026-10-01',
     changes: [
