@@ -12,14 +12,19 @@ import type { SmartTimerListener } from './bluetooth/types'
 import { TimerPage } from './TimerPage'
 import type { WiredTimerOptions } from './wired/wiredTimer'
 
-const bluetoothMock = vi.hoisted(() => ({ emit: null as SmartTimerListener | null }))
+const bluetoothMock = vi.hoisted(() => ({
+  emit: null as SmartTimerListener | null,
+  disconnect: null as ReturnType<typeof vi.fn> | null,
+}))
 const wiredMock = vi.hoisted(() => ({ options: null as WiredTimerOptions | null }))
 
 vi.mock('./bluetooth/bluetoothTimer', () => ({
   isWebBluetoothSupported: () => true,
   connectBluetoothTimer: vi.fn(async (onEvent: SmartTimerListener) => {
     bluetoothMock.emit = onEvent
-    return { deviceName: 'QY-Adapter-1A2B', disconnect: vi.fn(async () => undefined) }
+    const disconnect = vi.fn(async () => undefined)
+    bluetoothMock.disconnect = disconnect
+    return { deviceName: 'QY-Adapter-1A2B', disconnect }
   }),
 }))
 
@@ -106,6 +111,27 @@ describe('TimerPage', () => {
       expect(solves).toHaveLength(1)
       expect(solves[0]).toMatchObject({ durationMs: 12_345, timingDevice: 'external_timer' })
     })
+  })
+
+  it('closes the Bluetooth link when the timer reports a disconnect', async () => {
+    const ownerId = await ensureGuestOwner()
+    const user = userEvent.setup()
+    renderTimer()
+
+    await screen.findByRole('button', { name: 'Timer' })
+    await user.selectOptions(screen.getByLabelText('Timing device'), 'bluetooth')
+    await waitFor(async () => {
+      expect((await db.settings.get(ownerId))).toMatchObject({ timingDevice: 'external_timer', externalTimer: 'bluetooth' })
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
+    expect(await screen.findByText('QY-Adapter-1A2B')).toBeInTheDocument()
+
+    // The timer's protocol reports a disconnect while the GATT link is still open.
+    act(() => bluetoothMock.emit!({ state: 'disconnected' }))
+
+    expect(bluetoothMock.disconnect!).toHaveBeenCalledTimes(1)
+    expect(await screen.findByRole('button', { name: 'Connect timer' })).toBeInTheDocument()
   })
 
   it('records solves from a wired timer', async () => {

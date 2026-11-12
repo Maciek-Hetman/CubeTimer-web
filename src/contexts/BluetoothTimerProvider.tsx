@@ -46,8 +46,12 @@ export function BluetoothTimerProvider({ children }: { children: ReactNode }) {
 
   const emit = useCallback((event: SmartTimerEvent) => {
     if (event.state === 'disconnected') {
+      // The timer's protocol can report a disconnect while the GATT link is still open,
+      // so close the connection here too; disconnect() is a no-op if the browser already closed it.
+      const connection = connectionRef.current
       connectionRef.current = null
       setStatus('disconnected')
+      void connection?.disconnect()
     }
     listenersRef.current.forEach((listener) => listener(event))
   }, [])
