@@ -188,9 +188,10 @@ export async function countSolvesBySession(
   const collection = event
     ? db.solves.where('[ownerId+event]').equals([ownerId, event])
     : db.solves.where('ownerId').equals(ownerId)
-  await collection.each((solve) => {
+  // One getAll, not `.each()`: a cursor step per solve takes about twice as long.
+  for (const solve of await collection.toArray()) {
     if (solve.deletedAt) {
-      return
+      continue
     }
     totals.set(solve.event, (totals.get(solve.event) ?? 0) + 1)
     if (solve.sessionId) {
@@ -198,7 +199,7 @@ export async function countSolvesBySession(
     } else {
       accumulate(orphans, solve.event, solve)
     }
-  })
+  }
 
   return { sessions: summarize(sessions), orphans: summarize(orphans), totals }
 }

@@ -110,6 +110,9 @@ export interface ChartPoint {
  * Loads non-deleted solves oldest-first straight from the solvedAt compound index, so no
  * JS sort is needed. Ties on solvedAt come back in id order, the same order a stable
  * sort by solvedAt over the [ownerId+event] / [ownerId+sessionId] index gives.
+ *
+ * Tombstones are dropped after the read on purpose: a Dexie `.filter()` turns the query into a
+ * cursor walk, about twice as slow as the single getAll a plain key range gets.
  */
 async function loadSolvesOldestFirst(
   ownerId: string,
@@ -123,7 +126,7 @@ async function loadSolvesOldestFirst(
     : db.solves
         .where('[ownerId+event+solvedAt]')
         .between([ownerId, event, Dexie.minKey], [ownerId, event, Dexie.maxKey])
-  return collection.filter((solve) => !solve.deletedAt).toArray()
+  return (await collection.toArray()).filter((solve) => !solve.deletedAt)
 }
 
 /**
@@ -232,29 +235,27 @@ export interface EventSummary {
 /** Totals for every event with solves, busiest first. One pass, no rolling averages. */
 export async function summarizeEvents(ownerId: string): Promise<EventSummary[]> {
   const totals = new Map<CubeEvent, EventSummary & { counted: number; sum: number }>()
-  await db.solves
-    .where('ownerId')
-    .equals(ownerId)
-    .each((solve) => {
-      if (solve.deletedAt) {
-        return
+  // One getAll, not `.each()`: a cursor step per solve takes about twice as long.
+  for (const solve of await db.solves.where('ownerId').equals(ownerId).toArray()) {
+    if (solve.deletedAt) {
+      continue
+    }
+    let entry = totals.get(solve.event)
+    if (!entry) {
+      entry = { event: solve.event, count: 0, totalTime: 0, best: null, mean: null, counted: 0, sum: 0 }
+      totals.set(solve.event, entry)
+    }
+    entry.count += 1
+    entry.totalTime += solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
+    const effective = effectiveTimeMs(solve)
+    if (effective !== null) {
+      entry.counted += 1
+      entry.sum += effective
+      if (entry.best === null || effective < entry.best) {
+        entry.best = effective
       }
-      let entry = totals.get(solve.event)
-      if (!entry) {
-        entry = { event: solve.event, count: 0, totalTime: 0, best: null, mean: null, counted: 0, sum: 0 }
-        totals.set(solve.event, entry)
-      }
-      entry.count += 1
-      entry.totalTime += solve.durationMs + (solve.penalty === 'plus_two' ? 2000 : 0)
-      const effective = effectiveTimeMs(solve)
-      if (effective !== null) {
-        entry.counted += 1
-        entry.sum += effective
-        if (entry.best === null || effective < entry.best) {
-          entry.best = effective
-        }
-      }
-    })
+    }
+  }
   return Array.from(totals.values(), ({ counted, sum, ...summary }) => ({
     ...summary,
     mean: counted > 0 ? sum / counted : null,
@@ -275,20 +276,23 @@ export async function countSolvesByDay(ownerId: string, since: Date): Promise<Ma
     })
   // A range per event on [ownerId+event+solvedAt] then reads only this owner's solves since `since`.
   // solvedAt is UTC ISO, so its strings sort by time: the order loadSolvesOldestFirst relies on too.
-  await Promise.all(
+  const perEvent = await Promise.all(
     events.map((event) =>
       db.solves
         .where('[ownerId+event+solvedAt]')
         .between([ownerId, event, from], [ownerId, event, Dexie.maxKey])
-        .each((solve) => {
-          if (solve.deletedAt) {
-            return
-          }
-          const key = dayKey(new Date(solve.solvedAt))
-          counts.set(key, (counts.get(key) ?? 0) + 1)
-        }),
+        .toArray(),
     ),
   )
+  for (const solves of perEvent) {
+    for (const solve of solves) {
+      if (solve.deletedAt) {
+        continue
+      }
+      const key = dayKey(new Date(solve.solvedAt))
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+  }
   return counts
 }
 
