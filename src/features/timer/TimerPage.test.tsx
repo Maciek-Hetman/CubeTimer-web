@@ -159,6 +159,95 @@ describe('TimerPage', () => {
     expect(await db.solves.count()).toBe(0)
   })
 
+  it('does not save the last solve again when the next attempt is abandoned', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timingDevice: 'external_timer', externalTimer: 'wired' })
+    const user = userEvent.setup()
+    renderTimer()
+
+    await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
+    act(() => wiredMock.options!.onSignalChange(true))
+    const timer = screen.getByRole('button', { name: 'Timer' })
+    act(() => wiredMock.options!.onEvent({ state: 'running' }))
+    act(() => wiredMock.options!.onEvent({ state: 'stopped', timeMs: 9_870 }))
+    await waitFor(async () => expect(await db.solves.count()).toBe(1))
+
+    // Hands on until the light turns green, then lifted without starting.
+    act(() => wiredMock.options!.onEvent({ state: 'ready' }))
+    expect(timer).toHaveClass('timer-ready')
+    act(() => wiredMock.options!.onEvent({ state: 'idle' }))
+    expect(timer).toHaveClass('timer-finished')
+
+    // Ready again, then the timer goes away.
+    act(() => wiredMock.options!.onEvent({ state: 'ready' }))
+    act(() => wiredMock.options!.onEvent({ state: 'disconnected' }))
+
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(await db.solves.count()).toBe(1)
+  })
+
+  it('saves both solves when the next one finishes in the same tick as it starts', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timingDevice: 'external_timer', externalTimer: 'wired' })
+    const user = userEvent.setup()
+    renderTimer()
+
+    await user.click(await screen.findByRole('button', { name: 'Connect timer' }))
+    act(() => wiredMock.options!.onSignalChange(true))
+    act(() => wiredMock.options!.onEvent({ state: 'running' }))
+    act(() => wiredMock.options!.onEvent({ state: 'stopped', timeMs: 9_870 }))
+    await waitFor(async () => expect(await db.solves.count()).toBe(1))
+
+    // Both events land in one batch, so React never renders the running phase in between.
+    act(() => {
+      wiredMock.options!.onEvent({ state: 'running' })
+      wiredMock.options!.onEvent({ state: 'stopped', timeMs: 9_870 })
+    })
+    await waitFor(async () => expect(await db.solves.count()).toBe(2))
+  })
+
+  it('cancels a hold when the window loses focus, so a missed key release cannot jam the timer', async () => {
+    const ownerId = await ensureGuestOwner()
+    const settings = await getOrCreateSettings(ownerId)
+    await db.settings.put({ ...settings, timerStartDelayMs: 0 })
+    renderTimer()
+    const timer = await screen.findByRole('button', { name: 'Timer' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i))
+
+    fireEvent.keyDown(window, { code: 'KeyJ', key: 'j' })
+    expect(timer).not.toHaveClass('timer-idle')
+    // Alt-tabbing away: the key is released in another window, so no keyup arrives here.
+    fireEvent.blur(window)
+    expect(timer).toHaveClass('timer-idle')
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' })
+    expect(timer).not.toHaveClass('timer-idle')
+  })
+
+  it('leaves keys alone while a dialog is open', async () => {
+    renderTimer()
+    const timer = await screen.findByRole('button', { name: 'Timer' })
+    await waitFor(() => expect(timerHint()).toHaveTextContent(/Hold any key or tap and hold to start/i))
+
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    const confirm = document.createElement('button')
+    dialog.append(confirm)
+    document.body.append(dialog)
+    try {
+      confirm.focus()
+      const enter = fireEvent.keyDown(confirm, { code: 'Enter', key: 'Enter' })
+      // Not prevented, so the browser still activates the focused button.
+      expect(enter).toBe(true)
+      expect(timer).toHaveClass('timer-idle')
+    } finally {
+      dialog.remove()
+    }
+  })
+
   it('only reacts to Space when controls are set to Space', async () => {
     const ownerId = await ensureGuestOwner()
     const settings = await getOrCreateSettings(ownerId)

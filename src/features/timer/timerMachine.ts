@@ -5,6 +5,8 @@ export interface TimerSnapshot {
   holdProgress: number
   elapsedMs: number
   finishedMs: number | null
+  /** Counts the solves started, so a finished solve can be told apart from an earlier one with the same time. */
+  run: number
 }
 
 export const IDLE_TIMER: TimerSnapshot = {
@@ -12,6 +14,7 @@ export const IDLE_TIMER: TimerSnapshot = {
   holdProgress: 0,
   elapsedMs: 0,
   finishedMs: null,
+  run: 0,
 }
 
 export interface TimerEngine {
@@ -36,9 +39,10 @@ export function createTimerEngine(getHoldMs?: () => number): TimerEngine {
   let holdProgress = 0
   let elapsedMs = 0
   let finishedMs: number | null = null
+  let run = 0
 
   function snapshot(): TimerSnapshot {
-    return { phase, holdProgress, elapsedMs, finishedMs }
+    return { phase, holdProgress, elapsedMs, finishedMs, run }
   }
 
   function holdDurationMs(): number {
@@ -55,6 +59,7 @@ export function createTimerEngine(getHoldMs?: () => number): TimerEngine {
 
   function beginRun(now: number): void {
     phase = 'running'
+    run += 1
     runStartedAt = normalizeTime(now)
     elapsedMs = 0
     finishedMs = null

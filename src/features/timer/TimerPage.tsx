@@ -59,6 +59,11 @@ const SYSTEM_KEYS = new Set([
 // Multimedia keys (play/pause, volume, track skip, browser/launch buttons) belong to the OS, not the timer.
 const MULTIMEDIA_KEY = /^(Media|Audio|Volume|Browser|Launch)/
 
+// A dialog owns the keyboard while it is open: Enter and Space must reach its buttons, not start a solve behind it.
+function isDialogOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null
+}
+
 function isSystemKey(event: KeyboardEvent): boolean {
   return (
     SYSTEM_KEYS.has(event.key) ||
@@ -285,7 +290,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
   const [snapshot, setSnapshot] = useState<TimerSnapshot>(IDLE_TIMER)
   const [notice, setNotice] = useState('')
   const [runningSeconds, setRunningSeconds] = useState(0)
-  const autoSavedRef = useRef(false)
+  const savedRunRef = useRef(0)
   const activeKeyRef = useRef<string | null>(null)
   const activePointerRef = useRef<number | null>(null)
   const isSolvingOrPreparing = isTimerBusy(snapshot.phase)
@@ -308,7 +313,8 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
       const savedSolve = await saveSolve({
         durationMs,
         penalty: 'none',
-        scramble: scramble || '—',
+        // While the next scramble is still generating, `scramble` holds the one the previous solve used.
+        scramble: scrambleState === 'ready' && scramble ? scramble : '—',
         timingDevice: useExternalTimer ? 'external_timer' : 'keyboard',
       })
 
@@ -348,18 +354,16 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
 
       await loadScramble()
     },
-    [loadScramble, recentSolves, saveSolve, scramble, solveStats, settings.accentColor, useExternalTimer],
+    [loadScramble, recentSolves, saveSolve, scramble, scrambleState, solveStats, settings.accentColor, useExternalTimer],
   )
 
   useEffect(() => {
-    if (snapshot.phase !== 'finished' || snapshot.finishedMs === null) {
-      autoSavedRef.current = false
+    // Keyed on the run, not on leaving the finished phase: an external timer can bring an earlier finished time
+    // back on screen (attempt abandoned, timer disconnected), and can finish a solve in the render that started it.
+    if (snapshot.phase !== 'finished' || snapshot.finishedMs === null || savedRunRef.current === snapshot.run) {
       return
     }
-    if (autoSavedRef.current) {
-      return
-    }
-    autoSavedRef.current = true
+    savedRunRef.current = snapshot.run
     const duration = snapshot.finishedMs
     const releaseUpdate = appUpdater.hold()
     void finish(duration)
@@ -367,7 +371,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         setNotice('Could not save solve')
       })
       .finally(releaseUpdate)
-  }, [finish, snapshot.finishedMs, snapshot.phase])
+  }, [finish, snapshot.finishedMs, snapshot.phase, snapshot.run])
 
   useEffect(() => {
     if (!notice) {
@@ -472,7 +476,7 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         // Tabbing to the timer is keyboard navigation: bring its focus ring back.
         document.body.classList.remove('timer-keys')
       }
-      if (isFormTarget(event.target) || isSystemKey(event)) {
+      if (isFormTarget(event.target) || isSystemKey(event) || isDialogOpen()) {
         return
       }
       if (controls === 'space' && event.code !== 'Space') {
@@ -503,11 +507,22 @@ export function TimerPage({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         : engine.release(now)
       setSnapshot(next)
     }
+    // A key released while another window has focus never sends its keyup here. Without this the hold stays
+    // armed and every other key is ignored until that same key is pressed again.
+    const onBlur = () => {
+      activeKeyRef.current = null
+      const phase = engine.getSnapshot().phase
+      if (phase === 'holding' || phase === 'ready') {
+        setSnapshot(engine.cancel())
+      }
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
       document.body.classList.remove('timer-keys')
     }
   }, [engine, controls, useExternalTimer])
