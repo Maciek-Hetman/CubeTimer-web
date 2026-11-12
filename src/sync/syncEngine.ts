@@ -417,6 +417,10 @@ export async function applySyncResponse(
 
         if (changedWhileSending && pending) {
           await rebasePendingMutation(outboxById, pending, outcome.version)
+        } else if (outcome.status === 'rejected' && outcome.code === 'not_found' && local.operation === 'delete') {
+          // Deleted locally and unknown to the server (e.g. created and deleted offline): both
+          // sides already agree, so this is not a rejection the user needs to see.
+          removedIds.push(outcome.mutation_id)
         } else {
           // Rejections, unresolvable conflicts and unknown statuses must leave the outbox,
           // otherwise the same mutation is resent on every sync.

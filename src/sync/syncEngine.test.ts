@@ -941,6 +941,75 @@ describe('syncEngine', () => {
       expect(stored?.durationMs).toBe(7777)
       expect(stored?.version).toBe(2)
     })
+
+    describe('rejected not_found outcomes', () => {
+      const queueSolve = async (operation: 'upsert' | 'delete') => {
+        const solve = newSolve({
+          ownerId: 'account-1',
+          sessionId: null,
+          durationMs: 1000,
+          penalty: 'none',
+          scramble: 'R',
+          event: '3x3',
+        })
+        await putSolve(solve, { enqueue: true, baseVersion: 0 })
+        if (operation === 'delete') {
+          // Created and deleted offline: the queued row is a delete the server has never seen.
+          await putSolve({ ...solve, deletedAt: nowIso() }, { enqueue: true, baseVersion: 0 })
+        }
+        const [sent] = await listOutbox('account-1')
+        expect(sent.operation).toBe(operation)
+        return sent
+      }
+
+      it('treats a rejected not_found delete as done instead of a rejection', async () => {
+        const sent = await queueSolve('delete')
+
+        const result = await applySyncResponse(
+          'account-1',
+          [sent],
+          [{ mutation_id: sent.id, status: 'rejected', code: 'not_found' }],
+          [],
+          2,
+        )
+
+        expect(result).toEqual({ conflicts: 0, rejected: 0 })
+        expect(await db.outbox.count()).toBe(0)
+        expect(await db.rejections.count()).toBe(0)
+      })
+
+      it('still records a rejected not_found upsert', async () => {
+        const sent = await queueSolve('upsert')
+
+        const result = await applySyncResponse(
+          'account-1',
+          [sent],
+          [{ mutation_id: sent.id, status: 'rejected', code: 'not_found' }],
+          [],
+          2,
+        )
+
+        expect(result).toEqual({ conflicts: 0, rejected: 1 })
+        expect(await db.outbox.count()).toBe(0)
+        expect((await db.rejections.get(sent.id))?.code).toBe('not_found')
+      })
+
+      it('still records a rejected delete with another code', async () => {
+        const sent = await queueSolve('delete')
+
+        const result = await applySyncResponse(
+          'account-1',
+          [sent],
+          [{ mutation_id: sent.id, status: 'rejected', code: 'validation_failed' }],
+          [],
+          2,
+        )
+
+        expect(result).toEqual({ conflicts: 0, rejected: 1 })
+        expect(await db.outbox.count()).toBe(0)
+        expect((await db.rejections.get(sent.id))?.code).toBe('validation_failed')
+      })
+    })
   })
 
   describe('withBackoff helper', () => {
