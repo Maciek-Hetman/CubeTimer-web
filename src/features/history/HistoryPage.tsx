@@ -515,11 +515,19 @@ function SessionGroup({
   onRenameSession: (session: CubeSession) => void
   updateSolvePenalty: (solveId: string, penalty: Solve['penalty']) => Promise<void>
 }) {
+  const [solveLimit, setSolveLimit] = useState(SOLVES_PER_GROUP)
+  // useLiveQuery keeps its last result while a bigger page loads, so the rows stay on screen.
   const solves = useLiveQuery(
-    async () =>
+    async () => {
       // null while collapsed so expanding doesn't briefly show the empty-session message.
-      expanded ? (session ? listSolvesForSession(ownerId, session.id, SOLVES_PER_GROUP) : listOrphanSolves(ownerId, event, SOLVES_PER_GROUP)) : null,
-    [expanded, ownerId, event, session?.id],
+      if (!expanded) {
+        return null
+      }
+      return session
+        ? listSolvesForSession(ownerId, session.id, solveLimit)
+        : listOrphanSolves(ownerId, event, solveLimit)
+    },
+    [expanded, ownerId, event, session?.id, solveLimit],
   )
 
   const bestSolveId = useMemo(() => {
@@ -606,20 +614,32 @@ function SessionGroup({
       </div>
 
       {expanded && (
-        <ol className="session-group-solves">
-          {solves?.length === 0 && <li className="muted">No solves in this session.</li>}
-          {solves?.map((solve, index) => (
-            <SolveRow
-              key={solve.id}
-              solve={solve}
-              number={solveCount - index}
-              best={solve.id === bestSolveId && (solves?.length ?? 0) > 1}
-              onPreview={onPreview}
-              onDelete={onDelete}
-              updateSolvePenalty={updateSolvePenalty}
-            />
-          ))}
-        </ol>
+        <>
+          <ol className="session-group-solves">
+            {solves?.length === 0 && <li className="muted">No solves in this session.</li>}
+            {solves?.map((solve, index) => (
+              <SolveRow
+                key={solve.id}
+                solve={solve}
+                number={solveCount - index}
+                best={solve.id === bestSolveId && (solves?.length ?? 0) > 1}
+                onPreview={onPreview}
+                onDelete={onDelete}
+                updateSolvePenalty={updateSolvePenalty}
+              />
+            ))}
+          </ol>
+          {solves && solves.length < solveCount && (
+            <div className="history-pagination">
+              <Button type="button" onClick={() => setSolveLimit((limit) => limit + SOLVES_PER_GROUP)}>
+                Show older solves
+              </Button>
+              <span className="muted">
+                Showing {solves.length} of {solveCount}
+              </span>
+            </div>
+          )}
+        </>
       )}
     </section>
   )

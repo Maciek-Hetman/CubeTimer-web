@@ -378,4 +378,50 @@ describe('HistoryPage', () => {
     const updatedSession = await db.sessions.get(session.id)
     expect(updatedSession?.name).toBe('New Name')
   })
+
+  it('loads older solves in a session beyond the first page', async () => {
+    const user = userEvent.setup()
+    const ownerId = await ensureGuestOwner()
+
+    const session = newSession({
+      ownerId,
+      name: 'Long Session',
+      event: '3x3',
+      kind: 'manual',
+    })
+    await putSession(session, { enqueue: false, baseVersion: 0 })
+
+    const base = Date.UTC(2026, 0, 1, 12)
+    const solves = Array.from({ length: 205 }, (_, i) =>
+      newSolve({
+        ownerId,
+        sessionId: session.id,
+        durationMs: 10000 + i,
+        penalty: 'none',
+        scramble: 'R U',
+        event: '3x3',
+        solvedAt: new Date(base + i * 1000).toISOString(),
+      }),
+    )
+    await db.solves.bulkPut(solves)
+
+    renderHistory()
+
+    const heading = await screen.findByRole('heading', { name: 'Long Session' })
+    const group = heading.closest('section') as HTMLElement
+    await user.click(within(group).getByRole('button', { name: 'Expand session' }))
+
+    await waitFor(() => {
+      expect(group.querySelectorAll('li.history-row')).toHaveLength(200)
+    })
+    const showOlder = within(group).getByRole('button', { name: 'Show older solves' })
+    expect(within(group).getByText('Showing 200 of 205')).toBeInTheDocument()
+
+    await user.click(showOlder)
+
+    await waitFor(() => {
+      expect(group.querySelectorAll('li.history-row')).toHaveLength(205)
+    })
+    expect(within(group).queryByRole('button', { name: 'Show older solves' })).not.toBeInTheDocument()
+  })
 })
