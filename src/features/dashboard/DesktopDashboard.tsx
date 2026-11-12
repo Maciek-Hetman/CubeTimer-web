@@ -52,32 +52,43 @@ export function DesktopDashboard() {
   const [store, setStore] = useState<StoredDashboard>({
     widgets: DEFAULT_WIDGETS,
   })
-  const [hydrated, setHydrated] = useState(false)
+  // Which owner `store` was loaded for; saving is only safe once it matches ownerId.
+  const [hydratedOwner, setHydratedOwner] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
 
   useEffect(() => {
+    // AuthProvider starts with an empty ownerId; don't read or write a junk row.
+    if (!ownerId) {
+      return
+    }
     let cancelled = false
-    void db.widgetLayouts.get(ownerId).then((record) => {
-      if (cancelled) {
-        return
-      }
-      const layout = record?.layout as StoredDashboard | undefined
-      if (layout && Array.isArray(layout.widgets)) {
-        const knownWidgets = layout.widgets.filter(isWidgetInstance)
-        const widgets = knownWidgets.length > 0 ? knownWidgets : DEFAULT_WIDGETS
-        setStore({ widgets })
-      } else {
-        setStore({ widgets: DEFAULT_WIDGETS })
-      }
-      setHydrated(true)
-    })
+    db.widgetLayouts
+      .get(ownerId)
+      .then((record) => {
+        const layout = record?.layout as StoredDashboard | undefined
+        if (layout && Array.isArray(layout.widgets)) {
+          const knownWidgets = layout.widgets.filter(isWidgetInstance)
+          return { widgets: knownWidgets.length > 0 ? knownWidgets : DEFAULT_WIDGETS }
+        }
+        return { widgets: DEFAULT_WIDGETS }
+      })
+      // A failed read falls back to defaults so the user can still edit.
+      .catch(() => ({ widgets: DEFAULT_WIDGETS }))
+      .then((loaded) => {
+        if (cancelled) {
+          return
+        }
+        setStore(loaded)
+        setHydratedOwner(ownerId)
+      })
     return () => {
       cancelled = true
     }
   }, [ownerId])
 
   useEffect(() => {
-    if (!hydrated) {
+    // Skip while dragging: handleDragOver updates the store on every step.
+    if (!ownerId || hydratedOwner !== ownerId || activeId !== null) {
       return
     }
     void db.widgetLayouts.put({
@@ -85,7 +96,7 @@ export function DesktopDashboard() {
       widgets: store.widgets.map((widget) => widget.type),
       layout: store,
     })
-  }, [hydrated, ownerId, store])
+  }, [activeId, hydratedOwner, ownerId, store])
 
   function addWidget(type: WidgetType, side: 'left' | 'right') {
     if (store.widgets.some((widget) => widget.type === type)) {
