@@ -7,6 +7,7 @@ import * as authApi from '../api/auth'
 import { ApiError, type AuthSession, type User } from '../api/types'
 import { clearAuth, saveAuth, setCurrentOwnerId } from '../app/profile'
 import { db, getMeta } from '../data/db'
+import { newSolve, putSolve } from '../data/repositories/solves'
 import { AuthProvider } from './AuthProvider'
 import { useAuth } from './AuthContext'
 
@@ -265,6 +266,50 @@ describe('AuthContext & AuthProvider', () => {
     expect(result.current.ownerId).toMatch(/^guest:/)
     expect(await getMeta('auth.refresh', null)).toBeNull()
     expect(await getMeta('auth.user', null)).toBeNull()
+  })
+
+  it('queues solves saved while unverified once a verified session is applied', async () => {
+    const unverified: User = { id: 'u-late', email: 'late@example.com', email_verified: false, user_role: 'user' }
+    const sessionFor = (user: User): AuthSession => ({
+      access_token: 'acc-late',
+      refresh_token: 'ref-late',
+      token_type: 'Bearer',
+      expires_in: 3600,
+      user,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    })
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      await result.current.applyAuthSession(sessionFor(unverified), { mergeGuest: false })
+    })
+    expect(result.current.enqueueWrites).toBe(false)
+
+    // Mirrors what SolvesProvider does while enqueueWrites is false.
+    const solve = newSolve({
+      ownerId: unverified.id,
+      sessionId: null,
+      durationMs: 9000,
+      penalty: 'none',
+      scramble: "R U R'",
+      event: '3x3',
+    })
+    await putSolve(solve, { enqueue: false, baseVersion: 0 })
+    expect(await db.outbox.count()).toBe(0)
+
+    await act(async () => {
+      await result.current.applyAuthSession(sessionFor({ ...unverified, email_verified: true }), {
+        mergeGuest: false,
+      })
+    })
+
+    const outbox = await db.outbox.where('ownerId').equals(unverified.id).toArray()
+    expect(outbox).toHaveLength(1)
+    expect(outbox[0]).toMatchObject({ entity: 'solve', entityId: solve.id, operation: 'upsert', baseVersion: 0 })
+    expect(result.current.enqueueWrites).toBe(true)
   })
 
   describe('with other tabs sharing the stored session', () => {

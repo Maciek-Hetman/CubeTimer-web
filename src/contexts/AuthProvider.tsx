@@ -22,6 +22,7 @@ import { nowIso } from '../domain/models'
 import { adoptGuestData } from '../sync/guestMerge'
 import { lastSyncKey } from '../sync/syncEngine'
 import { isTokenExpired } from '../sync/syncPolicy'
+import { enqueueUnsyncedRows, markUnsyncedWrites, unsyncedKey } from '../sync/unsyncedBackfill'
 import {
   clearAuth,
   createFreshGuestOwner,
@@ -40,6 +41,22 @@ function isRefreshRejected(error: unknown): boolean {
 }
 
 const AUTH_LOCK = 'cubetimer:auth'
+
+/**
+ * Unverified accounts write without queuing; once verified, those rows still need to sync.
+ * Never throws: on failure the flag stays set and the next call retries.
+ */
+async function noteVerification(user: User): Promise<void> {
+  try {
+    if (!user.email_verified) {
+      await markUnsyncedWrites(user.id)
+    } else {
+      await enqueueUnsyncedRows(user.id)
+    }
+  } catch (error) {
+    console.warn('Could not update unsynced-write tracking', error)
+  }
+}
 
 /**
  * Runs `task` under a lock shared by every tab. Refresh tokens are single-use, so reading
@@ -91,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await adoptGuestData(guest, session.user.id)
         }
       }
+      await noteVerification(session.user)
       await activateOwner(session.user.id)
     },
     [activateOwner, applyTokens],
@@ -119,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessTokenRef.current = null
       accessTokenExpiresAtRef.current = 0
       userRef.current = storedUser
+      await noteVerification(storedUser)
       await activateOwner(storedUser.id)
     },
     [activateOwner],
@@ -148,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const session = await authApi.refresh(token)
         await saveAuth(session.refresh_token, session.user)
+        await noteVerification(session.user)
         applyTokens(session)
         return session
       } catch (error) {
@@ -194,6 +214,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (storedUser) {
           setUser(storedUser)
         }
+      }
+      if (storedUser && !storedUser.email_verified) {
+        // So an offline start still flags writes made while unverified.
+        await noteVerification(storedUser)
       }
 
       await getOrCreateSettings(owner)
@@ -356,7 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await db.rejections.where('ownerId').equals(ownerId).delete()
         await db.settings.delete(ownerId)
         await db.widgetLayouts.delete(ownerId)
-        await db.meta.bulkDelete([`cursor:${ownerId}`, lastSyncKey(ownerId)])
+        await db.meta.bulkDelete([`cursor:${ownerId}`, lastSyncKey(ownerId), unsyncedKey(ownerId)])
       },
     )
     await transitionToGuest()
