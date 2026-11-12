@@ -306,12 +306,33 @@ export async function collectChartSeries(
   scale: StatsChartScale = 'all',
   maxPoints = DEFAULT_CHART_POINTS,
 ): Promise<ChartPoint[]> {
-  const limit = scale === 'all' ? null : Number(scale)
-  const pts = chartPointsFromSolves(await loadSolvesOldestFirst(ownerId, event))
-  if (limit !== null) {
-    return pts.length > limit ? pts.slice(-limit) : pts
+  return scaleChartPoints(chartPointsFromSolves(await loadSolvesOldestFirst(ownerId, event)), scale, maxPoints)
+}
+
+/** Recent-N slice for a numeric scale, downsampling for 'all'; shared so the two read paths can't drift. */
+function scaleChartPoints(points: ChartPoint[], scale: StatsChartScale, maxPoints: number): ChartPoint[] {
+  if (scale === 'all') {
+    return downsampleChartPoints(points, maxPoints)
   }
-  return downsampleChartPoints(pts, maxPoints)
+  const limit = Number(scale)
+  return points.length > limit ? points.slice(-limit) : points
+}
+
+/**
+ * An event's all-time stats and chart series from a single history read, which is the
+ * expensive step; computeSolveStats + collectChartSeries would read it twice.
+ */
+export async function computeEventOverview(
+  ownerId: string,
+  event: CubeEvent,
+  scale: StatsChartScale = 'all',
+  maxPoints = DEFAULT_CHART_POINTS,
+): Promise<{ stats: SolveStats; points: ChartPoint[] }> {
+  const solves = await loadSolvesOldestFirst(ownerId, event)
+  return {
+    stats: summarizeSolves(newestFirst(solves)),
+    points: scaleChartPoints(chartPointsFromSolves(solves), scale, maxPoints),
+  }
 }
 
 export function chartPointsFromSolves(solvesOldestFirst: Solve[]): ChartPoint[] {

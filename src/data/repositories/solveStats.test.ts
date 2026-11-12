@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '../db'
 import {
   countSolvesBySession,
@@ -11,6 +11,7 @@ import {
 } from './solves'
 import {
   collectChartSeries,
+  computeEventOverview,
   computeSolveStats,
   countSolvesByDay,
   DEFAULT_CHART_POINTS,
@@ -408,6 +409,52 @@ describe('collectChartSeries', () => {
     expect(series1000[series1000.length - 1].index).toBe(40)
   })
 })
+
+describe('computeEventOverview', () => {
+  beforeEach(resetDb)
+
+  // seedDataset mixes in DNFs and +2s; the tombstone must be left out of both results.
+  async function seedWithTombstone(owner: string, count: number) {
+    await seedDataset(owner, 'session-1', count)
+    const [first] = await db.solves.where('ownerId').equals(owner).toArray()
+    await db.solves.put({ ...first, deletedAt: '2026-02-01T00:00:00.000Z' })
+  }
+
+  it('matches computeSolveStats and collectChartSeries for the same history', async () => {
+    const owner = 'user-1'
+    await seedWithTombstone(owner, 300)
+    expect((await db.solves.toArray()).some((s) => s.penalty === 'dnf')).toBe(true)
+    expect((await db.solves.toArray()).some((s) => s.penalty === 'plus_two')).toBe(true)
+
+    const expectedStats = await computeSolveStats(owner, '3x3')
+    for (const [scale, maxPoints] of [
+      ['all', DEFAULT_CHART_POINTS],
+      ['100', DEFAULT_CHART_POINTS],
+      ['all', 40],
+    ] as const) {
+      const overview = await computeEventOverview(owner, '3x3', scale, maxPoints)
+      expect(overview.stats).toEqual(expectedStats)
+      expect(overview.points).toEqual(await collectChartSeries(owner, '3x3', scale, maxPoints))
+    }
+    const downsampled = await computeEventOverview(owner, '3x3', 'all', 40)
+    expect(downsampled.points.length).toBeLessThanOrEqual(40)
+    expect(downsampled.points.length).toBeLessThan(299)
+    expect(expectedStats.count).toBe(299)
+  })
+
+  it('reads the solve history once', async () => {
+    const owner = 'user-1'
+    await seedWithTombstone(owner, 50)
+    const where = vi.spyOn(db.solves, 'where')
+    try {
+      await computeEventOverview(owner, '3x3')
+      expect(where).toHaveBeenCalledTimes(1)
+    } finally {
+      where.mockRestore()
+    }
+  })
+})
+
 describe('downsampleChartPoints', () => {
   const point = (index: number, time: number | null): ChartPoint => ({ index, time, ao5: null, ao12: null })
   const series = (times: Array<number | null>) => times.map((time, i) => point(i + 1, time))

@@ -53,13 +53,19 @@ vi.mock('../../data/repositories/solveStats', async () => {
   const actual = await vi.importActual<typeof import('../../data/repositories/solveStats')>(
     '../../data/repositories/solveStats',
   )
+  const computeSolveStats = (_ownerId: string, event: CubeEvent, sessionId?: string) =>
+    !sessionId && mocks.pending.has(event)
+      ? new Promise<never>(() => {})
+      : Promise.resolve((sessionId ? mocks.sessionStats[sessionId] : mocks.eventStats[event]) ?? actual.EMPTY_SOLVE_STATS)
   return {
     ...actual,
-    computeSolveStats: (_ownerId: string, event: CubeEvent, sessionId?: string) =>
-      !sessionId && mocks.pending.has(event)
-        ? new Promise<never>(() => {})
-        : Promise.resolve((sessionId ? mocks.sessionStats[sessionId] : mocks.eventStats[event]) ?? actual.EMPTY_SOLVE_STATS),
+    computeSolveStats,
     collectChartSeries: async () => [],
+    // The page now reads stats and chart points from this one call.
+    computeEventOverview: async (ownerId: string, event: CubeEvent) => ({
+      stats: await computeSolveStats(ownerId, event),
+      points: [],
+    }),
     summarizeEvents: async () => mocks.summaries,
     countSolvesByDay: async () => {
       if (mocks.dayCountsError) throw mocks.dayCountsError

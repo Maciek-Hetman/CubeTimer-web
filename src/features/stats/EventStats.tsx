@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useApp } from '../../app/AppContext'
 import { listSessions } from '../../data/repositories/sessions'
 import {
-  collectChartSeries,
+  computeEventOverview,
   computeSolveStats,
   type SolveStats,
 } from '../../data/repositories/solveStats'
@@ -23,9 +23,11 @@ export function EventStats({ event }: { event: CubeEvent }) {
   const { solveStats, settings, updateSettings, ownerId } = useApp()
   const chartScale: StatsChartScale = settings.statsChartScale ?? 'all'
 
+  // One query for stats and chart so the event's history is read once per change. Tagged with its
+  // inputs so a scale change keeps the previous result, and the chart dims until the new points land.
   const live = useLiveQuery(
-    async () => ({ event, stats: await computeSolveStats(ownerId, event) }),
-    [ownerId, event],
+    async () => ({ event, scale: chartScale, ...(await computeEventOverview(ownerId, event, chartScale)) }),
+    [ownerId, event, chartScale],
   )
   // The app keeps the timer's whole event summarized (the same computeSolveStats call), so that can
   // show while this query catches up.
@@ -53,13 +55,8 @@ export function EventStats({ event }: { event: CubeEvent }) {
   const sessionStats = useSessionStats(ownerId, event, currentSession)
   const previousSessionStats = useSessionStats(ownerId, event, previousSession)
 
-  // Tagged with its inputs so a scale change keeps the previous points, dimmed, until the new ones land.
-  const chartResult = useLiveQuery(
-    async () => ({ event, scale: chartScale, points: await collectChartSeries(ownerId, event, chartScale) }),
-    [ownerId, event, chartScale],
-  )
-  const chartData = chartResult?.event === event ? chartResult.points : undefined
-  const chartStale = chartResult !== undefined && chartResult.event === event && chartResult.scale !== chartScale
+  const chartData = live?.event === event ? live.points : undefined
+  const chartStale = live !== undefined && live.event === event && live.scale !== chartScale
 
   const stats = shown?.stats
   // Switching away from an event without solves has nothing worth holding on screen.
